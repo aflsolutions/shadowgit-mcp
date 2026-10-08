@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } from 'vitest';
 import {
   AppNotRunningError, activeSessions, createCheckpoint, endSession, startSession,
 } from '../src/session-api.js';
@@ -28,6 +28,11 @@ beforeEach(() => {
   process.env.SHADOWGIT_SESSION_API = app.url;
   app.sessions.length = 0;
   app.checkpointStatus = 200;
+  app.hang = false;
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 const checkpointInput = { repoPath: '/projects/webshop', title: 'Fix login', author: 'Claude Code' };
@@ -48,6 +53,13 @@ describe('sessions', () => {
     await stopped.close();
     await expect(activeSessions()).rejects.toBeInstanceOf(AppNotRunningError);
     await expect(activeSessions()).rejects.toThrow("ShadowGit isn't running: nothing answered on localhost:45289.");
+  });
+
+  it('says the app did not answer, not that it is not running, when a request times out', async () => {
+    app.hang = true;
+    const error = await activeSessions().catch((e: unknown) => e);
+    expect(error).not.toBeInstanceOf(AppNotRunningError);
+    expect(error).toHaveProperty('message', 'ShadowGit did not answer within 3 s.');
   });
 });
 
@@ -71,5 +83,15 @@ describe('createCheckpoint', () => {
   it('names the HTTP status when the app fails without JSON', async () => {
     app.checkpointStatus = 500;
     await expect(createCheckpoint(checkpointInput)).rejects.toThrow('ShadowGit answered HTTP 500.');
+  });
+
+  it('warns that the checkpoint may still be saving when the app does not answer', async () => {
+    app.hang = true;
+    // Stands in for the 60 s wait: the real timeout is replaced by a 50 ms one, which fails the same way.
+    const timeout = AbortSignal.timeout.bind(AbortSignal);
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => timeout(50));
+    await expect(createCheckpoint(checkpointInput)).rejects.toThrow(
+      'ShadowGit did not answer within 60 s; the checkpoint may still be saving. Check with git_command (log -1) before trying again.',
+    );
   });
 });

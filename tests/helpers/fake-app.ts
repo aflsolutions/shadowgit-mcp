@@ -16,6 +16,8 @@ export interface FakeApp {
   sessions: FakeSession[];
   /** 200 commits; 409 has nothing to commit; 404 is an app without the route; 500 is a crash page. */
   checkpointStatus: 200 | 404 | 409 | 500;
+  /** Leaves every request unanswered, like an app busy with a large project. */
+  hang: boolean;
   close(): Promise<void>;
 }
 
@@ -30,7 +32,13 @@ export async function startFakeApp(): Promise<FakeApp> {
     requests: [],
     sessions: [],
     checkpointStatus: 200,
-    close: () => new Promise((resolve) => server.close(() => resolve())),
+    hang: false,
+    close: () => {
+      const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+      // A hung request keeps its connection open, and close() waits for every connection.
+      server.closeAllConnections();
+      return closed;
+    },
   };
 
   server.on('request', async (req, res) => {
@@ -39,6 +47,7 @@ export async function startFakeApp(): Promise<FakeApp> {
     const body: Record<string, unknown> = text ? JSON.parse(text) : {};
     const route = (req.url ?? '').replace(/^\/api/, '');
     app.requests.push({ path: route, body });
+    if (app.hang) return;
     const json = (status: number, payload: unknown) => {
       res.writeHead(status, { 'content-type': 'application/json' });
       res.end(JSON.stringify(payload));

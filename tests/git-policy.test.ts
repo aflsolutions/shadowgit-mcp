@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { refusal, tokenize } from '../src/git.js';
 
+const OPTION_REFUSAL = /is refused: it reads or writes files outside the ShadowGit history\.$/;
+const PATH_REFUSAL =
+  /is refused: it names a path outside the project\. If it is an option's value, attach it to the option \(--grep=\/api, -L\/\^func\/,\/\^\}\/\)\.$/;
+
 describe('tokenize', () => {
   it('splits on whitespace and keeps quoted text together', () => {
     expect(tokenize(`log --since="1 hour ago" --grep 'fix login' -5`)).toEqual([
@@ -38,6 +42,11 @@ describe('refusal', () => {
     'blame --output=/tmp/x a.txt',
     'rev-list -O/etc/hosts HEAD',
     'shortlog -O/etc/hosts HEAD',
+  ])('refuses %s', (command) => {
+    expect(refusal(tokenize(command))).toMatch(OPTION_REFUSAL);
+  });
+
+  it.each([
     'diff /etc/hosts a.txt',
     'diff ../outside.txt a.txt',
     'diff -- a.txt ../../etc/hosts',
@@ -46,8 +55,10 @@ describe('refusal', () => {
     'diff ../outside/secret.txt a.txt',
     'diff C:secret.txt a.txt',
     'diff c:/Windows/win.ini a.txt',
-  ])('refuses %s', (command) => {
-    expect(refusal(tokenize(command))).toMatch(/is refused: it reads or writes files outside the ShadowGit history\.$/);
+    'diff -- -foo/../../outside/secret.txt a.txt',
+    'diff -- --/../../outside/secret.txt a.txt',
+  ])('refuses the path in %s', (command) => {
+    expect(refusal(tokenize(command))).toMatch(PATH_REFUSAL);
   });
 
   it.each([
@@ -63,6 +74,8 @@ describe('refusal', () => {
     'diff main...HEAD -- src/app.ts',
     'rev-list --objects --all',
     'show HEAD:src/app.ts',
+    'blame -L/^func/,/^}/ a.txt',
+    'log --grep=/api/users',
   ])('allows %s', (command) => {
     expect(refusal(tokenize(command))).toBeNull();
   });

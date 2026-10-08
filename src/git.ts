@@ -54,7 +54,10 @@ export function tokenize(command: string): string[] {
   return args;
 }
 
-/** Why these git arguments are refused, or null when they may run. */
+/**
+ * Why these git arguments are refused, or null when they may run. Options are checked first. Then every argument is
+ * checked as a path, because after `--` git reads even a `-foo` name as one.
+ */
 export function refusal(args: string[]): string | null {
   const [subcommand, ...options] = args;
   if (subcommand === undefined) return 'Empty command. Example: log --since="1 hour ago" --stat';
@@ -62,20 +65,22 @@ export function refusal(args: string[]): string | null {
     return `git ${subcommand} is not allowed. Allowed: ${ALLOWED_SUBCOMMANDS.join(', ')}.`;
   }
   const denied = DENIED[subcommand];
-  const offending = options.find((arg) =>
-    arg.startsWith('-')
-      ? isDenied(arg, DENIED_EVERYWHERE) || (denied !== undefined && isDenied(arg, denied))
-      : leavesProject(arg),
+  const option = options.find(
+    (arg) =>
+      arg.startsWith('-') && (isDenied(arg, DENIED_EVERYWHERE) || (denied !== undefined && isDenied(arg, denied))),
   );
-  return offending
-    ? `${offending.split('=')[0]} is refused: it reads or writes files outside the ShadowGit history.`
-    : null;
+  if (option !== undefined) {
+    return `${option.split('=')[0]} is refused: it reads or writes files outside the ShadowGit history.`;
+  }
+  const outside = options.find(leavesProject);
+  if (outside === undefined) return null;
+  return `${outside} is refused: it names a path outside the project. If it is an option's value, attach it to the option (--grep=/api, -L/^func/,/^}/).`;
 }
 
 /**
- * A path outside the project: git diff compares such a path with --no-index by itself. Ranges like a..b pass. Windows
- * drive-qualified paths (C:\x, C:/x, and drive-relative C:file) are refused too; a revision on a one-letter branch
- * such as a:file is refused as a false positive.
+ * A path outside the project: git diff compares such a path with --no-index by itself. Checked on every argument, option
+ * or not. Ranges like a..b pass. Windows drive-qualified paths (C:\x, C:/x, and drive-relative C:file) are refused too; a
+ * revision on a one-letter branch such as a:file is refused as a false positive.
  */
 function leavesProject(arg: string): boolean {
   return path.isAbsolute(arg) || /(^|[\\/])\.\.([\\/]|$)/.test(arg) || /^[A-Za-z]:/.test(arg);

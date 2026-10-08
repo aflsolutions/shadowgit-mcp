@@ -50,11 +50,13 @@ Anthropic's "Writing effective tools for agents" and directory review criteria, 
 
 - **SDK:** `@modelcontextprotocol/server` ^2.3 and `zod` ^4 (imported as `zod/v4`), an ESM package, Node ≥ 20 (the SDK's
   floor; Node 18 reached end of life in April 2025).
-- **Transport:** `serveStdio(() => buildServer())`. Its default (`legacy: 'stateless'`) answers both the 2026-07-28
-  `server/discover` probe and the 2025 `initialize` handshake, so every client connects on the revision it speaks.
-- **Build:** esbuild bundles the server, the SDK and zod into one file; both move to `devDependencies`, so
-  `npx -y shadowgit-mcp-server` fetches one small package within Claude Code's 30-second first-start window. The build
-  injects the version from `package.json`, replacing the hard-coded `'1.1.2'`.
+- **Transport:** `serveStdio(buildServer)`. Its default (`legacy: 'serve'`) answers both the 2026-07-28
+  `server/discover` probe and the 2025 `initialize` handshake, so every client connects on the revision it speaks
+  (verified with SDK 2.3.1 against a pinned 2026-07-28 client and a legacy one).
+- **Build:** esbuild bundles the server, the SDK and zod into one ESM file (a `createRequire` banner serves the SDK's
+  CommonJS dependencies); both move to `devDependencies`, so `npx -y shadowgit-mcp-server` fetches one small package
+  within Claude Code's 30-second first-start window. The server reads its version from `package.json` at runtime,
+  replacing the hard-coded `'1.1.2'`.
 - **Quality gates:** Vitest replaces Jest; an ESLint flat config makes `npm run lint` work; `tsc --noEmit`. A GitHub
   Actions workflow runs all three on every pull request on Ubuntu, macOS and Windows, since storage paths differ by OS.
 - **Registry:** `mcpName: "io.github.aflsolutions/shadowgit"` in `package.json` and a `server.json` for the official MCP
@@ -74,7 +76,8 @@ keep working.
   do; the server instructions carry the workflow.
 - A project has one pause state: `start_session` returns the session already active on the project, and `end_session`
   without an id ends every active session on it, returning the ids it ended.
-- Every tool sets `openWorldHint: false`. Timestamps are ISO 8601 with the local offset (`2026-10-08T12:29:00+02:00`).
+- Every tool sets `title`, `readOnlyHint`, `destructiveHint` (the three the directory requires, `false` on the read-only
+  tools too) and `openWorldHint: false`. Timestamps are ISO 8601 with the local offset (`2026-10-08T12:29:00+02:00`).
 
 | Tool | Title | Annotations | Input | Output |
 |---|---|---|---|---|
@@ -114,8 +117,10 @@ Descriptions, verbatim:
   Changes not saved with checkpoint are picked up by the next automatic snapshot."
 
 `checkpoint` drops the `author` parameter: the author is the calling client's name, read from the request
-(`ctx.mcpReq.envelope` on 2026-07-28, the `initialize` client info on 2025 connections), falling back to "AI
-assistant". The title limit rises from 50 to 72 characters, git's hard wrap width.
+(`ctx.mcpReq.envelope[CLIENT_INFO_META_KEY]` on 2026-07-28; on 2025 connections, which carry no envelope, the deprecated
+`server.getClientVersion()`, the only source there), falling back to "AI assistant". `start_session` sends the same name
+as the app's `aiTool`, so session ids read `claude-code-…` instead of `mcp-client-…`. The title limit rises from 50 to
+72 characters, git's hard wrap width.
 
 ### Project resolution
 
@@ -183,9 +188,11 @@ by a test that shows the escape:
 | `--exclude-from`, `-X`, `--exclude-per-directory` | ls-files | reads any file |
 | `--resolve-git-dir` | rev-parse | probes any path |
 
-A long option is denied when its name, before any `=`, is a prefix of a denied name (`--cont` matches `--contents`):
-git's option parser expands unambiguous abbreviations, and a future git can make a refused abbreviation unambiguous. A
-short option is denied with its value attached too (`-O/etc/x`). The old entries `-C`, `-c`, `-e`, `--exec`,
+A long option is denied when its name, before any `=`, is a prefix of a denied name: git expands unambiguous
+abbreviations, and `blame --cont <file>` prints the file like `--contents`. Two real options start with a denied name and
+stay allowed: `blame --ignore-rev` and `ls-files --exclude`. Short options bundle (`log -pO<file>` is `-p` plus
+`-O<file>`; `blame -wS <file>` leaks the file as "bad graft data"), so a single-dash token is denied when any of its
+letters is a denied short option. The old entries `-C`, `-c`, `-e`, `--exec`,
 `--upload-pack`, `--receive-pack`, `--git-dir`, `--work-tree` and `--config` go: after the subcommand they are harmless
 or useful. The quote-aware tokenizer and the 1,000-character limit stay.
 
@@ -195,8 +202,9 @@ or useful. The quote-aware tokenizer and the 1,000-character limit stay.
 the app stages into, `GIT_TERMINAL_PROMPT=0` and `GIT_PAGER=cat`.
 
 **Output.** At most 25,000 characters, below Claude Code's 10,000-token warning. A cut output starts with
-`[Truncated: showing the first 25,000 of 312,480 characters. Narrow it with -n, --since, --stat or a path.]`; when
-git's output overflows the 1 MB buffer, git is stopped and the note reads "of more than 1,000,000 characters". A failing
+`[Truncated: showing the first 25,000 characters of 312,480 characters. Narrow it with -n, --since, --stat or a path.]`;
+when git's output overflows the 1 MB buffer, git is stopped and the note reads "of more than 1 MB". A non-zero exit
+with nothing on stderr is git reporting a result (`diff --exit-code` found differences) and returns the output. A failing
 git returns `isError: true` with git's stderr, trimmed to 2,000 characters; empty output reads `(no output)`. The emoji
 banners and `SHADOWGIT_HINTS` go.
 
@@ -213,14 +221,16 @@ names the cause and the next step; the SDK turns it into `isError: true`. The `s
 | Nothing to checkpoint (409) | Result `{ commit: null, files_changed: 0 }`: "No changes since the last snapshot; nothing to checkpoint." |
 | No session to end | Result `{ ended: [] }`: "No active session; automatic snapshots are already on." |
 
-Logs go to stderr, at `SHADOWGIT_LOG_LEVEL`. The server sends no telemetry: it reads private code history on the
-user's machine.
+The only log line is a transport error, written to stderr; `SHADOWGIT_LOG_LEVEL` and `SHADOWGIT_HINTS` go. The server
+sends no telemetry: it reads private code history on the user's machine.
 
 ### Module layout
 
-`src/server.ts` (`buildServer`: server info, instructions, tool registration), `src/index.ts` (`serveStdio`, the
-binary), one file per tool under `src/tools/`, and `src/repos.ts` (storage location, `resolveRepo`),
-`src/session-api.ts` (the app's HTTP API), `src/git.ts` (tokenizer, argument policy, execution, output cap).
+`src/index.ts` (`serveStdio`, the binary), `src/server.ts` (`buildServer`: server info, instructions, tool
+registration), `src/version.ts`, `src/repos.ts` (storage location, `resolveRepo`), `src/session-api.ts` (the app's HTTP
+API: sessions and checkpoints), `src/git.ts` (tokenizer, argument policy, execution, output cap), `src/time.ts` (local
+ISO timestamps), `src/client-name.ts`, and one file per tool under `src/tools/` with the shared `repo` parameter and
+result helper beside them.
 
 ## App changes (shadowgit-app)
 

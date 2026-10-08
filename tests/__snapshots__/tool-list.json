@@ -1,0 +1,292 @@
+[
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List the projects ShadowGit is snapshotting: name, path, time of the last snapshot, any active session, and which one matches the project you are working in. Other ShadowGit tools default to that current project. Use this when the user names a project you don't recognise.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_repos",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "app_running": {
+          "type": "boolean"
+        },
+        "current": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repos": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "current": {
+                "type": "boolean"
+              },
+              "last_snapshot": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "session": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "description": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "started_at": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "description",
+                      "started_at"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "path",
+              "current",
+              "last_snapshot",
+              "session"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "current",
+        "app_running",
+        "repos"
+      ],
+      "type": "object"
+    },
+    "title": "List ShadowGit projects"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Run a read-only git command on a project's ShadowGit history: automatic snapshots taken every few minutes, kept apart from the project's own .git. Use it for what changed recently, a file's history, when something broke, or a diff between two points in time. Allowed: log, show, diff, status, blame, shortlog, rev-list, rev-parse, ls-files, ls-tree, cat-file, describe, show-branch. Commands that write, and options that read or write files outside the history (such as --output and --no-index), are refused. Output is capped at 25,000 characters; narrow it with -n, --since, --stat or a path.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "command": {
+          "description": "A git command without the leading \"git\", e.g. log --since=\"1 hour ago\" --stat",
+          "maxLength": 1000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "repo": {
+          "description": "Project name or absolute path. Defaults to the current project.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    "name": "git_command",
+    "title": "Query snapshot history with git"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Pause ShadowGit's automatic snapshots for a project while you make a set of related edits, so they can be saved as one checkpoint instead of several partial snapshots. Returns the existing session if one is already active. Needs the ShadowGit app running. To save the edits and resume snapshots, use checkpoint and end_session.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "description": {
+          "description": "What you are about to change, e.g. \"Fix login redirect\"",
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "repo": {
+          "description": "Project name or absolute path. Defaults to the current project.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "description"
+      ],
+      "type": "object"
+    },
+    "name": "start_session",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "already_active": {
+          "type": "boolean"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id",
+        "repo",
+        "already_active"
+      ],
+      "type": "object"
+    },
+    "title": "Start a ShadowGit session"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Save the project's current changes to ShadowGit history as one named checkpoint, applying the project's .shadowgit-ignore rules. Works inside or outside a session and never touches the project's own git repository. Returns the commit hash. Needs the ShadowGit app running.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "message": {
+          "description": "Optional details: why, and anything a reviewer should know",
+          "maxLength": 1000,
+          "type": "string"
+        },
+        "repo": {
+          "description": "Project name or absolute path. Defaults to the current project.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "title": {
+          "description": "One line saying what changed, e.g. \"Fix login redirect loop\"",
+          "maxLength": 72,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    },
+    "name": "checkpoint",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "files_changed": {
+          "type": "number"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "commit",
+        "title",
+        "files_changed",
+        "repo"
+      ],
+      "type": "object"
+    },
+    "title": "Create a ShadowGit checkpoint"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Resume automatic snapshots for a project by ending its active ShadowGit session. Without session_id it ends whatever session is active on the project, and succeeds with nothing to do if there is none. Changes not saved with checkpoint are picked up by the next automatic snapshot.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "repo": {
+          "description": "Project name or absolute path. Defaults to the current project.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "session_id": {
+          "description": "Defaults to the active session of the project",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "end_session",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "ended": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "repo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "ended",
+        "repo"
+      ],
+      "type": "object"
+    },
+    "title": "End a ShadowGit session"
+  }
+]

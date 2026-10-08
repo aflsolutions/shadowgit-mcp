@@ -109,7 +109,6 @@ function canonical(p: string): string {
 
 function isInside(child: string, parent: string): boolean {
   const relative = path.relative(parent, child);
-  if (relative === '') return true;
   return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
 

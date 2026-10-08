@@ -27,19 +27,23 @@ type Row = Listing['repos'][number];
 export async function listRepos(): Promise<CallToolResult> {
   const repos = readRepos();
   const current = currentRepo(repos);
-  const { sessions, timedOut } = await askApp();
-  const rows = await Promise.all(repos.map(async (repo) => {
+  const [{ sessions, timedOut }, snapshots] = await Promise.all([
+    askApp(),
+    Promise.all(repos.map(async (repo) => ({ repo, ...(await lastSnapshot(repo)) }))),
+  ]);
+  const rows = snapshots.map(({ repo, last_snapshot, error }) => {
     const session = sessions?.find((s) => s.repoPath === repo.path);
     return {
       name: repo.name,
       path: repo.path,
       current: repo === current,
-      ...(await lastSnapshot(repo)),
+      last_snapshot,
+      error,
       session: session ? { id: session.id, description: session.description, started_at: session.startedAt } : null,
     };
-  }));
-  const listing: Listing = { current: current?.name ?? null, app_running: sessions !== null, repos: rows };
-  return dataResult(render(listing, timedOut), listing);
+  });
+  const listing = { current: current?.name ?? null, app_running: sessions !== null, repos: rows };
+  return dataResult(Output, render(listing, snapshots.map((s) => s.reason), timedOut), listing);
 }
 
 export function registerListRepos(server: McpServer): void {
@@ -52,7 +56,7 @@ export function registerListRepos(server: McpServer): void {
       outputSchema: Output,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
-    () => listRepos(),
+    listRepos,
   );
 }
 
@@ -67,30 +71,32 @@ async function askApp(): Promise<{ sessions: ActiveSession[] | null; timedOut: b
   }
 }
 
-const unreadablePrefix = (repo: Pick<Repo, 'name' | 'path'>) =>
-  `Couldn't read the ShadowGit history of ${repo.name} (${tildify(repo.path)}): `;
-
-async function lastSnapshot(repo: Repo): Promise<Pick<Row, 'last_snapshot' | 'error'>> {
-  if (!fs.existsSync(path.join(repo.path, SHADOWGIT_DIR))) return { last_snapshot: null, error: null };
+/** The row's snapshot fields, plus git's own reason when the history is unreadable (the row's error wraps it). */
+async function lastSnapshot(repo: Repo): Promise<Pick<Row, 'last_snapshot' | 'error'> & { reason: string | null }> {
+  if (!fs.existsSync(path.join(repo.path, SHADOWGIT_DIR))) return { last_snapshot: null, error: null, reason: null };
   // --all makes a history without snapshots yet exit 0 with no output; any real failure (git, disk, corruption) is the row's error.
   const result = await runGit(repo.path, ['log', '-1', '--all', '--format=%ct']);
-  if (!result.ok) return { last_snapshot: null, error: unreadablePrefix(repo) + result.error };
+  if (!result.ok) {
+    const error = `Couldn't read the ShadowGit history of ${repo.name} (${tildify(repo.path)}): ${result.error}`;
+    return { last_snapshot: null, error, reason: result.error };
+  }
   const seconds = result.stdout.trim();
-  return { last_snapshot: seconds === '' ? null : toLocalIso(new Date(Number(seconds) * 1000)), error: null };
+  return { last_snapshot: seconds === '' ? null : toLocalIso(new Date(Number(seconds) * 1000)), error: null, reason: null };
 }
 
-function snapshotText(row: Row): string {
-  if (row.error) return `history unreadable: ${row.error.slice(unreadablePrefix(row).length)}`;
+function snapshotText(row: Row, reason: string | null): string {
+  if (reason !== null) return `history unreadable: ${reason}`;
   return row.last_snapshot ? `last snapshot ${row.last_snapshot}` : 'no snapshots yet';
 }
 
-function render(listing: Listing, timedOut: boolean): string {
+/** `reasons` lines up with `listing.repos`: git's reason for each unreadable history, else null. */
+function render(listing: Listing, reasons: (string | null)[], timedOut: boolean): string {
   if (listing.repos.length === 0) {
     return 'ShadowGit is not tracking any project yet. Ask the user to add one in the ShadowGit app.';
   }
-  const lines = listing.repos.map((r) => [
+  const lines = listing.repos.map((r, i) => [
     `${r.name}${r.current ? ' (current)' : ''}: ${tildify(r.path)}`,
-    snapshotText(r),
+    snapshotText(r, reasons[i] ?? null),
     ...(r.session ? [`session "${r.session.description}" active since ${r.session.started_at}`] : []),
   ].join(', '));
   if (timedOut) lines.push('The ShadowGit app did not answer in time, so sessions and checkpoints may be unavailable.');

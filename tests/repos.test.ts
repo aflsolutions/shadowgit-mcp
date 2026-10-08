@@ -3,16 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readRepos, resolveRepo, tildify } from '../src/repos.js';
-import { makeProject, removeTempDirs, tempDir, useStorage } from './helpers/fixtures.js';
-
-const saved = { CLAUDE_PROJECT_DIR: process.env.CLAUDE_PROJECT_DIR, SHADOWGIT_STORAGE_DIR: process.env.SHADOWGIT_STORAGE_DIR };
-
-function restore(name: keyof typeof saved): void {
-  const value = saved[name];
-  // Assigning undefined to process.env would store the string "undefined".
-  if (value === undefined) delete process.env[name];
-  else process.env[name] = value;
-}
+import { makeProject, removeTempDirs, restoreEnv, tempDir, useStorage } from './helpers/fixtures.js';
 
 beforeEach(() => {
   delete process.env.CLAUDE_PROJECT_DIR;
@@ -20,8 +11,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  restore('CLAUDE_PROJECT_DIR');
-  restore('SHADOWGIT_STORAGE_DIR');
+  restoreEnv();
   removeTempDirs();
 });
 

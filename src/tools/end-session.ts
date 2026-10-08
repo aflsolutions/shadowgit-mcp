@@ -11,16 +11,16 @@ export async function endSession({ repo, session_id }: { repo?: string; session_
   if (session_id) {
     // The app's /session/end reports success even for unknown ids, so only an active session gets ended.
     const session = sessions.find((s) => s.id === session_id);
-    if (!session) return dataResult(`No active session ${session_id}; nothing to end.`, { ended: [], repo: null });
+    if (!session) return dataResult(Output, `No active session ${session_id}; nothing to end.`, { ended: [], repo: null });
     await endAppSession(session.id);
     const name = readRepos().find((r) => r.path === session.repoPath)?.name ?? session.repoPath;
-    return dataResult(`Ended session ${session.id} on ${name}. Automatic snapshots resumed.`, { ended: [session.id], repo: name });
+    return dataResult(Output, `Ended session ${session.id} on ${name}. Automatic snapshots resumed.`, { ended: [session.id], repo: name });
   }
   const project = resolveRepo(repo);
   const ended = sessions.filter((s) => s.repoPath === project.path).map((s) => s.id);
   for (const id of ended) await endAppSession(id);
-  if (ended.length === 0) return dataResult('No active session; automatic snapshots are already on.', { ended, repo: project.name });
-  return dataResult(`Ended ${ended.join(', ')} on ${project.name}. Automatic snapshots resumed.`, { ended, repo: project.name });
+  if (ended.length === 0) return dataResult(Output, 'No active session; automatic snapshots are already on.', { ended, repo: project.name });
+  return dataResult(Output, `Ended ${ended.join(', ')} on ${project.name}. Automatic snapshots resumed.`, { ended, repo: project.name });
 }
 
 export function registerEndSession(server: McpServer): void {

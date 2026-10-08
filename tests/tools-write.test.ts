@@ -1,28 +1,15 @@
 import { CLIENT_INFO_META_KEY, McpServer, type ServerContext } from '@modelcontextprotocol/server';
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { clientName } from '../src/client-name.js';
 import { checkpoint } from '../src/tools/checkpoint.js';
 import { endSession } from '../src/tools/end-session.js';
 import { startSession } from '../src/tools/start-session.js';
-import { startFakeApp, type FakeApp } from './helpers/fake-app.js';
-import { makeProject, removeTempDirs, tempDir, textOf, useStorage } from './helpers/fixtures.js';
+import { closedAppUrl, fakeSession, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { makeProject, removeTempDirs, restoreEnv, tempDir, textOf, useStorage } from './helpers/fixtures.js';
 
 let project: string;
 let other: string;
 let app: FakeApp;
-const savedEnv = {
-  CLAUDE_PROJECT_DIR: process.env.CLAUDE_PROJECT_DIR,
-  SHADOWGIT_SESSION_API: process.env.SHADOWGIT_SESSION_API,
-  SHADOWGIT_STORAGE_DIR: process.env.SHADOWGIT_STORAGE_DIR,
-};
-
-function restoreEnv(): void {
-  for (const [key, value] of Object.entries(savedEnv)) {
-    // Assigning undefined to process.env would store the string "undefined".
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-  }
-}
 
 beforeAll(async () => {
   project = makeProject('webshop');
@@ -39,10 +26,13 @@ afterAll(async () => {
 
 beforeEach(() => {
   process.env.CLAUDE_PROJECT_DIR = project;
-  process.env.SHADOWGIT_SESSION_API = app.url;
   app.requests.length = 0;
   app.sessions.length = 0;
   app.checkpointStatus = 200;
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe('clientName', () => {
@@ -75,15 +65,14 @@ describe('start_session', () => {
   });
 
   it('returns the session already active instead of starting a second one', async () => {
-    app.sessions.push({ id: 'cursor-9', repoPath: project, description: 'Other work', startedAt: '2026-10-08 10:00:00' });
+    app.sessions.push(fakeSession({ id: 'cursor-9', repoPath: project, description: 'Other work' }));
     const result = await startSession({ description: 'Fix login' }, 'Claude Code');
     expect(result.structuredContent).toEqual({ session_id: 'cursor-9', repo: 'webshop', already_active: true });
-    expect(app.requests.some((r) => r.path === '/session/start')).toBe(false);
+    expect(app.requestsTo('/session/start')).toEqual([]);
   });
 
   it('says the app is not running when nothing answers', async () => {
-    const stopped = await startFakeApp();
-    await stopped.close();
+    vi.stubEnv('SHADOWGIT_SESSION_API', await closedAppUrl());
     await expect(startSession({ description: 'Fix login' }, 'Claude Code')).rejects.toThrow("ShadowGit isn't running");
   });
 });
@@ -121,7 +110,7 @@ describe('checkpoint', () => {
 
 describe('end_session', () => {
   it('ends the active session of the current project without an id', async () => {
-    app.sessions.push({ id: 'claude-code-7', repoPath: project, description: 'Fix login', startedAt: '2026-10-08 10:00:00' });
+    app.sessions.push(fakeSession({ id: 'claude-code-7', repoPath: project }));
     const result = await endSession({});
     expect(result.structuredContent).toEqual({ ended: ['claude-code-7'], repo: 'webshop' });
     expect(app.requests.at(-1)).toEqual({ path: '/session/end', body: { sessionId: 'claude-code-7' } });
@@ -134,7 +123,7 @@ describe('end_session', () => {
   });
 
   it('ends a session by id on another project without resolving the current one', async () => {
-    app.sessions.push({ id: 'cursor-2', repoPath: other, description: 'Blog post', startedAt: '2026-10-08 10:00:00' });
+    app.sessions.push(fakeSession({ id: 'cursor-2', repoPath: other, description: 'Blog post' }));
     process.env.CLAUDE_PROJECT_DIR = tempDir('nowhere');
     const result = await endSession({ session_id: 'cursor-2' });
     expect(result.structuredContent).toEqual({ ended: ['cursor-2'], repo: 'blog' });
@@ -143,6 +132,6 @@ describe('end_session', () => {
   it('ends nothing for an id that is not active', async () => {
     const result = await endSession({ session_id: 'claude-code-404' });
     expect(result.structuredContent).toEqual({ ended: [], repo: null });
-    expect(app.requests.some((r) => r.path === '/session/end')).toBe(false);
+    expect(app.requestsTo('/session/end')).toEqual([]);
   });
 });

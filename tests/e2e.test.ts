@@ -3,20 +3,7 @@ import type { Client } from '@modelcontextprotocol/client';
 import { INSTRUCTIONS } from '../src/server.js';
 import { ERAS, connect } from './helpers/client.js';
 import { startFakeApp, type FakeApp } from './helpers/fake-app.js';
-import { makeProject, removeTempDirs, useStorage } from './helpers/fixtures.js';
-
-const savedEnv = {
-  SHADOWGIT_SESSION_API: process.env.SHADOWGIT_SESSION_API,
-  SHADOWGIT_STORAGE_DIR: process.env.SHADOWGIT_STORAGE_DIR,
-};
-
-function restoreEnv(): void {
-  for (const [key, value] of Object.entries(savedEnv)) {
-    // Assigning undefined to process.env would store the string "undefined".
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-  }
-}
+import { makeProject, removeTempDirs, restoreEnv, useStorage } from './helpers/fixtures.js';
 
 // The two protocol revisions put "$schema" in different places; key order is not content.
 function sortKeys(_key: string, value: unknown): unknown {
@@ -74,8 +61,8 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     const end = await client.callTool({ name: 'end_session', arguments: {} });
     expect(end.structuredContent).toMatchObject({ ended: [expect.any(String)], repo: 'demo' });
 
-    expect(app.requests.find((r) => r.path === '/session/start')?.body).toMatchObject({ aiTool: 'shadowgit-e2e', repoPath: project });
-    expect(app.requests.find((r) => r.path === '/checkpoint')?.body).toMatchObject({ author: 'shadowgit-e2e' });
+    expect(app.requestsTo('/session/start')[0]).toMatchObject({ aiTool: 'shadowgit-e2e', repoPath: project });
+    expect(app.requestsTo('/checkpoint')[0]).toMatchObject({ author: 'shadowgit-e2e' });
   });
 
   it('trims a checkpoint title and refuses a blank one', async () => {
@@ -83,7 +70,7 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(blank.isError).toBe(true);
 
     await client.callTool({ name: 'checkpoint', arguments: { title: '  Padded title  ' } });
-    expect(app.requests.filter((r) => r.path === '/checkpoint').at(-1)?.body).toMatchObject({ title: 'Padded title' });
+    expect(app.requestsTo('/checkpoint').at(-1)).toMatchObject({ title: 'Padded title' });
   });
 
   it('returns a refused git command as a tool error', async () => {

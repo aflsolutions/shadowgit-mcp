@@ -12,12 +12,14 @@ export async function startSession({ description, repo }: { description: string;
   const existing = (await activeSessions()).find((s) => s.repoPath === project.path);
   if (existing) {
     return dataResult(
+      Output,
       `A session is already active on ${project.name}: ${existing.id} ("${existing.description}"). Automatic snapshots stay paused until it ends.`,
       { session_id: existing.id, repo: project.name, already_active: true },
     );
   }
   const id = await startAppSession(project.path, description, client);
   return dataResult(
+    Output,
     `Started session ${id} on ${project.name}. Automatic snapshots are paused until end_session.`,
     { session_id: id, repo: project.name, already_active: false },
   );

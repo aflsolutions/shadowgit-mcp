@@ -22,30 +22,32 @@ const CHECKPOINT_TIMEOUT_MS = 55_000;
 
 const APP_TOO_OLD = "This version of ShadowGit can't create checkpoints for AI assistants. Ask the user to update the ShadowGit app.";
 
-export interface ActiveSession {
-  id: string;
-  repoPath: string;
-  description: string;
-  /** Local ISO time. */
-  startedAt: string;
-}
-
-const Sessions = z.object({
-  sessions: z.array(z.object({ id: z.string(), repoPath: z.string(), description: z.string().nullable(), startedAt: z.string() })),
+const Session = z.object({
+  id: z.string(),
+  repoPath: z.string(),
+  description: z.string().nullable().transform((description) => description ?? ''),
+  // SQLite's CURRENT_TIMESTAMP: UTC written as "2026-10-08 10:00:00"; local ISO time here.
+  startedAt: z.string().transform((utc) => toLocalIso(new Date(`${utc.replace(' ', 'T')}Z`))),
 });
+const Sessions = z.object({ sessions: z.array(Session) });
+const StartedSession = z.object({ sessionId: z.string() });
+const Checkpoint = z.object({ commit: z.string(), filesChanged: z.number() });
+const ErrorReply = z.object({ error: z.string() });
+
+export type ActiveSession = z.infer<typeof Session>;
 
 const baseUrl = () => process.env.SHADOWGIT_SESSION_API ?? 'http://localhost:45289/api';
 
+/** A POST when there is a body, else a GET. Any status but 200 and the ones in `accept` throws; the caller handles those. */
 async function request(
-  method: 'GET' | 'POST',
   route: string,
   body?: object,
-  timeoutMs = 3_000,
+  { timeoutMs = 3_000, accept = [] }: { timeoutMs?: number; accept?: number[] } = {},
 ): Promise<{ status: number; json: unknown }> {
   let response: Response;
   try {
     response = await fetch(`${baseUrl()}${route}`, {
-      method,
+      method: body ? 'POST' : 'GET',
       headers: body ? { 'content-type': 'application/json' } : undefined,
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(timeoutMs),
@@ -61,35 +63,27 @@ async function request(
   } catch {
     // An app without the route, or one that crashed, answers with HTML; the status says what happened.
   }
+  if (response.status !== 200 && !accept.includes(response.status)) throw failure(response.status, json);
   return { status: response.status, json };
 }
 
 function failure(status: number, json: unknown): Error {
-  const reply = z.object({ error: z.string() }).safeParse(json);
+  const reply = ErrorReply.safeParse(json);
   return new Error(reply.success ? `ShadowGit: ${reply.data.error}` : `ShadowGit answered HTTP ${status}.`);
 }
 
 export async function activeSessions(): Promise<ActiveSession[]> {
-  const { status, json } = await request('GET', '/session/active');
-  if (status !== 200) throw failure(status, json);
-  return Sessions.parse(json).sessions.map((s) => ({
-    id: s.id,
-    repoPath: s.repoPath,
-    description: s.description ?? '',
-    // SQLite's CURRENT_TIMESTAMP: UTC written as "2026-10-08 10:00:00".
-    startedAt: toLocalIso(new Date(`${s.startedAt.replace(' ', 'T')}Z`)),
-  }));
+  const { json } = await request('/session/active');
+  return Sessions.parse(json).sessions;
 }
 
 export async function startSession(repoPath: string, description: string, aiTool: string): Promise<string> {
-  const { status, json } = await request('POST', '/session/start', { repoPath, description, aiTool });
-  if (status !== 200) throw failure(status, json);
-  return z.object({ sessionId: z.string() }).parse(json).sessionId;
+  const { json } = await request('/session/start', { repoPath, description, aiTool });
+  return StartedSession.parse(json).sessionId;
 }
 
 export async function endSession(sessionId: string): Promise<void> {
-  const { status, json } = await request('POST', '/session/end', { sessionId });
-  if (status !== 200) throw failure(status, json);
+  await request('/session/end', { sessionId });
 }
 
 export async function createCheckpoint(input: {
@@ -99,7 +93,7 @@ export async function createCheckpoint(input: {
   author: string;
 }): Promise<{ commit: string | null; filesChanged: number }> {
   // The app runs git add and git commit inside this request, which takes a while on a large project.
-  const { status, json } = await request('POST', '/checkpoint', input, CHECKPOINT_TIMEOUT_MS).catch((error: unknown) => {
+  const { status, json } = await request('/checkpoint', input, { timeoutMs: CHECKPOINT_TIMEOUT_MS, accept: [404, 409] }).catch((error: unknown) => {
     if (!(error instanceof AppTimeoutError)) throw error;
     throw new Error(
       `ShadowGit did not answer within ${CHECKPOINT_TIMEOUT_MS / 1_000} s; the checkpoint may still be saving. Check with git_command (log -1) before trying again.`,
@@ -108,6 +102,5 @@ export async function createCheckpoint(input: {
   });
   if (status === 404) throw new Error(APP_TOO_OLD);
   if (status === 409) return { commit: null, filesChanged: 0 };
-  if (status !== 200) throw failure(status, json);
-  return z.object({ commit: z.string(), filesChanged: z.number() }).parse(json);
+  return Checkpoint.parse(json);
 }

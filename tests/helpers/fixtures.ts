@@ -5,6 +5,16 @@ import os from 'node:os';
 import path from 'node:path';
 
 const created: string[] = [];
+const originalEnv = { ...process.env };
+
+/** Puts process.env back as it was when this module loaded: drops the variables a test added, resets the ones it changed. */
+export function restoreEnv(): void {
+  for (const key of Object.keys(process.env)) {
+    if (!(key in originalEnv)) delete process.env[key];
+  }
+  // originalEnv holds no undefined values; assigning one to process.env would store the string "undefined".
+  Object.assign(process.env, originalEnv);
+}
 
 /** A temporary directory, deleted by removeTempDirs(). */
 export function tempDir(label: string): string {

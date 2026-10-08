@@ -14,8 +14,8 @@ export async function checkpoint(
   const project = resolveRepo(repo);
   const result = await createCheckpoint({ repoPath: project.path, title, message, author });
   const data = { commit: result.commit, title, files_changed: result.filesChanged, repo: project.name };
-  if (!result.commit) return dataResult('No changes since the last snapshot; nothing to checkpoint.', data);
-  return dataResult(`Saved checkpoint ${result.commit.slice(0, 8)} "${title}" on ${project.name} (${result.filesChanged} files).`, data);
+  if (!result.commit) return dataResult(Output, 'No changes since the last snapshot; nothing to checkpoint.', data);
+  return dataResult(Output, `Saved checkpoint ${result.commit.slice(0, 8)} "${title}" on ${project.name} (${result.filesChanged} files).`, data);
 }
 
 export function registerCheckpoint(server: McpServer): void {

@@ -5,27 +5,13 @@ import { runGit, tokenize } from '../src/git.js';
 import { tildify } from '../src/repos.js';
 import { gitCommand } from '../src/tools/git-command.js';
 import { listRepos } from '../src/tools/list-repos.js';
-import { startFakeApp, type FakeApp } from './helpers/fake-app.js';
-import { makeProject, removeTempDirs, shadowGit, snapshot, tempDir, textOf, useStorage } from './helpers/fixtures.js';
+import { closedAppUrl, fakeSession, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { makeProject, removeTempDirs, restoreEnv, shadowGit, snapshot, tempDir, textOf, useStorage } from './helpers/fixtures.js';
 
 let project: string;
 let other: string;
 let deleted: string;
 let app: FakeApp;
-const savedEnv = {
-  TZ: process.env.TZ,
-  CLAUDE_PROJECT_DIR: process.env.CLAUDE_PROJECT_DIR,
-  SHADOWGIT_SESSION_API: process.env.SHADOWGIT_SESSION_API,
-  SHADOWGIT_STORAGE_DIR: process.env.SHADOWGIT_STORAGE_DIR,
-};
-
-function restoreEnv(): void {
-  for (const [key, value] of Object.entries(savedEnv)) {
-    // Assigning undefined to process.env would store the string "undefined".
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-  }
-}
 
 beforeAll(async () => {
   process.env.TZ = 'Europe/Paris';
@@ -40,6 +26,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 afterAll(async () => {
@@ -129,7 +116,7 @@ describe('git_command file escapes', () => {
 
 describe('list_repos', () => {
   it('reports every project, the current one, the last snapshot and any session', async () => {
-    app.sessions.push({ id: 'claude-code-1', repoPath: project, description: 'Fix login', startedAt: '2026-10-08 10:00:00' });
+    app.sessions.push(fakeSession({ repoPath: project }));
     const result = await listRepos();
     app.sessions.length = 0;
 
@@ -152,10 +139,8 @@ describe('list_repos', () => {
   });
 
   it('still lists the projects when the app is not running', async () => {
-    const stopped = await startFakeApp();
-    await stopped.close();
+    vi.stubEnv('SHADOWGIT_SESSION_API', await closedAppUrl());
     const result = await listRepos();
-    process.env.SHADOWGIT_SESSION_API = app.url;
 
     expect(result.structuredContent).toMatchObject({ app_running: false });
     expect(textOf(result)).toContain('The ShadowGit app is not running, so sessions and checkpoints are unavailable.');

@@ -2,17 +2,10 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } 
 import {
   AppNotRunningError, AppTimeoutError, activeSessions, createCheckpoint, endSession, startSession,
 } from '../src/session-api.js';
-import { startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { closedAppUrl, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { restoreEnv } from './helpers/fixtures.js';
 
 let app: FakeApp;
-const savedEnv = { TZ: process.env.TZ, SHADOWGIT_SESSION_API: process.env.SHADOWGIT_SESSION_API };
-
-function restoreEnv(): void {
-  for (const [key, value] of Object.entries(savedEnv)) {
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-  }
-}
 
 beforeAll(async () => {
   process.env.TZ = 'Europe/Paris';
@@ -25,7 +18,6 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  process.env.SHADOWGIT_SESSION_API = app.url;
   app.sessions.length = 0;
   app.checkpointStatus = 200;
   app.hang = false;
@@ -33,6 +25,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 const checkpointInput = { repoPath: '/projects/webshop', title: 'Fix login', author: 'Claude Code' };
@@ -49,8 +42,7 @@ describe('sessions', () => {
   });
 
   it('reports an app that does not answer as AppNotRunningError', async () => {
-    const stopped = await startFakeApp();
-    await stopped.close();
+    vi.stubEnv('SHADOWGIT_SESSION_API', await closedAppUrl());
     await expect(activeSessions()).rejects.toBeInstanceOf(AppNotRunningError);
     await expect(activeSessions()).rejects.toThrow("ShadowGit isn't running: nothing answered on localhost:45289.");
   });

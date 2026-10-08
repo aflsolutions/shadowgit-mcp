@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const SHADOWGIT_DIR = '.shadowgit.git';
-export const OUTPUT_LIMIT = 25_000;
+const OUTPUT_LIMIT = 25_000;
 const MAX_BUFFER = 1024 * 1024;
 
 const MAX_TIMEOUT_MS = 2_147_483_647; // a larger delay makes Node fire the timeout after 1 ms
@@ -14,9 +14,9 @@ function timeoutMs(): number {
   return Number.isInteger(value) && value >= 1 && value <= MAX_TIMEOUT_MS ? value : 10_000;
 }
 
-export type GitResult = { ok: true; stdout: string; overflowed: boolean } | { ok: false; error: string };
+type GitResult = { ok: true; stdout: string; overflowed: boolean } | { ok: false; error: string };
 
-export const ALLOWED_SUBCOMMANDS = [
+const ALLOWED_SUBCOMMANDS = [
   'log', 'show', 'diff', 'status', 'blame', 'shortlog', 'rev-list', 'rev-parse', 'ls-files', 'ls-tree', 'cat-file',
   'describe', 'show-branch',
 ] as const;
@@ -116,16 +116,13 @@ function isDenied(option: string, denied: DeniedOptions): boolean {
     // git expands unambiguous abbreviations: blame --cont runs as --contents.
     return denied.long.some((long) => long.startsWith(name));
   }
-  return option.startsWith('-') && denied.short.some((letter) => option.slice(1).includes(letter));
+  return denied.short.some((letter) => option.slice(1).includes(letter));
 }
 
 /** Runs git on a project's ShadowGit history. The arguments go to git as they are; no shell is involved. */
 export function runGit(projectPath: string, args: string[]): Promise<GitResult> {
+  const timeout = timeoutMs();
   return new Promise((resolve) => {
-    // Node reports a missing cwd as `spawn git ENOENT`, which reads as git not being installed.
-    if (!fs.existsSync(projectPath)) {
-      return resolve({ ok: false, error: `The project folder ${projectPath} no longer exists.` });
-    }
     const child = execFile(
       'git',
       // safecrlf=false: with core.autocrlf=true (Git for Windows' default) a diff that exits 1 also warns on stderr, which would hide it.
@@ -134,7 +131,7 @@ export function runGit(projectPath: string, args: string[]): Promise<GitResult> 
         cwd: projectPath,
         encoding: 'utf8',
         maxBuffer: MAX_BUFFER,
-        timeout: timeoutMs(),
+        timeout,
         windowsHide: true,
         // GIT_OPTIONAL_LOCKS=0: status must not rewrite the index the app stages snapshots into.
         env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GIT_PAGER: 'cat', PAGER: 'cat' },
@@ -142,9 +139,15 @@ export function runGit(projectPath: string, args: string[]): Promise<GitResult> 
       (error, stdout, stderr) => {
         if (!error) return resolve({ ok: true, stdout, overflowed: false });
         if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') return resolve({ ok: true, stdout, overflowed: true });
-        if (error.code === 'ENOENT') return resolve({ ok: false, error: 'git is not installed or not on PATH.' });
+        if (error.code === 'ENOENT') {
+          // Node reports a missing cwd as `spawn git ENOENT` too, so look at which of the two is missing.
+          return resolve({
+            ok: false,
+            error: fs.existsSync(projectPath) ? 'git is not installed or not on PATH.' : `The project folder ${projectPath} no longer exists.`,
+          });
+        }
         if (error.killed) {
-          return resolve({ ok: false, error: `git took longer than ${timeoutMs() / 1000} s. Narrow the command with -n, --since or a path.` });
+          return resolve({ ok: false, error: `git took longer than ${timeout / 1000} s. Narrow the command with -n, --since or a path.` });
         }
         // A non-zero exit with nothing on stderr is git reporting a result (diff --exit-code found differences).
         if (typeof error.code === 'number' && !stderr.trim()) return resolve({ ok: true, stdout, overflowed: false });

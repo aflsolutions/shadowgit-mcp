@@ -6,13 +6,12 @@
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import * as z from 'zod/v4';
-import { startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
+import { BINARY } from '../tests/helpers/client.js';
+import { fakeSession, startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
 import { makeProject, removeTempDirs, snapshot, tempDir, useStorage } from '../tests/helpers/fixtures.js';
 
-const BINARY = fileURLToPath(new URL('../dist/shadowgit-mcp-server.js', import.meta.url));
 const run = promisify(execFile);
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
@@ -22,32 +21,30 @@ interface Context {
   answer: string;
 }
 
-const sent = (app: FakeApp, route: string) => app.requests.filter((r) => r.path === route).map((r) => r.body);
-
 // The docs say "my-project"; the temporary project is called webshop.
 const CASES: { phrase: string; prepare?: (app: FakeApp, project: string) => void; passed: (c: Context) => boolean }[] = [
   {
     phrase: 'Show me my ShadowGit repositories',
     // list_repos asks the app for its active sessions; the answer alone could come from the working directory.
-    passed: ({ app, answer }) => answer.includes('webshop') && app.requests.some((r) => r.path === '/session/active'),
+    passed: ({ app, answer }) => answer.includes('webshop') && app.requestsTo('/session/active').length > 0,
   },
   { phrase: 'Show me the last 10 commits in webshop', passed: ({ answer }) => answer.includes('Add checkout page') },
   { phrase: 'What changed in webshop in the last hour?', passed: ({ answer }) => answer.includes('checkout.ts') },
   { phrase: 'Show me the history of Header.tsx', passed: ({ answer }) => answer.includes('Restyle header') },
   {
     phrase: 'Start a ShadowGit session for debugging',
-    passed: ({ app, project }) => sent(app, '/session/start').some((b) => b.repoPath === project),
+    passed: ({ app, project }) => app.requestsTo('/session/start').some((b) => b.repoPath === project),
   },
   {
     phrase: "Create a checkpoint with message 'Fixed auth bug'",
-    passed: ({ app }) => sent(app, '/checkpoint').some((b) => /fixed auth bug/i.test(String(b.title))),
+    passed: ({ app }) => app.requestsTo('/checkpoint').some((b) => /fixed auth bug/i.test(String(b.title))),
   },
   {
     phrase: 'End the current ShadowGit session',
     prepare: (app, project) => {
-      app.sessions.push({ id: 'claude-code-1', repoPath: project, description: 'debugging', startedAt: '2026-10-08 10:00:00' });
+      app.sessions.push(fakeSession({ repoPath: project, description: 'debugging' }));
     },
-    passed: ({ app }) => sent(app, '/session/end').some((b) => b.sessionId === 'claude-code-1'),
+    passed: ({ app }) => app.requestsTo('/session/end').some((b) => b.sessionId === 'claude-code-1'),
   },
 ];
 

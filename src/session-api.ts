@@ -38,11 +38,10 @@ export type ActiveSession = z.infer<typeof Session>;
 
 const baseUrl = () => process.env.SHADOWGIT_SESSION_API ?? 'http://localhost:45289/api';
 
-/** Host and port the requests go to: localhost:45289 by default; the raw value when SHADOWGIT_SESSION_API has no host. */
+/** Host and port the requests go to (localhost:45289 by default). Never the raw value: it may hold credentials. */
 function endpoint(): string {
   const url = baseUrl();
-  const host = URL.canParse(url) ? new URL(url).host : '';
-  return host || url;
+  return (URL.canParse(url) && new URL(url).host) || 'the address in SHADOWGIT_SESSION_API';
 }
 
 /** A POST when there is a body, else a GET. Any status but 200 and the ones in `accept` throws; the caller handles those. */

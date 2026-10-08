@@ -240,7 +240,7 @@ names the cause and the next step; the SDK turns it into `isError: true`. The `s
 
 | Situation | Result |
 |---|---|
-| App not answering (session tools, checkpoint) | Error: "ShadowGit isn't running: nothing answered on localhost:45289. Ask the user to open the ShadowGit app, then try again. Reading history with git_command still works." The host and port are those of `SHADOWGIT_SESSION_API` (the raw value when it has no host). |
+| App not answering (session tools, checkpoint) | Error: "ShadowGit isn't running: nothing answered on localhost:45289. Ask the user to open the ShadowGit app, then try again. Reading history with git_command still works." The host and port are those of `SHADOWGIT_SESSION_API` ("the address in SHADOWGIT_SESSION_API" when it has no host; the value itself may hold credentials, so it is never repeated). |
 | App answering too slowly (3 s, headers and body together; session tools) | Error: "ShadowGit did not answer within 3 s. The app may be busy with a large project; try again in a moment." `list_repos` reports `app_running: false` instead. |
 | Checkpoint answering too slowly (55 s, under the MCP SDK client's 60 s default) | Error: "ShadowGit did not answer within 55 s; the checkpoint may still be saving. Check with git_command (log -1) before trying again." |
 | App too old (`POST /api/checkpoint` returns 404 for the route) | Error: "This version of ShadowGit can't create checkpoints for AI assistants. Ask the user to update the ShadowGit app." |

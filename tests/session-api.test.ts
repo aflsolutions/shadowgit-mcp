@@ -56,10 +56,15 @@ describe('sessions', () => {
     );
   });
 
-  it.each(['nonsense', 'localhost:45289/api'])('names the raw SHADOWGIT_SESSION_API %s when it has no host', async (value) => {
-    vi.stubEnv('SHADOWGIT_SESSION_API', value);
-    await expect(activeSessions()).rejects.toThrow(`ShadowGit isn't running: nothing answered on ${value}. Ask the user to open`);
-  });
+  it.each(['', 'nonsense', 'user:secret@localhost:45289/api', 'http://user:secret@/api'])(
+    'names the variable, not its value, when SHADOWGIT_SESSION_API %j has no host',
+    async (value) => {
+      vi.stubEnv('SHADOWGIT_SESSION_API', value);
+      await expect(activeSessions()).rejects.toThrow(
+        "ShadowGit isn't running: nothing answered on the address in SHADOWGIT_SESSION_API. Ask the user to open",
+      );
+    },
+  );
 
   it('says the app did not answer, not that it is not running, when a request times out', async () => {
     app.hang = true;

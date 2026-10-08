@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.aflsolutions/shadowgit",
+  "title": "ShadowGit",
+  "description": "Read ShadowGit's snapshot history and save AI edits as sessions and checkpoints.",
+  "websiteUrl": "https://shadowgit.com",
+  "version": "2.0.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "shadowgit-mcp-server",
+      "version": "2.0.0",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

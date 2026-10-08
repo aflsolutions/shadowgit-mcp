@@ -2,6 +2,32 @@
 
 All notable changes to the ShadowGit MCP Server will be documented in this file.
 
+## [2.0.0] - 2026-10-08
+
+Rewritten on the MCP TypeScript SDK v2, serving the 2026-07-28 and 2025-11-25 protocol revisions.
+
+### Changed
+- Every tool works on the current project when `repo` is omitted (Claude Code's project directory, or the only tracked
+  project). `end_session` no longer needs a session id: it ends the project's active session.
+- `checkpoint` is made by the ShadowGit app, so it follows `.shadowgit-ignore`; it needs an app release with
+  `POST /api/checkpoint`. The `author` parameter is gone (the assistant's name is used), and titles may run to 72
+  characters.
+- A slow ShadowGit app is reported as slow, not as closed; checkpoints wait up to 55 s.
+- Server instructions tell the assistant when to use each tool; tools carry titles, annotations and output schemas.
+- `git_command` output is capped at 25,000 characters, git runs asynchronously, and `status` no longer touches the
+  snapshot index.
+- Requires Node.js 20.
+
+### Security
+- `git_command` refuses options that read or write files outside the snapshot history: `--output` and
+  `-O`/`--orderfile` on every subcommand, `diff --no-index`, `blame --contents`/`--ignore-revs-file`/`-S`,
+  `ls-files --exclude-from`/`-X`/`--exclude-per-directory` and `rev-parse --resolve-git-dir`, abbreviated or bundled,
+  and any path outside the project (which `diff` would otherwise compare with `--no-index`).
+- Projects not tracked by ShadowGit are refused even when they contain a `.shadowgit.git` folder.
+
+### Removed
+- `SHADOWGIT_HINTS`, `SHADOWGIT_LOG_LEVEL` and the workflow banners appended to results.
+
 ## [1.1.2] - 2025-09-05
 
 ### Security Improvements

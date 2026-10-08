@@ -90,7 +90,9 @@ keep working.
 In `list_repos`, `current` names the project the other tools default to (`resolveRepo()` without an argument), or is
 `null` when that fails; `session` is `{ id, description, started_at }` or `null`; `last_snapshot` is `null` for a project
 without snapshots. `error` is `null`, or says why the project's history could not be read ("Couldn't read the ShadowGit
-history of app (~/code/app): <git error>"); that row has `last_snapshot: null` and the other projects are still listed.
+history of app (~/code/app): <reason>"), where the reason is git's error or the file system's (`EACCES` on a folder the
+OS protects); a deleted folder is not an error. That row has `last_snapshot: null` and the other projects are still
+listed.
 `checkpoint` returns `commit: null` and `files_changed: 0` when nothing changed. `end_session` with a
 `session_id` skips project resolution: it ends that session if it is active and reports its project as `repo`, and
 returns `ended: []` otherwise (the app's `/api/session/end` reports success even for unknown ids).
@@ -136,8 +138,9 @@ One `resolveRepo(repo?)` serves every tool.
    case-insensitively; when two tracked projects share a folder name, the error lists both paths.
 3. **`repo` omitted.** The start directory is `CLAUDE_PROJECT_DIR`, which Claude Code sets for stdio servers, else the
    working directory. The tracked project whose path contains it wins, the most specific one when projects nest. Both
-   sides go through `realpath` first, so symlinks and case-insensitive file systems match; a folder that was deleted
-   or cannot be read keeps its recorded path.
+   sides go through the native `realpath` first, so symlinks match and, on macOS and Windows, so does case: realpath
+   returns the folder's case on disk, and the paths are never lowercased, which would merge two folders that differ only
+   in case on a case-sensitive volume. A folder that was deleted or cannot be read keeps its recorded path.
 4. Else, if exactly one project is tracked and the client did not name a project directory (CLAUDE_PROJECT_DIR unset:
    Cursor, Claude Desktop), that one.
 5. Else an error: "No ShadowGit project contains /Users/x/code. Pass repo as one of: app (~/code/app), site
@@ -179,8 +182,8 @@ the 1.x arguments (`sessionId`, `author`), is not published; these instructions 
 **Invariant.** The first token must be an allowed subcommand: `log`, `show`, `diff`, `status`, `blame`, `shortlog`,
 `rev-list`, `rev-parse`, `ls-files`, `ls-tree`, `cat-file`, `describe`, `show-branch`. Git's global options
 (`-C <dir>`, `-c key=value`, `--git-dir`, `--exec-path`) are therefore unreachable, and every later token is an option
-of that subcommand. The deny list holds the subcommand options that read or write files outside the history, each backed
-by a test that shows the escape:
+of that subcommand. The deny list holds the subcommand options that read or write files outside the history or run
+helper commands from git's configuration, each backed by a test that shows the escape:
 
 | Denied | Subcommands | Escape |
 |---|---|---|
@@ -192,10 +195,15 @@ by a test that shows the escape:
 | `--ignore-revs-file`, `-S` | blame | reads any file; `-S` stays allowed elsewhere (pickaxe in `log`) |
 | `--exclude-from`, `-X`, `--exclude-per-directory` | ls-files | reads any file |
 | `--resolve-git-dir` | rev-parse | probes any path |
+| `--ext-diff` | every subcommand (diff, log, show and blame accept it) | runs the helper named in `diff.external` |
+| `--textconv`, `--filters` | every subcommand (diff, log, show, blame accept `--textconv`; cat-file accepts both) | runs the textconv or filter helper that the history's config assigns to a path |
 
 A long option is denied when its name, before any `=`, is a prefix of a denied name: git expands unambiguous
-abbreviations, and `blame --cont <file>` prints the file like `--contents`. Two real options start with a denied name and
-stay allowed: `blame --ignore-rev` and `ls-files --exclude`. Short options bundle (`log -pO<file>` is `-p` plus
+abbreviations, and `blame --cont <file>` prints the file like `--contents`. Four real options start with a denied name
+and stay allowed: `blame --ignore-rev`, `ls-files --exclude`, and `--text` (treat files as text) and `--filter` (object
+filtering) on the revision walkers. Only `cat-file` reads `--text` and `--filter` as abbreviations of `--textconv` and
+`--filters`, so it has an entry of its own without those exceptions. `--no-ext-diff` and `--no-textconv` are not
+prefixes of a denied name and pass. Short options bundle (`log -pO<file>` is `-p` plus
 `-O<file>`; `blame -wS <file>` leaks the file as "bad graft data"), so a single-dash token is denied when any of its
 letters is a denied short option. A non-option argument is refused when it is an absolute path or contains `..` as a
 path segment; revision ranges (`HEAD~2..HEAD`, `main...feature`) are not path segments and pass. `--help` and its
@@ -214,7 +222,9 @@ the app stages into, `GIT_TERMINAL_PROMPT=0` and `GIT_PAGER=cat`.
 **Output.** At most 25,000 characters, below Claude Code's 10,000-token warning. A cut output starts with
 `[Truncated: showing the first 25,000 characters of 312,480 characters. Narrow it with -n, --since, --stat or a path.]`;
 when git's output overflows the 1 MB buffer, git is stopped and the note reads "of more than 1 MB". A non-zero exit
-with nothing on stderr is git reporting a result (`diff --exit-code` found differences) and returns the output. A failing
+with nothing on stderr is git reporting a result (`diff --exit-code` found differences, `cat-file -e` found no such
+object) and returns the output, followed by a last line `[git exited with status 1]`; with no output the text is
+`(no output; git exited with status 1)`, so a missing object never reads as an existing one. A failing
 git returns `isError: true` with git's stderr, trimmed to 2,000 characters; empty output reads `(no output)`. The emoji
 banners and `SHADOWGIT_HINTS` go.
 
@@ -226,7 +236,7 @@ names the cause and the next step; the SDK turns it into `isError: true`. The `s
 | Situation | Result |
 |---|---|
 | App not answering (session tools, checkpoint) | Error: "ShadowGit isn't running: nothing answered on localhost:45289. Ask the user to open the ShadowGit app, then try again. Reading history with git_command still works." |
-| App answering too slowly (3 s; session tools) | Error: "ShadowGit did not answer within 3 s. The app may be busy with a large project; try again in a moment." `list_repos` reports `app_running: false` instead. |
+| App answering too slowly (3 s, headers and body together; session tools) | Error: "ShadowGit did not answer within 3 s. The app may be busy with a large project; try again in a moment." `list_repos` reports `app_running: false` instead. |
 | Checkpoint answering too slowly (55 s, under the MCP SDK client's 60 s default) | Error: "ShadowGit did not answer within 55 s; the checkpoint may still be saving. Check with git_command (log -1) before trying again." |
 | App too old (`POST /api/checkpoint` returns 404 for the route) | Error: "This version of ShadowGit can't create checkpoints for AI assistants. Ask the user to update the ShadowGit app." |
 | Project not found or ambiguous | Error: the messages in [Project resolution](#project-resolution) |

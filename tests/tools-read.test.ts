@@ -56,6 +56,28 @@ describe('git_command', () => {
     await expect(gitCommand({ command: 'push' })).rejects.toThrow('git push is not allowed.');
   });
 
+  it('says so when git exits non-zero without a message', async () => {
+    const missing = '0'.repeat(40);
+    expect(textOf(await gitCommand({ command: `cat-file -e ${missing}` }))).toBe('(no output; git exited with status 1)');
+    expect(textOf(await gitCommand({ command: 'cat-file -e HEAD' }))).toBe('(no output)');
+  });
+
+  it('puts the exit status after output that came with it', async () => {
+    fs.writeFileSync(path.join(project, 'README.md'), '# Webshop, edited\n');
+    const text = textOf(await gitCommand({ command: 'diff --exit-code' }));
+    fs.writeFileSync(path.join(project, 'README.md'), '# Webshop\n');
+    expect(text).toContain('+# Webshop, edited\n');
+    expect(text.endsWith('\n[git exited with status 1]')).toBe(true);
+  });
+
+  it('puts the exit status after truncated output too', async () => {
+    fs.writeFileSync(path.join(project, 'README.md'), 'z'.repeat(40_000));
+    const text = textOf(await gitCommand({ command: 'diff --exit-code' }));
+    fs.writeFileSync(path.join(project, 'README.md'), '# Webshop\n');
+    expect(text.startsWith('[Truncated: showing the first 25,000 characters of ')).toBe(true);
+    expect(text.endsWith('\n[git exited with status 1]')).toBe(true);
+  });
+
   it('truncates long output and says so first', async () => {
     snapshot(other, { 'big.txt': 'z'.repeat(40_000) }, 'Big file');
     const text = textOf(await gitCommand({ command: 'show HEAD:big.txt', repo: 'blog' }));
@@ -111,6 +133,40 @@ describe('git_command file escapes', () => {
   ])('refuses %s', async (command) => {
     // Relative values keep the path rule out of it: only the option rules can produce this wording.
     await expect(gitCommand({ command })).rejects.toThrow(/is refused: it reads or writes files outside the ShadowGit history\./);
+  });
+});
+
+// Helpers named in the history's own config run when an option asks for them; the scripts leave a marker file behind.
+describe.skipIf(process.platform === 'win32')('git_command helper commands', () => {
+  it('refuses each option that makes git run a configured helper', async () => {
+    const dir = tempDir('helpers');
+    const marker = path.join(dir, 'ran');
+    const script = path.join(dir, 'helper.sh');
+    // Called with one file (textconv), no argument (smudge filter) or seven (external diff); cats the file when given one.
+    fs.writeFileSync(script, `#!/bin/sh\necho ran >> '${marker}'\n[ "$#" -le 1 ] && cat "$@"\nexit 0\n`, { mode: 0o755 });
+    snapshot(other, { 'helper.txt': 'one\n' }, 'Helper one');
+    snapshot(other, { 'helper.txt': 'two\n' }, 'Helper two');
+    shadowGit(other, ['config', 'diff.canary.textconv', script]);
+    shadowGit(other, ['config', 'filter.canary.smudge', script]);
+    shadowGit(other, ['config', 'diff.external', script]);
+    fs.writeFileSync(path.join(other, '.shadowgit.git', 'info', 'attributes'), 'helper.txt diff=canary filter=canary\n');
+
+    const commands = [
+      'diff --ext-diff HEAD~1 HEAD',
+      'show --textconv HEAD:helper.txt',
+      'cat-file --textconv HEAD:helper.txt',
+      'cat-file --filters HEAD:helper.txt',
+      'blame --textconv helper.txt',
+    ];
+    for (const command of commands) {
+      fs.rmSync(marker, { force: true });
+      await runGit(other, tokenize(command));
+      expect(fs.existsSync(marker), `plain git runs the helper with: ${command}`).toBe(true);
+
+      fs.rmSync(marker, { force: true });
+      await expect(gitCommand({ command, repo: 'blog' })).rejects.toThrow(/is refused/);
+      expect(fs.existsSync(marker), `git_command ran the helper with: ${command}`).toBe(false);
+    }
   });
 });
 
@@ -179,6 +235,30 @@ describe('list_repos with a history that has no snapshots or is broken', () => {
 
     expect(result.structuredContent).toMatchObject({ repos: [{ name: 'fresh', path: project, last_snapshot: null }] });
     expect(textOf(result)).toContain('no snapshots yet');
+  });
+
+  // macOS protects folders such as ~/Documents; existsSync reads that as "no history", which hides the real problem.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('reports a project whose folder cannot be read, not a history without snapshots', async () => {
+    const locked = tempDir('locked');
+    const protectedProject = path.join(locked, 'app');
+    fs.mkdirSync(path.join(protectedProject, '.shadowgit.git'), { recursive: true });
+    useStorage([{ name: 'protected', path: protectedProject }]);
+    fs.chmodSync(locked, 0o000);
+    let result: Awaited<ReturnType<typeof listRepos>>;
+    try {
+      result = await listRepos();
+    } finally {
+      fs.chmodSync(locked, 0o700);
+    }
+
+    expect(result.structuredContent).toMatchObject({
+      repos: [{
+        name: 'protected', last_snapshot: null,
+        error: expect.stringContaining(`Couldn't read the ShadowGit history of protected (${tildify(protectedProject)}): EACCES`),
+      }],
+    });
+    expect(textOf(result)).toContain(`protected: ${tildify(protectedProject)}, history unreadable: EACCES`);
+    expect(textOf(result)).not.toContain('no snapshots yet');
   });
 
   it("reports a history git cannot read in that project's row and keeps listing the others", async () => {

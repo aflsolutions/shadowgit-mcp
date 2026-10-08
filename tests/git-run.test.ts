@@ -26,7 +26,7 @@ afterEach(() => {
 describe('runGit', () => {
   it('runs git against the ShadowGit history', async () => {
     expect(await runGit(project, ['log', '--format=%s'])).toEqual({
-      ok: true, stdout: 'Initial ShadowGit Snapshot\n', overflowed: false,
+      ok: true, stdout: 'Initial ShadowGit Snapshot\n', overflowed: false, exitCode: 0,
     });
   });
 
@@ -40,7 +40,13 @@ describe('runGit', () => {
     fs.writeFileSync(path.join(project, 'a.txt'), 'hello again\n');
     const result = await runGit(project, ['diff', '--exit-code', '--stat']);
     fs.writeFileSync(path.join(project, 'a.txt'), 'hello\n');
-    expect(result.ok && result.stdout).toContain('a.txt');
+    expect(result).toMatchObject({ ok: true, stdout: expect.stringContaining('a.txt'), exitCode: 1 });
+  });
+
+  it('returns a silent non-zero exit as a result carrying its exit code', async () => {
+    expect(await runGit(project, ['cat-file', '-e', '0'.repeat(40)])).toEqual({
+      ok: true, stdout: '', overflowed: false, exitCode: 1,
+    });
   });
 
   // Git for Windows sets core.autocrlf=true, and then a diff that exits 1 also warns about line endings on stderr.

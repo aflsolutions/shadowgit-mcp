@@ -25,6 +25,8 @@ export interface FakeApp {
   checkpointStatus: 200 | 404 | 409 | 500;
   /** Leaves every request unanswered, like an app busy with a large project. */
   hang: boolean;
+  /** Sends the headers and part of the body, then never ends it, like an app that stalls mid-answer. */
+  hangBody: boolean;
   close(): Promise<void>;
 }
 
@@ -54,6 +56,7 @@ async function listen(): Promise<FakeApp> {
     sessions: [],
     checkpointStatus: 200,
     hang: false,
+    hangBody: false,
     close: () => {
       const closed = new Promise<void>((resolve) => server.close(() => resolve()));
       // A hung request keeps its connection open, and close() waits for every connection.
@@ -69,6 +72,11 @@ async function listen(): Promise<FakeApp> {
     const route = (req.url ?? '').replace(/^\/api/, '');
     app.requests.push({ path: route, body });
     if (app.hang) return;
+    if (app.hangBody) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.write('{"sessions":[');
+      return;
+    }
     const json = (status: number, payload: unknown) => {
       res.writeHead(status, { 'content-type': 'application/json' });
       res.end(JSON.stringify(payload));

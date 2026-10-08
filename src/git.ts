@@ -14,7 +14,8 @@ function timeoutMs(): number {
   return Number.isInteger(value) && value >= 1 && value <= MAX_TIMEOUT_MS ? value : 10_000;
 }
 
-type GitResult = { ok: true; stdout: string; overflowed: boolean } | { ok: false; error: string };
+/** exitCode is git's own: non-zero with an ok result means git reported a finding (diff --exit-code, cat-file -e), not a failure. */
+type GitResult = { ok: true; stdout: string; overflowed: boolean; exitCode: number } | { ok: false; error: string };
 
 const ALLOWED_SUBCOMMANDS = [
   'log', 'show', 'diff', 'status', 'blame', 'shortlog', 'rev-list', 'rev-parse', 'ls-files', 'ls-tree', 'cat-file',
@@ -30,13 +31,21 @@ interface DeniedOptions {
 }
 
 /**
- * Options that make a subcommand read or write files outside the history (checked against git 2.47). The subcommand
- * comes first, so git's global options (-C, -c, --git-dir) never apply and need no entry. The revision walkers (log,
- * show, diff, rev-list, shortlog, blame) accept --output and -O, so those are refused for every subcommand.
+ * Options that make a subcommand read or write files outside the history, or run helper commands from git's
+ * configuration (checked against git 2.47). The subcommand comes first, so git's global options (-C, -c, --git-dir)
+ * never apply and need no entry. The revision walkers (log, show, diff, rev-list, shortlog, blame) accept --output and
+ * -O, and the diff machinery behind log, show, diff and blame accepts --ext-diff and --textconv, so those are refused
+ * for every subcommand. --text (treat files as text) and --filter (object filtering) are real options there; only
+ * cat-file reads them as abbreviations, and it has its own entry below.
  */
-const DENIED_EVERYWHERE: DeniedOptions = { long: ['--output', '--orderfile'], short: ['O'] };
+const DENIED_EVERYWHERE: DeniedOptions = {
+  long: ['--output', '--orderfile', '--ext-diff', '--textconv', '--filters'],
+  short: ['O'],
+  except: ['--text', '--filter'],
+};
 
 const DENIED: Record<string, DeniedOptions> = {
+  'cat-file': { long: ['--textconv', '--filters'], short: [] },
   diff: { long: ['--no-index'], short: [] },
   blame: { long: ['--contents', '--ignore-revs-file'], short: ['S'], except: ['--ignore-rev'] },
   'ls-files': { long: ['--exclude-from', '--exclude-per-directory'], short: ['X'], except: ['--exclude'] },
@@ -137,8 +146,9 @@ export function runGit(projectPath: string, args: string[]): Promise<GitResult> 
         env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GIT_PAGER: 'cat', PAGER: 'cat' },
       },
       (error, stdout, stderr) => {
-        if (!error) return resolve({ ok: true, stdout, overflowed: false });
-        if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') return resolve({ ok: true, stdout, overflowed: true });
+        if (!error) return resolve({ ok: true, stdout, overflowed: false, exitCode: 0 });
+        // Node killed git, so there is no exit status; the truncation note tells the story.
+        if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') return resolve({ ok: true, stdout, overflowed: true, exitCode: 0 });
         if (error.code === 'ENOENT') {
           // Node reports a missing cwd as `spawn git ENOENT` too, so look at which of the two is missing.
           return resolve({
@@ -150,7 +160,7 @@ export function runGit(projectPath: string, args: string[]): Promise<GitResult> 
           return resolve({ ok: false, error: `git took longer than ${timeout / 1000} s. Narrow the command with -n, --since or a path.` });
         }
         // A non-zero exit with nothing on stderr is git reporting a result (diff --exit-code found differences).
-        if (typeof error.code === 'number' && !stderr.trim()) return resolve({ ok: true, stdout, overflowed: false });
+        if (typeof error.code === 'number' && !stderr.trim()) return resolve({ ok: true, stdout, overflowed: false, exitCode: error.code });
         // A signal we did not send (the OOM killer, a crash) leaves partial output that must not pass for a result.
         if (error.signal) return resolve({ ok: false, error: `git was stopped by ${error.signal} before it finished.` });
         resolve({ ok: false, error: stderr.trim().slice(0, 2_000) || error.message });

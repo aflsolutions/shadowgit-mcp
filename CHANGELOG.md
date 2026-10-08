@@ -20,6 +20,8 @@ Rewritten on the MCP TypeScript SDK v2, serving the 2026-07-28 and 2025-11-25 pr
   snapshot index.
 - `SHADOWGIT_STORAGE_DIR` points the server at a non-default ShadowGit storage folder, as it does for the app.
 - `git_command` accepts `-C`, `-c` and `-e` again (copy detection, combined diffs, `cat-file -e`).
+- `git_command` ends its output with `[git exited with status N]` when git exits non-zero, so `cat-file -e` on a missing
+  object does not read as success.
 - Tool failures come back as MCP errors (`isError`) instead of a `success: false` field.
 - `list_repos` reports a project whose history cannot be read in its own row, and keeps listing the others.
 - Requires Node.js 20 or later.
@@ -29,6 +31,8 @@ Rewritten on the MCP TypeScript SDK v2, serving the 2026-07-28 and 2025-11-25 pr
   `-O`/`--orderfile` on every subcommand, `diff --no-index`, `blame --contents`/`--ignore-revs-file`/`-S`,
   `ls-files --exclude-from`/`-X`/`--exclude-per-directory` and `rev-parse --resolve-git-dir`, abbreviated or bundled,
   and any path outside the project (which `diff` would otherwise compare with `--no-index`).
+- `git_command` refuses `--ext-diff`, `--textconv` and `--filters` on every subcommand, which would run helper commands
+  from the history's git configuration.
 - `git_command` refuses `--help`, which would open git's manual.
 - Projects not tracked by ShadowGit are refused even when they contain a `.shadowgit.git` folder.
 

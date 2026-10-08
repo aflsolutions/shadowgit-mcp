@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as z from 'zod/v4';
 import { SHADOWGIT_DIR, runGit } from '../git.js';
-import { currentRepo, readRepos, tildify, type Repo } from '../repos.js';
+import { currentRepo, hasCode, readRepos, tildify, type Repo } from '../repos.js';
 import { AppNotRunningError, AppTimeoutError, activeSessions, type ActiveSession } from '../session-api.js';
 import { toLocalIso } from '../time.js';
 import { dataResult } from './shared.js';
@@ -71,15 +71,23 @@ async function askApp(): Promise<{ sessions: ActiveSession[] | null; timedOut: b
   }
 }
 
-/** The row's snapshot fields, plus git's own reason when the history is unreadable (the row's error wraps it). */
+/** The row's snapshot fields, plus the underlying reason when the history is unreadable (the row's error wraps it). */
 async function lastSnapshot(repo: Repo): Promise<Pick<Row, 'last_snapshot' | 'error'> & { reason: string | null }> {
-  if (!fs.existsSync(path.join(repo.path, SHADOWGIT_DIR))) return { last_snapshot: null, error: null, reason: null };
+  const unreadable = (reason: string) => ({
+    last_snapshot: null,
+    error: `Couldn't read the ShadowGit history of ${repo.name} (${tildify(repo.path)}): ${reason}`,
+    reason,
+  });
+  try {
+    fs.statSync(path.join(repo.path, SHADOWGIT_DIR));
+  } catch (error) {
+    // A deleted folder or a project without history is not an error; a protected one (EACCES, EPERM) is.
+    if (hasCode(error, 'ENOENT', 'ENOTDIR')) return { last_snapshot: null, error: null, reason: null };
+    return unreadable(error instanceof Error ? error.message : String(error));
+  }
   // --all makes a history without snapshots yet exit 0 with no output; any real failure (git, disk, corruption) is the row's error.
   const result = await runGit(repo.path, ['log', '-1', '--all', '--format=%ct']);
-  if (!result.ok) {
-    const error = `Couldn't read the ShadowGit history of ${repo.name} (${tildify(repo.path)}): ${result.error}`;
-    return { last_snapshot: null, error, reason: result.error };
-  }
+  if (!result.ok) return unreadable(result.error);
   const seconds = result.stdout.trim();
   return { last_snapshot: seconds === '' ? null : toLocalIso(new Date(Number(seconds) * 1000)), error: null, reason: null };
 }

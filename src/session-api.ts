@@ -45,6 +45,7 @@ async function request(
   { timeoutMs = 3_000, accept = [] }: { timeoutMs?: number; accept?: number[] } = {},
 ): Promise<{ status: number; json: unknown }> {
   let response: Response;
+  let text: string;
   try {
     response = await fetch(`${baseUrl()}${route}`, {
       method: body ? 'POST' : 'GET',
@@ -52,11 +53,12 @@ async function request(
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(timeoutMs),
     });
+    // The same signal covers the body: an app that sends headers and stalls must time out the same way.
+    text = await response.text();
   } catch (error) {
     if (error instanceof Error && error.name === 'TimeoutError') throw new AppTimeoutError(timeoutMs / 1_000, { cause: error });
     throw new AppNotRunningError({ cause: error });
   }
-  const text = await response.text();
   let json: unknown = null;
   try {
     json = JSON.parse(text);

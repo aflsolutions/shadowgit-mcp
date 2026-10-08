@@ -42,6 +42,14 @@ describe('refusal', () => {
     'blame --output=/tmp/x a.txt',
     'rev-list -O/etc/hosts HEAD',
     'shortlog -O/etc/hosts HEAD',
+    'diff --ext-diff HEAD~1',
+    'diff --ext HEAD~1',
+    'show --textconv HEAD:a.txt',
+    'cat-file --textconv HEAD:a.txt',
+    'cat-file --text HEAD:a.txt',
+    'cat-file --filters --path=a.txt HEAD:a.txt',
+    'cat-file --filter --path=a.txt HEAD:a.txt',
+    'blame --textconv a.txt',
   ])('refuses %s', (command) => {
     expect(refusal(tokenize(command))).toMatch(OPTION_REFUSAL);
   });
@@ -83,6 +91,13 @@ describe('refusal', () => {
     'log --grep=/api/users',
     'log --grep=help',
     'log --grep help',
+    'diff --no-ext-diff HEAD~1',
+    'log --no-textconv -p',
+    'diff --exit-code',
+    'log --format=%s --follow --first-parent --topo-order a.txt',
+    'log --text -p',
+    'blame --text a.txt',
+    'rev-list --filter=blob:none --objects HEAD',
   ])('allows %s', (command) => {
     expect(refusal(tokenize(command))).toBeNull();
   });

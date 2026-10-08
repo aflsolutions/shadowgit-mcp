@@ -12,7 +12,16 @@ export async function gitCommand({ command, repo }: { command: string; repo?: st
   if (refused) throw new Error(refused);
   const result = await runGit(project.path, args);
   if (!result.ok) throw new Error(result.error);
-  return { content: [{ type: 'text', text: capOutput(result.stdout, result.overflowed) }] };
+  return { content: [{ type: 'text', text: withExitStatus(result) }] };
+}
+
+/** The output as the model gets it. A non-zero exit is a finding (cat-file -e on a missing object), so it is never left silent. */
+function withExitStatus({ stdout, overflowed, exitCode }: { stdout: string; overflowed: boolean; exitCode: number }): string {
+  if (exitCode === 0) return capOutput(stdout, overflowed);
+  const status = `git exited with status ${exitCode}`;
+  if (stdout === '') return `(no output; ${status})`;
+  const text = capOutput(stdout, overflowed);
+  return `${text}${text.endsWith('\n') ? '' : '\n'}[${status}]`;
 }
 
 export function registerGitCommand(server: McpServer): void {

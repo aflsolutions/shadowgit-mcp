@@ -55,7 +55,8 @@ The other tools work on the current project unless given `repo`.
 
 `git_command` runs only read-only subcommands, without a shell, and refuses the options that would read or write files
 outside the snapshot history (`--output`, `--no-index`, `blame --contents` and others, including abbreviated and bundled
-forms) and paths outside the project. Checkpoints are made by the ShadowGit app, only in projects you added to it. The
+forms), the ones that run helper commands from git's configuration (`--ext-diff`, `--textconv`, `--filters`), and paths
+outside the project. Checkpoints are made by the ShadowGit app, only in projects you added to it. The
 server itself only talks to the ShadowGit app on localhost; what it returns goes to your assistant like any tool result.
 
 ## Configuration

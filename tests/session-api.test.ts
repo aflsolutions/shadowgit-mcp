@@ -21,6 +21,7 @@ beforeEach(() => {
   app.sessions.length = 0;
   app.checkpointStatus = 200;
   app.hang = false;
+  app.hangBody = false;
 });
 
 afterEach(() => {
@@ -56,6 +57,15 @@ describe('sessions', () => {
       'message',
       'ShadowGit did not answer within 3 s. The app may be busy with a large project; try again in a moment.',
     );
+  });
+});
+
+describe('a body that never ends', () => {
+  it('times out like an app that does not answer at all, not with a raw TimeoutError', async () => {
+    app.hangBody = true;
+    const error = await activeSessions().catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AppTimeoutError);
+    expect(error).toHaveProperty('message', expect.stringMatching(/^ShadowGit did not answer within 3 s\./));
   });
 });
 

@@ -94,17 +94,18 @@ function startDir(): string {
   return process.env.CLAUDE_PROJECT_DIR || process.cwd();
 }
 
-/** The real path, case-folded where file systems usually ignore case, so two spellings of a path compare equal. */
+/**
+ * The real path. On macOS and Windows the native realpath returns the case the folder has on disk, so two spellings of a
+ * path compare equal; no lowercasing, which would merge two folders that differ only in case on a case-sensitive volume.
+ */
 function canonical(p: string): string {
-  let resolved: string;
   try {
-    resolved = fs.realpathSync.native(p);
+    return fs.realpathSync.native(p);
   } catch (error) {
     if (!hasCode(error, 'ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'ELOOP')) throw error;
     // A tracked project can be deleted or unreadable; its recorded path still names it, and git on it reports the real failure.
-    resolved = path.resolve(p);
+    return path.resolve(p);
   }
-  return process.platform === 'linux' ? resolved : resolved.toLowerCase();
 }
 
 function isInside(child: string, parent: string): boolean {
@@ -112,7 +113,7 @@ function isInside(child: string, parent: string): boolean {
   return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
 
-function hasCode(error: unknown, ...codes: string[]): boolean {
+export function hasCode(error: unknown, ...codes: string[]): boolean {
   return error instanceof Error && 'code' in error && typeof error.code === 'string' && codes.includes(error.code);
 }
 

@@ -226,6 +226,8 @@ names the cause and the next step; the SDK turns it into `isError: true`. The `s
 | Situation | Result |
 |---|---|
 | App not answering (session tools, checkpoint) | Error: "ShadowGit isn't running: nothing answered on localhost:45289. Ask the user to open the ShadowGit app, then try again. Reading history with git_command still works." |
+| App answering too slowly (3 s; session tools) | Error: "ShadowGit did not answer within 3 s. The app may be busy with a large project; try again in a moment." `list_repos` reports `app_running: false` instead. |
+| Checkpoint answering too slowly (55 s, under the MCP SDK client's 60 s default) | Error: "ShadowGit did not answer within 55 s; the checkpoint may still be saving. Check with git_command (log -1) before trying again." |
 | App too old (`POST /api/checkpoint` returns 404 for the route) | Error: "This version of ShadowGit can't create checkpoints for AI assistants. Ask the user to update the ShadowGit app." |
 | Project not found or ambiguous | Error: the messages in [Project resolution](#project-resolution) |
 | Nothing to checkpoint (409) | Result `{ commit: null, files_changed: 0 }`: "No changes since the last snapshot; nothing to checkpoint." |

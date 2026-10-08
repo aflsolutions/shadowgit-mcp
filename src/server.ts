@@ -1,4 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/server';
+import { registerGitCommand } from './tools/git-command.js';
+import { registerListRepos } from './tools/list-repos.js';
 import { VERSION } from './version.js';
 
 export const INSTRUCTIONS = [
@@ -12,8 +14,11 @@ export const INSTRUCTIONS = [
 ].join('\n');
 
 export function buildServer(): McpServer {
-  return new McpServer(
+  const server = new McpServer(
     { name: 'shadowgit', title: 'ShadowGit', version: VERSION, websiteUrl: 'https://shadowgit.com' },
     { instructions: INSTRUCTIONS },
   );
+  registerListRepos(server);
+  registerGitCommand(server);
+  return server;
 }

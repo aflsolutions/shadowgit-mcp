@@ -56,6 +56,28 @@ export function makeProject(name: string, files: Record<string, string> = { 'REA
   return project;
 }
 
+/**
+ * A project whose history holds a submodule at `sub`, at two commits that differ in the file `s.txt`. The submodule's
+ * repository lives in a folder outside the project, which `sub/.git` points to; git follows it to print `canary`.
+ */
+export function makeProjectWithOutsideSubmodule(canary: string): string {
+  const outside = makeProject('outside', { 's.txt': `${canary}\n` });
+  const first = shadowGit(outside, ['rev-parse', 'HEAD']);
+  snapshot(outside, { 's.txt': 'changed\n' }, 'Second');
+  const second = shadowGit(outside, ['rev-parse', 'HEAD']);
+
+  const project = makeProject('main');
+  fs.mkdirSync(path.join(project, 'sub'));
+  fs.writeFileSync(path.join(project, 'sub', '.git'), `gitdir: ${path.join(outside, '.shadowgit.git')}\n`);
+  fs.writeFileSync(path.join(project, '.gitmodules'), '[submodule "sub"]\n\tpath = sub\n\turl = ./sub\n');
+  shadowGit(project, ['config', 'submodule.active', '.']);
+  for (const commit of [first, second]) {
+    shadowGit(project, ['update-index', '--add', '--cacheinfo', `160000,${commit},sub`]);
+    shadowGit(project, ['commit', '--quiet', '-m', `Submodule at ${commit.slice(0, 7)}`]);
+  }
+  return project;
+}
+
 /** Points the server at a temporary storage directory holding this project list; returns the directory. */
 export function useStorage(repos: { name: string; path: string }[]): string {
   const dir = tempDir('storage');

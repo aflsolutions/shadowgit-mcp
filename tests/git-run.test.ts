@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { capOutput, runGit } from '../src/git.js';
-import { makeProject, removeTempDirs, shadowGit, snapshot, tempDir } from './helpers/fixtures.js';
+import { capOutput, refusal, runGit, tokenize } from '../src/git.js';
+import { makeProject, makeProjectWithOutsideSubmodule, removeTempDirs, shadowGit, snapshot, tempDir } from './helpers/fixtures.js';
 
 let project: string;
 
@@ -100,6 +100,50 @@ describe('runGit', () => {
   it.skipIf(process.platform === 'win32')('reports a git stopped by a signal as an error, not as a result', async () => {
     stubGit('echo partial; kill -KILL $$');
     expect(await runGit(project, ['log'])).toEqual({ ok: false, error: 'git was stopped by SIGKILL before it finished.' });
+  });
+});
+
+// The history's config is data the server did not write: a line in it must not run a program or open another repository.
+describe('runGit with a history whose config reaches outside it', () => {
+  it.skipIf(process.platform === 'win32')('does not run the program named by core.fsmonitor', async () => {
+    const hooked = makeProject('hooked', { 'a.txt': 'hello\n' });
+    const marker = path.join(tempDir('marker'), 'ran');
+    const script = path.join(tempDir('hook'), 'fsmonitor.sh');
+    fs.writeFileSync(script, `#!/bin/sh\ntouch '${marker}'\nprintf 'token\\0/\\0'\n`, { mode: 0o755 });
+    shadowGit(hooked, ['config', 'core.fsmonitor', script]);
+
+    await runGit(hooked, ['status', '--short']);
+    expect(fs.existsSync(marker)).toBe(false);
+
+    shadowGit(hooked, ['status', '--short']); // control: plain git obeys the config, so the check above can fail
+    expect(fs.existsSync(marker), 'plain git runs the program').toBe(true);
+  });
+
+  const CANARY = 'CANARY-5c1e';
+
+  it('does not open a submodule outside the project because the config says to show its diff', async () => {
+    const withSubmodule = makeProjectWithOutsideSubmodule(CANARY);
+    shadowGit(withSubmodule, ['config', 'diff.submodule', 'diff']);
+    shadowGit(withSubmodule, ['config', 'submodule.recurse', 'true']);
+
+    const result = await runGit(withSubmodule, ['diff', 'HEAD~1', 'HEAD']);
+    expect(result.ok && result.stdout).toContain('Subproject commit');
+    expect(result.ok && result.stdout).not.toContain(CANARY);
+  });
+
+  it('refuses the options that open a submodule outside the project, which plain git follows', async () => {
+    const withSubmodule = makeProjectWithOutsideSubmodule(CANARY);
+    const leaks = [
+      ['diff --submodule=diff HEAD~1 HEAD', CANARY],
+      ['log -p --submodule=diff -1', CANARY],
+      ['show --submodule=diff HEAD', CANARY],
+      ['ls-files --recurse-submodules', 'sub/s.txt'],
+    ] as const;
+    for (const [command, evidence] of leaks) {
+      const raw = await runGit(withSubmodule, tokenize(command));
+      expect(raw.ok && raw.stdout, `plain git leaks with: ${command}`).toContain(evidence);
+      expect(refusal(tokenize(command)), command).toMatch(/is refused/);
+    }
   });
 });
 

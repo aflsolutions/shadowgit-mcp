@@ -15,6 +15,7 @@ Rewritten on the MCP TypeScript SDK v2, serving the 2026-07-28 and 2025-11-25 pr
   `POST /api/checkpoint`. The `author` parameter is gone (the assistant's name is used), and titles may run to 72
   characters.
 - A slow ShadowGit app is reported as slow, not as closed; checkpoints wait up to 55 s.
+- The "ShadowGit isn't running" error names the host that `SHADOWGIT_SESSION_API` points at.
 - Server instructions tell the assistant when to use each tool; tools carry titles, annotations and output schemas.
 - `git_command` output is capped at 25,000 characters, git runs asynchronously, and `status` no longer touches the
   snapshot index.
@@ -32,7 +33,9 @@ Rewritten on the MCP TypeScript SDK v2, serving the 2026-07-28 and 2025-11-25 pr
   `ls-files --exclude-from`/`-X`/`--exclude-per-directory` and `rev-parse --resolve-git-dir`, abbreviated or bundled,
   and any path outside the project (which `diff` would otherwise compare with `--no-index`).
 - `git_command` refuses `--ext-diff`, `--textconv` and `--filters` on every subcommand, which would run helper commands
-  from the history's git configuration.
+  from the history's git configuration, and `--submodule` and `--recurse-submodules`, which would open a submodule's
+  repository outside the project. git always runs with `core.fsmonitor`, `diff.submodule` and `submodule.recurse` fixed,
+  so the history's own config cannot run a program or switch submodule recursion on.
 - `git_command` refuses `--help`, which would open git's manual.
 - Projects not tracked by ShadowGit are refused even when they contain a `.shadowgit.git` folder.
 

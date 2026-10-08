@@ -4,7 +4,7 @@ import { toLocalIso } from './time.js';
 export class AppNotRunningError extends Error {
   constructor(options?: ErrorOptions) {
     super(
-      "ShadowGit isn't running: nothing answered on localhost:45289. Ask the user to open the ShadowGit app, then try again. Reading history with git_command still works.",
+      `ShadowGit isn't running: nothing answered on ${endpoint()}. Ask the user to open the ShadowGit app, then try again. Reading history with git_command still works.`,
       options,
     );
   }
@@ -37,6 +37,13 @@ const ErrorReply = z.object({ error: z.string() });
 export type ActiveSession = z.infer<typeof Session>;
 
 const baseUrl = () => process.env.SHADOWGIT_SESSION_API ?? 'http://localhost:45289/api';
+
+/** Host and port the requests go to: localhost:45289 by default; the raw value when SHADOWGIT_SESSION_API has no host. */
+function endpoint(): string {
+  const url = baseUrl();
+  const host = URL.canParse(url) ? new URL(url).host : '';
+  return host || url;
+}
 
 /** A POST when there is a body, else a GET. Any status but 200 and the ones in `accept` throws; the caller handles those. */
 async function request(

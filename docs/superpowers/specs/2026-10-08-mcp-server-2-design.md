@@ -197,27 +197,32 @@ helper commands from git's configuration, each backed by a test that shows the e
 | `--resolve-git-dir` | rev-parse | probes any path |
 | `--ext-diff` | every subcommand (diff, log, show and blame accept it) | runs the helper named in `diff.external` |
 | `--textconv`, `--filters` | every subcommand (diff, log, show, blame accept `--textconv`; cat-file accepts both) | runs the textconv or filter helper that the history's config assigns to a path |
+| `--submodule` | every subcommand (diff, log and show accept it) | `--submodule=diff` or `=log` opens the submodule's own repository, which can live outside the project, and prints its changes |
+| `--recurse-submodules` | every subcommand (ls-files accepts it) | lists the files of a submodule's repository, wherever it lives |
 
 A long option is denied when its name, before any `=`, is a prefix of a denied name: git expands unambiguous
 abbreviations, and `blame --cont <file>` prints the file like `--contents`. Four real options start with a denied name
 and stay allowed: `blame --ignore-rev`, `ls-files --exclude`, and `--text` (treat files as text) and `--filter` (object
 filtering) on the revision walkers. Only `cat-file` reads `--text` and `--filter` as abbreviations of `--textconv` and
-`--filters`, so it has an entry of its own without those exceptions. `--no-ext-diff` and `--no-textconv` are not
-prefixes of a denied name and pass. Short options bundle (`log -pO<file>` is `-p` plus
-`-O<file>`; `blame -wS <file>` leaks the file as "bad graft data"), so a single-dash token is denied when any of its
-letters is a denied short option. A non-option argument is refused when it is an absolute path or contains `..` as a
-path segment; revision ranges (`HEAD~2..HEAD`, `main...feature`) are not path segments and pass. `--help` and its
-abbreviations of four or more characters (`--he`, `--hel`) are refused too: git would open its manual (a browser with
-Git for Windows' default `help.format=html`, `man` elsewhere) instead of answering. The first version of
-this table listed `--output` and `-O` for log, show and diff only, and missed diff's implicit `--no-index`; an automated
+`--filters`, so it has an entry of its own without those exceptions. `--no-ext-diff`, `--no-textconv`,
+`--ignore-submodules`, `--reverse`, `--relative` and `--raw` are not prefixes of a denied name and pass. Short options
+bundle (`log -pO<file>` is `-p` plus `-O<file>`; `blame -wS <file>` leaks the file as "bad graft data"), so a
+single-dash token is denied when any of its letters is a denied short option. A non-option argument is refused when it
+is an absolute path or contains `..` as a path segment; revision ranges (`HEAD~2..HEAD`, `main...feature`) are not path
+segments and pass. `--help` and its abbreviations of four or more characters (`--he`, `--hel`) are refused too: git
+would open its manual (a browser with Git for Windows' default `help.format=html`, `man` elsewhere) instead of
+answering. The first version of this table listed `--output` and `-O` for log, show and diff only, and missed diff's implicit `--no-index`; an automated
 security review of the implementation found both (verified with git 2.47). The old entries `-C`, `-c`, `-e`, `--exec`,
 `--upload-pack`, `--receive-pack`, `--git-dir`, `--work-tree` and `--config` go: after the subcommand they are harmless
 or useful. The quote-aware tokenizer and the 1,000-character limit stay.
 
-**Execution.** Async `execFile` (`git --git-dir=<project>/.shadowgit.git --work-tree=<project> …`), so a slow
-`log -p` no longer blocks the server; a 10-second timeout (`SHADOWGIT_TIMEOUT`); stdin closed, so `--stdin` and
-`--batch` cannot hang; a 1 MB buffer. Environment: `GIT_OPTIONAL_LOCKS=0`, so `status` never rewrites the shadow index
-the app stages into, `GIT_TERMINAL_PROMPT=0` and `GIT_PAGER=cat`.
+**Execution.** Async `execFile` (`git -c … --git-dir=<project>/.shadowgit.git --work-tree=<project> …`), so a slow
+`log -p` no longer blocks the server; a 10-second timeout (`SHADOWGIT_TIMEOUT`); stdin closed, so `--stdin` and `--batch`
+cannot hang; a 1 MB buffer. The server fixes four settings with `-c`, which outranks the history's own config:
+`core.safecrlf=false` (a diff that exits 1 must not also warn on stderr), `core.fsmonitor=false` (a program named there
+runs on `status`, `diff` and `ls-files`), `diff.submodule=short` and `submodule.recurse=false` (git's defaults, so a
+config cannot make git open submodule repositories outside the project). Environment: `GIT_OPTIONAL_LOCKS=0`, so
+`status` never rewrites the shadow index the app stages into, `GIT_TERMINAL_PROMPT=0` and `GIT_PAGER=cat`.
 
 **Output.** At most 25,000 characters, below Claude Code's 10,000-token warning. A cut output starts with
 `[Truncated: showing the first 25,000 characters of 312,480 characters. Narrow it with -n, --since, --stat or a path.]`;
@@ -235,7 +240,7 @@ names the cause and the next step; the SDK turns it into `isError: true`. The `s
 
 | Situation | Result |
 |---|---|
-| App not answering (session tools, checkpoint) | Error: "ShadowGit isn't running: nothing answered on localhost:45289. Ask the user to open the ShadowGit app, then try again. Reading history with git_command still works." |
+| App not answering (session tools, checkpoint) | Error: "ShadowGit isn't running: nothing answered on localhost:45289. Ask the user to open the ShadowGit app, then try again. Reading history with git_command still works." The host and port are those of `SHADOWGIT_SESSION_API` (the raw value when it has no host). |
 | App answering too slowly (3 s, headers and body together; session tools) | Error: "ShadowGit did not answer within 3 s. The app may be busy with a large project; try again in a moment." `list_repos` reports `app_running: false` instead. |
 | Checkpoint answering too slowly (55 s, under the MCP SDK client's 60 s default) | Error: "ShadowGit did not answer within 55 s; the checkpoint may still be saving. Check with git_command (log -1) before trying again." |
 | App too old (`POST /api/checkpoint` returns 404 for the route) | Error: "This version of ShadowGit can't create checkpoints for AI assistants. Ask the user to update the ShadowGit app." |

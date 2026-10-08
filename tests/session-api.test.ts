@@ -42,10 +42,23 @@ describe('sessions', () => {
     expect(await activeSessions()).toEqual([]);
   });
 
-  it('reports an app that does not answer as AppNotRunningError', async () => {
-    vi.stubEnv('SHADOWGIT_SESSION_API', await closedAppUrl());
+  it('reports an app that does not answer as AppNotRunningError, naming the endpoint it asked', async () => {
+    const closed = await closedAppUrl();
+    vi.stubEnv('SHADOWGIT_SESSION_API', closed);
     await expect(activeSessions()).rejects.toBeInstanceOf(AppNotRunningError);
-    await expect(activeSessions()).rejects.toThrow("ShadowGit isn't running: nothing answered on localhost:45289.");
+    await expect(activeSessions()).rejects.toThrow(`ShadowGit isn't running: nothing answered on ${new URL(closed).host}. Ask the user to open`);
+  });
+
+  it('names localhost:45289 when SHADOWGIT_SESSION_API is not set', () => {
+    vi.stubEnv('SHADOWGIT_SESSION_API', undefined);
+    expect(new AppNotRunningError().message).toBe(
+      "ShadowGit isn't running: nothing answered on localhost:45289. Ask the user to open the ShadowGit app, then try again. Reading history with git_command still works.",
+    );
+  });
+
+  it.each(['nonsense', 'localhost:45289/api'])('names the raw SHADOWGIT_SESSION_API %s when it has no host', async (value) => {
+    vi.stubEnv('SHADOWGIT_SESSION_API', value);
+    await expect(activeSessions()).rejects.toThrow(`ShadowGit isn't running: nothing answered on ${value}. Ask the user to open`);
   });
 
   it('says the app did not answer, not that it is not running, when a request times out', async () => {

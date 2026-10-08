@@ -33,13 +33,16 @@ interface DeniedOptions {
 /**
  * Options that make a subcommand read or write files outside the history, or run helper commands from git's
  * configuration (checked against git 2.47). The subcommand comes first, so git's global options (-C, -c, --git-dir)
- * never apply and need no entry. The revision walkers (log, show, diff, rev-list, shortlog, blame) accept --output and
- * -O, and the diff machinery behind log, show, diff and blame accepts --ext-diff and --textconv, so those are refused
- * for every subcommand. --text (treat files as text) and --filter (object filtering) are real options there; only
- * cat-file reads them as abbreviations, and it has its own entry below.
+ * never apply and need no entry. These are refused for every subcommand:
+ * - --output and -O (revision walkers: log, show, diff, rev-list, shortlog, blame);
+ * - --ext-diff, --textconv and --filters (the diff machinery of log, show, diff and blame; cat-file takes the last two);
+ * - --submodule (diff, log, show) and --recurse-submodules (ls-files), which open a submodule's repository, and that
+ *   can live anywhere.
+ * --text (treat files as text) and --filter (object filtering) are real options there; only cat-file reads them as
+ * abbreviations, and it has its own entry below.
  */
 const DENIED_EVERYWHERE: DeniedOptions = {
-  long: ['--output', '--orderfile', '--ext-diff', '--textconv', '--filters'],
+  long: ['--output', '--orderfile', '--ext-diff', '--textconv', '--filters', '--submodule', '--recurse-submodules'],
   short: ['O'],
   except: ['--text', '--filter'],
 };
@@ -128,14 +131,27 @@ function isDenied(option: string, denied: DeniedOptions): boolean {
   return denied.short.some((letter) => option.slice(1).includes(letter));
 }
 
+/**
+ * Settings the server fixes whatever the history's own config says (-c outranks it). The history is data the server
+ * did not write, and a config line must not reach beyond it or run a program.
+ */
+const GIT_SETTINGS = [
+  // With core.autocrlf=true (Git for Windows' default) a diff that exits 1 also warns on stderr, which would hide it.
+  'core.safecrlf=false',
+  // A program named here runs on status, diff and ls-files.
+  'core.fsmonitor=false',
+  // git's defaults. A config can switch on opening submodule repositories, which can live outside the project.
+  'diff.submodule=short',
+  'submodule.recurse=false',
+].flatMap((setting) => ['-c', setting]);
+
 /** Runs git on a project's ShadowGit history. The arguments go to git as they are; no shell is involved. */
 export function runGit(projectPath: string, args: string[]): Promise<GitResult> {
   const timeout = timeoutMs();
   return new Promise((resolve) => {
     const child = execFile(
       'git',
-      // safecrlf=false: with core.autocrlf=true (Git for Windows' default) a diff that exits 1 also warns on stderr, which would hide it.
-      ['-c', 'core.safecrlf=false', `--git-dir=${path.join(projectPath, SHADOWGIT_DIR)}`, `--work-tree=${projectPath}`, ...args],
+      [...GIT_SETTINGS, `--git-dir=${path.join(projectPath, SHADOWGIT_DIR)}`, `--work-tree=${projectPath}`, ...args],
       {
         cwd: projectPath,
         encoding: 'utf8',

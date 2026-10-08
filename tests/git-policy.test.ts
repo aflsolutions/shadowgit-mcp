@@ -50,6 +50,14 @@ describe('refusal', () => {
     'cat-file --filters --path=a.txt HEAD:a.txt',
     'cat-file --filter --path=a.txt HEAD:a.txt',
     'blame --textconv a.txt',
+    'diff --submodule=diff HEAD~1',
+    'diff --submodule=log HEAD~1',
+    'diff --submodule HEAD~1',
+    'diff --sub=diff HEAD~1',
+    'log -p --submodule=diff',
+    'show --submodule=diff HEAD',
+    'ls-files --recurse-submodules',
+    'ls-files --recurse',
   ])('refuses %s', (command) => {
     expect(refusal(tokenize(command))).toMatch(OPTION_REFUSAL);
   });
@@ -98,6 +106,12 @@ describe('refusal', () => {
     'log --text -p',
     'blame --text a.txt',
     'rev-list --filter=blob:none --objects HEAD',
+    'log --reverse --summary --relative-date',
+    'diff --relative --raw HEAD~1',
+    'show --remerge-diff HEAD',
+    'diff --ignore-submodules=all HEAD~1',
+    'status --ignore-submodules',
+    'ls-files --stage --deleted',
   ])('allows %s', (command) => {
     expect(refusal(tokenize(command))).toBeNull();
   });

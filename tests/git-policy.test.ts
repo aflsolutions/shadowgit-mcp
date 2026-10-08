@@ -33,6 +33,17 @@ describe('refusal', () => {
     'ls-files -X /etc/hosts',
     'ls-files --exclude-per-directory=.secret',
     'rev-parse --resolve-git-dir /etc',
+    'rev-list --output=/tmp/x HEAD',
+    'shortlog --output=/tmp/x HEAD',
+    'blame --output=/tmp/x a.txt',
+    'rev-list -O/etc/hosts HEAD',
+    'shortlog -O/etc/hosts HEAD',
+    'diff /etc/hosts a.txt',
+    'diff ../outside.txt a.txt',
+    'diff -- a.txt ../../etc/hosts',
+    'diff /dev/null /etc/passwd',
+    'diff -- /dev/null /etc/passwd',
+    'diff ../outside/secret.txt a.txt',
   ])('refuses %s', (command) => {
     expect(refusal(tokenize(command))).toMatch(/is refused: it reads or writes files outside the ShadowGit history\.$/);
   });
@@ -46,6 +57,9 @@ describe('refusal', () => {
     'blame --ignore-rev HEAD a.txt',
     'ls-files --others --exclude=*.log',
     'diff --output-indicator-new=+ HEAD~1',
+    'log HEAD~2..HEAD --stat',
+    'diff main...HEAD -- src/app.ts',
+    'rev-list --objects --all',
   ])('allows %s', (command) => {
     expect(refusal(tokenize(command))).toBeNull();
   });

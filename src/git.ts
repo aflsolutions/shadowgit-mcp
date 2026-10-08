@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 export const ALLOWED_SUBCOMMANDS = [
   'log', 'show', 'diff', 'status', 'blame', 'shortlog', 'rev-list', 'rev-parse', 'ls-files', 'ls-tree', 'cat-file',
   'describe', 'show-branch',
@@ -12,13 +14,14 @@ interface DeniedOptions {
 }
 
 /**
- * Options that make an allowed subcommand read or write files outside the history (checked against git 2.47). The
- * subcommand comes first, so git's global options (-C, -c, --git-dir) never apply and need no entry.
+ * Options that make a subcommand read or write files outside the history (checked against git 2.47). The subcommand
+ * comes first, so git's global options (-C, -c, --git-dir) never apply and need no entry. The revision walkers (log,
+ * show, diff, rev-list, shortlog, blame) accept --output and -O, so those are refused for every subcommand.
  */
+const DENIED_EVERYWHERE: DeniedOptions = { long: ['--output', '--orderfile'], short: ['O'] };
+
 const DENIED: Record<string, DeniedOptions> = {
-  log: { long: ['--output', '--orderfile'], short: ['O'] },
-  show: { long: ['--output', '--orderfile'], short: ['O'] },
-  diff: { long: ['--output', '--orderfile', '--no-index'], short: ['O'] },
+  diff: { long: ['--no-index'], short: [] },
   blame: { long: ['--contents', '--ignore-revs-file'], short: ['S'], except: ['--ignore-rev'] },
   'ls-files': { long: ['--exclude-from', '--exclude-per-directory'], short: ['X'], except: ['--exclude'] },
   'rev-parse': { long: ['--resolve-git-dir'], short: [] },
@@ -59,10 +62,19 @@ export function refusal(args: string[]): string | null {
     return `git ${subcommand} is not allowed. Allowed: ${ALLOWED_SUBCOMMANDS.join(', ')}.`;
   }
   const denied = DENIED[subcommand];
-  const offending = denied && options.find((option) => isDenied(option, denied));
+  const offending = options.find((arg) =>
+    arg.startsWith('-')
+      ? isDenied(arg, DENIED_EVERYWHERE) || (denied !== undefined && isDenied(arg, denied))
+      : leavesProject(arg),
+  );
   return offending
     ? `${offending.split('=')[0]} is refused: it reads or writes files outside the ShadowGit history.`
     : null;
+}
+
+/** A path outside the project: git diff compares such a path with --no-index by itself. Ranges like a..b pass. */
+function leavesProject(arg: string): boolean {
+  return path.isAbsolute(arg) || /(^|[\\/])\.\.([\\/]|$)/.test(arg);
 }
 
 function isDenied(option: string, denied: DeniedOptions): boolean {

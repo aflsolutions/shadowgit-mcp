@@ -1,7 +1,8 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { readRepos, resolveRepo } from '../src/repos.js';
+import { readRepos, resolveRepo, tildify } from '../src/repos.js';
 import { makeProject, removeTempDirs, tempDir, useStorage } from './helpers/fixtures.js';
 
 const saved = { CLAUDE_PROJECT_DIR: process.env.CLAUDE_PROJECT_DIR, SHADOWGIT_STORAGE_DIR: process.env.SHADOWGIT_STORAGE_DIR };
@@ -35,11 +36,11 @@ describe('readRepos', () => {
     expect(readRepos()).toEqual([]);
   });
 
-  it('fails on a corrupt repos.json instead of pretending it is empty', () => {
+  it('fails on a corrupt repos.json instead of pretending it is empty, naming the file', () => {
     const dir = tempDir('corrupt');
     fs.writeFileSync(path.join(dir, 'repos.json'), '{');
     process.env.SHADOWGIT_STORAGE_DIR = dir;
-    expect(() => readRepos()).toThrow();
+    expect(() => readRepos()).toThrow(`Couldn't read ShadowGit's project list at ${path.join(dir, 'repos.json')}: `);
   });
 });
 
@@ -99,8 +100,15 @@ describe('resolveRepo', () => {
     const tracked = makeProject('tracked');
     useStorage([{ name: 'tracked', path: tracked }, { name: 'blog', path: makeProject('blog') }]);
     expect(resolveRepo(tracked).name).toBe('tracked');
-    const untracked = tempDir('untracked');
+    const untracked = makeProject('untracked');
     expect(() => resolveRepo(untracked)).toThrow(`${untracked} is not a ShadowGit project. Pass repo as one of: tracked (`);
+  });
+
+  it('keeps a folder named like ..x inside its project', () => {
+    const a = makeProject('a');
+    useStorage([{ name: 'a', path: a }, { name: 'b', path: makeProject('b') }]);
+    process.env.CLAUDE_PROJECT_DIR = inside(a, '..cache');
+    expect(resolveRepo().name).toBe('a');
   });
 
   it('skips a tracked project whose folder was deleted', () => {
@@ -120,5 +128,14 @@ describe('resolveRepo', () => {
   it('tells the user to add a project when none is tracked', () => {
     useStorage([]);
     expect(() => resolveRepo()).toThrow('ShadowGit is not tracking any project yet. Ask the user to add one in the ShadowGit app.');
+  });
+});
+
+describe('tildify', () => {
+  it('shortens the home directory and what is inside it, not a sibling sharing its prefix', () => {
+    const home = os.homedir();
+    expect(tildify(home)).toBe('~');
+    expect(tildify(path.join(home, 'code'))).toBe(`~${path.sep}code`);
+    expect(tildify(`${home}ine${path.sep}code`)).toBe(`${home}ine${path.sep}code`);
   });
 });

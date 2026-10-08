@@ -22,14 +22,20 @@ export function storageDir(): string {
 
 /** The tracked projects, read on every call so projects added in the app show up without a restart. */
 export function readRepos(): Repo[] {
+  const file = path.join(storageDir(), 'repos.json');
   let text: string;
   try {
-    text = fs.readFileSync(path.join(storageDir(), 'repos.json'), 'utf8');
+    text = fs.readFileSync(file, 'utf8');
   } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return [];
+    if (hasCode(error, 'ENOENT')) return [];
     throw error;
   }
-  return ReposFile.parse(JSON.parse(text));
+  try {
+    return ReposFile.parse(JSON.parse(text));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`Couldn't read ShadowGit's project list at ${file}: ${reason}`, { cause: error });
+  }
 }
 
 /** The project the tools default to: the one containing the client's project directory, else the only one. */
@@ -56,7 +62,7 @@ export function resolveRepo(repo?: string): Repo {
 
 export function tildify(p: string): string {
   const home = os.homedir();
-  return p.startsWith(home) ? `~${p.slice(home.length)}` : p;
+  return p === home || p.startsWith(home + path.sep) ? `~${p.slice(home.length)}` : p;
 }
 
 function repoByArgument(repos: Repo[], repo: string): Repo {
@@ -89,7 +95,8 @@ function canonical(p: string): string {
   let resolved: string;
   try {
     resolved = fs.realpathSync.native(p);
-  } catch {
+  } catch (error) {
+    if (!hasCode(error, 'ENOENT', 'ENOTDIR')) throw error;
     // A tracked project can be deleted; its recorded path still names where it was.
     resolved = path.resolve(p);
   }
@@ -98,7 +105,12 @@ function canonical(p: string): string {
 
 function isInside(child: string, parent: string): boolean {
   const relative = path.relative(parent, child);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  if (relative === '') return true;
+  return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+function hasCode(error: unknown, ...codes: string[]): boolean {
+  return error instanceof Error && 'code' in error && typeof error.code === 'string' && codes.includes(error.code);
 }
 
 function expandHome(p: string): string {

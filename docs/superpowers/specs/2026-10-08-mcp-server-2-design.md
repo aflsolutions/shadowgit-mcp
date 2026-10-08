@@ -249,7 +249,8 @@ Released before the server's 2.0.0.
 3. **Host check.** The Session API answers only requests whose `Host` is `127.0.0.1:45289` or `localhost:45289`. It
    has no authentication and gains a write endpoint; the check stops DNS rebinding, which lets a web page reach a
    localhost server through a host name it controls. The MCP specification asks the same of local HTTP servers.
-4. **Snapshot titles in local time**, in its own pull request for the same release.
+4. **Snapshot titles in local time.** Shipped in shadowgit-app PR #36 (`localTimestamp()`), which also strips the
+   written time from titles in the app's commit list.
 
 ## Testing
 

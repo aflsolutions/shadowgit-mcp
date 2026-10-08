@@ -17,7 +17,8 @@ export class AppTimeoutError extends Error {
   }
 }
 
-const CHECKPOINT_TIMEOUT_MS = 60_000;
+// Under the MCP SDK client's default request timeout of 60 s, so our message arrives before the client gives up.
+const CHECKPOINT_TIMEOUT_MS = 55_000;
 
 const APP_TOO_OLD = "This version of ShadowGit can't create checkpoints for AI assistants. Ask the user to update the ShadowGit app.";
 

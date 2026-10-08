@@ -87,11 +87,11 @@ describe('createCheckpoint', () => {
 
   it('warns that the checkpoint may still be saving when the app does not answer', async () => {
     app.hang = true;
-    // Stands in for the 60 s wait: the real timeout is replaced by a 50 ms one, which fails the same way.
+    // Stands in for the 55 s wait: the real timeout is replaced by a 50 ms one, which fails the same way.
     const timeout = AbortSignal.timeout.bind(AbortSignal);
     vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => timeout(50));
     await expect(createCheckpoint(checkpointInput)).rejects.toThrow(
-      'ShadowGit did not answer within 60 s; the checkpoint may still be saving. Check with git_command (log -1) before trying again.',
+      'ShadowGit did not answer within 55 s; the checkpoint may still be saving. Check with git_command (log -1) before trying again.',
     );
   });
 });

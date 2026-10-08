@@ -1,4 +1,13 @@
+import { execFile } from 'node:child_process';
 import path from 'node:path';
+
+export const SHADOWGIT_DIR = '.shadowgit.git';
+export const OUTPUT_LIMIT = 25_000;
+const MAX_BUFFER = 1024 * 1024;
+
+const timeoutMs = () => Number(process.env.SHADOWGIT_TIMEOUT) || 10_000;
+
+export type GitResult = { ok: true; stdout: string; overflowed: boolean } | { ok: false; error: string };
 
 export const ALLOWED_SUBCOMMANDS = [
   'log', 'show', 'diff', 'status', 'blame', 'shortlog', 'rev-list', 'rev-parse', 'ls-files', 'ls-tree', 'cat-file',
@@ -94,4 +103,43 @@ function isDenied(option: string, denied: DeniedOptions): boolean {
     return denied.long.some((long) => long.startsWith(name));
   }
   return option.startsWith('-') && denied.short.some((letter) => option.slice(1).includes(letter));
+}
+
+/** Runs git on a project's ShadowGit history. The arguments go to git as they are; no shell is involved. */
+export function runGit(projectPath: string, args: string[]): Promise<GitResult> {
+  return new Promise((resolve) => {
+    const child = execFile(
+      'git',
+      [`--git-dir=${path.join(projectPath, SHADOWGIT_DIR)}`, `--work-tree=${projectPath}`, ...args],
+      {
+        cwd: projectPath,
+        encoding: 'utf8',
+        maxBuffer: MAX_BUFFER,
+        timeout: timeoutMs(),
+        windowsHide: true,
+        // GIT_OPTIONAL_LOCKS=0: status must not rewrite the index the app stages snapshots into.
+        env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GIT_PAGER: 'cat', PAGER: 'cat' },
+      },
+      (error, stdout, stderr) => {
+        if (!error) return resolve({ ok: true, stdout, overflowed: false });
+        if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') return resolve({ ok: true, stdout, overflowed: true });
+        if (error.code === 'ENOENT') return resolve({ ok: false, error: 'git is not installed or not on PATH.' });
+        if (error.killed) {
+          return resolve({ ok: false, error: `git took longer than ${timeoutMs() / 1000} s. Narrow the command with -n, --since or a path.` });
+        }
+        // A non-zero exit with nothing on stderr is git reporting a result (diff --exit-code found differences).
+        if (!stderr.trim()) return resolve({ ok: true, stdout, overflowed: false });
+        resolve({ ok: false, error: stderr.trim().slice(0, 2_000) });
+      },
+    );
+    // --stdin and --batch would otherwise wait for input until the timeout.
+    child.stdin?.end();
+  });
+}
+
+/** git output as the model gets it: at most OUTPUT_LIMIT characters, with a note first when cut. */
+export function capOutput(stdout: string, overflowed: boolean): string {
+  if (!overflowed && stdout.length <= OUTPUT_LIMIT) return stdout === '' ? '(no output)' : stdout;
+  const total = overflowed ? 'more than 1 MB' : `${stdout.length.toLocaleString('en-US')} characters`;
+  return `[Truncated: showing the first 25,000 characters of ${total}. Narrow it with -n, --since, --stat or a path.]\n${stdout.slice(0, OUTPUT_LIMIT)}`;
 }

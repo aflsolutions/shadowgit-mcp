@@ -72,9 +72,13 @@ export function refusal(args: string[]): string | null {
     : null;
 }
 
-/** A path outside the project: git diff compares such a path with --no-index by itself. Ranges like a..b pass. */
+/**
+ * A path outside the project: git diff compares such a path with --no-index by itself. Ranges like a..b pass. Windows
+ * drive-qualified paths (C:\x, C:/x, and drive-relative C:file) are refused too; a revision on a one-letter branch
+ * such as a:file is refused as a false positive.
+ */
 function leavesProject(arg: string): boolean {
-  return path.isAbsolute(arg) || /(^|[\\/])\.\.([\\/]|$)/.test(arg);
+  return path.isAbsolute(arg) || /(^|[\\/])\.\.([\\/]|$)/.test(arg) || /^[A-Za-z]:/.test(arg);
 }
 
 function isDenied(option: string, denied: DeniedOptions): boolean {

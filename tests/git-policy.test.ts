@@ -44,6 +44,8 @@ describe('refusal', () => {
     'diff /dev/null /etc/passwd',
     'diff -- /dev/null /etc/passwd',
     'diff ../outside/secret.txt a.txt',
+    'diff C:secret.txt a.txt',
+    'diff c:/Windows/win.ini a.txt',
   ])('refuses %s', (command) => {
     expect(refusal(tokenize(command))).toMatch(/is refused: it reads or writes files outside the ShadowGit history\.$/);
   });
@@ -60,6 +62,7 @@ describe('refusal', () => {
     'log HEAD~2..HEAD --stat',
     'diff main...HEAD -- src/app.ts',
     'rev-list --objects --all',
+    'show HEAD:src/app.ts',
   ])('allows %s', (command) => {
     expect(refusal(tokenize(command))).toBeNull();
   });

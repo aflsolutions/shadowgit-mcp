@@ -1,11 +1,18 @@
 import { execFile } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 
 export const SHADOWGIT_DIR = '.shadowgit.git';
 export const OUTPUT_LIMIT = 25_000;
 const MAX_BUFFER = 1024 * 1024;
 
-const timeoutMs = () => Number(process.env.SHADOWGIT_TIMEOUT) || 10_000;
+const MAX_TIMEOUT_MS = 2_147_483_647; // a larger delay makes Node fire the timeout after 1 ms
+
+/** SHADOWGIT_TIMEOUT in milliseconds. Anything but an integer Node accepts as a delay falls back to 10 s. */
+function timeoutMs(): number {
+  const value = Number(process.env.SHADOWGIT_TIMEOUT);
+  return Number.isInteger(value) && value >= 1 && value <= MAX_TIMEOUT_MS ? value : 10_000;
+}
 
 export type GitResult = { ok: true; stdout: string; overflowed: boolean } | { ok: false; error: string };
 
@@ -108,6 +115,10 @@ function isDenied(option: string, denied: DeniedOptions): boolean {
 /** Runs git on a project's ShadowGit history. The arguments go to git as they are; no shell is involved. */
 export function runGit(projectPath: string, args: string[]): Promise<GitResult> {
   return new Promise((resolve) => {
+    // Node reports a missing cwd as `spawn git ENOENT`, which reads as git not being installed.
+    if (!fs.existsSync(projectPath)) {
+      return resolve({ ok: false, error: `The project folder ${projectPath} no longer exists.` });
+    }
     const child = execFile(
       'git',
       [`--git-dir=${path.join(projectPath, SHADOWGIT_DIR)}`, `--work-tree=${projectPath}`, ...args],
@@ -128,8 +139,10 @@ export function runGit(projectPath: string, args: string[]): Promise<GitResult> 
           return resolve({ ok: false, error: `git took longer than ${timeoutMs() / 1000} s. Narrow the command with -n, --since or a path.` });
         }
         // A non-zero exit with nothing on stderr is git reporting a result (diff --exit-code found differences).
-        if (!stderr.trim()) return resolve({ ok: true, stdout, overflowed: false });
-        resolve({ ok: false, error: stderr.trim().slice(0, 2_000) });
+        if (typeof error.code === 'number' && !stderr.trim()) return resolve({ ok: true, stdout, overflowed: false });
+        // A signal we did not send (the OOM killer, a crash) leaves partial output that must not pass for a result.
+        if (error.signal) return resolve({ ok: false, error: `git was stopped by ${error.signal} before it finished.` });
+        resolve({ ok: false, error: stderr.trim().slice(0, 2_000) || error.message });
       },
     );
     // --stdin and --batch would otherwise wait for input until the timeout.
@@ -141,5 +154,5 @@ export function runGit(projectPath: string, args: string[]): Promise<GitResult> 
 export function capOutput(stdout: string, overflowed: boolean): string {
   if (!overflowed && stdout.length <= OUTPUT_LIMIT) return stdout === '' ? '(no output)' : stdout;
   const total = overflowed ? 'more than 1 MB' : `${stdout.length.toLocaleString('en-US')} characters`;
-  return `[Truncated: showing the first 25,000 characters of ${total}. Narrow it with -n, --since, --stat or a path.]\n${stdout.slice(0, OUTPUT_LIMIT)}`;
+  return `[Truncated: showing the first ${OUTPUT_LIMIT.toLocaleString('en-US')} characters of ${total}. Narrow it with -n, --since, --stat or a path.]\n${stdout.slice(0, OUTPUT_LIMIT)}`;
 }

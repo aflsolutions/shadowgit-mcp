@@ -1,16 +1,27 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { capOutput, runGit } from '../src/git.js';
-import { makeProject, removeTempDirs, snapshot } from './helpers/fixtures.js';
+import { makeProject, removeTempDirs, snapshot, tempDir } from './helpers/fixtures.js';
 
 let project: string;
+
+/** Puts a `git` that runs this shell script first on PATH, for the rest of the test. POSIX only. */
+function stubGit(script: string): void {
+  const bin = tempDir('fake-git');
+  fs.writeFileSync(path.join(bin, 'git'), `#!/bin/sh\n${script}\n`, { mode: 0o755 });
+  vi.stubEnv('PATH', `${bin}${path.delimiter}${process.env.PATH}`);
+}
 
 beforeAll(() => {
   project = makeProject('demo', { 'a.txt': 'hello\n' });
 });
 
 afterAll(removeTempDirs);
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('runGit', () => {
   it('runs git against the ShadowGit history', async () => {
@@ -50,6 +61,31 @@ describe('runGit', () => {
     const result = await runGit(project, ['show', 'HEAD:big.txt']);
     expect(result.ok && result.overflowed).toBe(true);
   });
+
+  it('names a project folder that no longer exists', async () => {
+    const gone = path.join(tempDir('gone'), 'never-created');
+    expect(await runGit(gone, ['log'])).toEqual({ ok: false, error: `The project folder ${gone} no longer exists.` });
+  });
+
+  // A real git can finish inside a 1 ms timeout, so a git that never answers makes this deterministic.
+  it.skipIf(process.platform === 'win32')('stops git at SHADOWGIT_TIMEOUT and says so', async () => {
+    stubGit('exec sleep 5');
+    vi.stubEnv('SHADOWGIT_TIMEOUT', '50');
+    const result = await runGit(project, ['log']);
+    expect(result.ok).toBe(false);
+    expect(result.ok ? '' : result.error).toMatch(/^git took longer than 0\.05 s\./);
+  });
+
+  it.each(['-1', '0', '0.5', '2147483648', 'soon'])('ignores SHADOWGIT_TIMEOUT=%s and uses the default', async (value) => {
+    vi.stubEnv('SHADOWGIT_TIMEOUT', value);
+    expect((await runGit(project, ['log', '--format=%s'])).ok).toBe(true);
+  });
+
+  // A git that dies from a signal the way the OOM killer or a crash ends it: partial output, no exit code.
+  it.skipIf(process.platform === 'win32')('reports a git stopped by a signal as an error, not as a result', async () => {
+    stubGit('echo partial; kill -KILL $$');
+    expect(await runGit(project, ['log'])).toEqual({ ok: false, error: 'git was stopped by SIGKILL before it finished.' });
+  });
 });
 
 describe('capOutput', () => {
@@ -59,6 +95,18 @@ describe('capOutput', () => {
 
   it('names empty output', () => {
     expect(capOutput('', false)).toBe('(no output)');
+  });
+
+  it('keeps output of exactly 25,000 characters whole', () => {
+    expect(capOutput('y'.repeat(25_000), false)).toBe('y'.repeat(25_000));
+  });
+
+  it('cuts output one character over the limit', () => {
+    const lines = capOutput('y'.repeat(25_001), false).split('\n');
+    expect(lines[0]).toBe(
+      '[Truncated: showing the first 25,000 characters of 25,001 characters. Narrow it with -n, --since, --stat or a path.]',
+    );
+    expect(lines[1]).toHaveLength(25_000);
   });
 
   it('cuts long output and says so first', () => {

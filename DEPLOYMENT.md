@@ -14,4 +14,8 @@ mcp-publisher publish
 `npm publish` runs typecheck, lint and tests first (`prepublishOnly`). The MCP Registry checks that `mcpName` in the
 published `package.json` matches `server.json`'s `name`, so publish to npm before the registry.
 
-`vite` is pinned to 7 in devDependencies although nothing imports it: with vite 8, npm 10 (Node 20, what CI runs) crashes resolving vitest 4 and rejects the lockfile in `npm ci`. Keep it at 7 until vitest supports vite 8 under npm 10.
+## Why vite is pinned
+
+`vite` is pinned to 7 in devDependencies although nothing imports it: with vite 8, npm 10 (Node 20, what CI runs)
+crashes resolving vitest 4 and rejects the lockfile in `npm ci`. Keep it at 7 until the npm that CI uses (Node 20's npm
+10) resolves vitest with vite 8.

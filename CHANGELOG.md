@@ -7,8 +7,9 @@ All notable changes to the ShadowGit MCP Server will be documented in this file.
 Rewritten on the MCP TypeScript SDK v2, serving the 2026-07-28 and 2025-11-25 protocol revisions.
 
 ### Changed
-- Every tool works on the current project when `repo` is omitted (Claude Code's project directory, or the only tracked
-  project). `end_session` no longer needs a session id: it ends the project's active session.
+- The tools other than `list_repos` work on the current project when `repo` is omitted (Claude Code's project directory,
+  or the only tracked project). `end_session` no longer needs a session id: it ends the project's active session.
+- `end_session` takes an optional `session_id` (was `sessionId`); `commitHash` is gone.
 - `checkpoint` is made by the ShadowGit app, so it follows `.shadowgit-ignore`; it needs an app release with
   `POST /api/checkpoint`. The `author` parameter is gone (the assistant's name is used), and titles may run to 72
   characters.
@@ -16,6 +17,7 @@ Rewritten on the MCP TypeScript SDK v2, serving the 2026-07-28 and 2025-11-25 pr
 - Server instructions tell the assistant when to use each tool; tools carry titles, annotations and output schemas.
 - `git_command` output is capped at 25,000 characters, git runs asynchronously, and `status` no longer touches the
   snapshot index.
+- `SHADOWGIT_STORAGE_DIR` points the server at a non-default ShadowGit storage folder, as it does for the app.
 - Requires Node.js 20.
 
 ### Security

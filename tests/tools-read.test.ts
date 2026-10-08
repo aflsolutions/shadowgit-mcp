@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { runGit, tokenize } from '../src/git.js';
+import { tildify } from '../src/repos.js';
 import { gitCommand } from '../src/tools/git-command.js';
 import { listRepos } from '../src/tools/list-repos.js';
 import { startFakeApp, type FakeApp } from './helpers/fake-app.js';
@@ -175,8 +176,10 @@ describe('list_repos with a history that has no snapshots or is broken', () => {
   });
 
   it('fails when git cannot read the history, instead of reporting no snapshots', async () => {
-    trackOnly('broken', (dir) => fs.mkdirSync(path.join(dir, '.shadowgit.git')));
+    const project = trackOnly('broken', (dir) => fs.mkdirSync(path.join(dir, '.shadowgit.git')));
 
-    await expect(listRepos()).rejects.toThrow(/not a git repository/);
+    await expect(listRepos()).rejects.toThrow(
+      `Couldn't read the ShadowGit history of broken (${tildify(project)}): fatal: not a git repository`,
+    );
   });
 });

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as z from 'zod/v4';
 import { SHADOWGIT_DIR, runGit } from '../git.js';
-import { currentRepo, readRepos, tildify } from '../repos.js';
+import { currentRepo, readRepos, tildify, type Repo } from '../repos.js';
 import { AppNotRunningError, activeSessions, type ActiveSession } from '../session-api.js';
 import { toLocalIso } from '../time.js';
 import { dataResult } from './shared.js';
@@ -32,7 +32,7 @@ export async function listRepos(): Promise<CallToolResult> {
       name: repo.name,
       path: repo.path,
       current: repo === current,
-      last_snapshot: await lastSnapshot(repo.path),
+      last_snapshot: await lastSnapshot(repo),
       session: session ? { id: session.id, description: session.description, started_at: session.startedAt } : null,
     };
   }));
@@ -63,11 +63,11 @@ async function sessionsIfRunning(): Promise<ActiveSession[] | null> {
   }
 }
 
-async function lastSnapshot(projectPath: string): Promise<string | null> {
-  if (!fs.existsSync(path.join(projectPath, SHADOWGIT_DIR))) return null;
+async function lastSnapshot(repo: Repo): Promise<string | null> {
+  if (!fs.existsSync(path.join(repo.path, SHADOWGIT_DIR))) return null;
   // --all makes a history without snapshots yet exit 0 with no output; any real failure (git, disk, corruption) must show.
-  const result = await runGit(projectPath, ['log', '-1', '--all', '--format=%ct']);
-  if (!result.ok) throw new Error(result.error);
+  const result = await runGit(repo.path, ['log', '-1', '--all', '--format=%ct']);
+  if (!result.ok) throw new Error(`Couldn't read the ShadowGit history of ${repo.name} (${tildify(repo.path)}): ${result.error}`);
   const seconds = result.stdout.trim();
   return seconds === '' ? null : toLocalIso(new Date(Number(seconds) * 1000));
 }

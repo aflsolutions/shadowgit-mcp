@@ -5,7 +5,7 @@ import { runGit, tokenize } from '../src/git.js';
 import { gitCommand } from '../src/tools/git-command.js';
 import { listRepos } from '../src/tools/list-repos.js';
 import { startFakeApp, type FakeApp } from './helpers/fake-app.js';
-import { makeProject, removeTempDirs, snapshot, tempDir, textOf, useStorage } from './helpers/fixtures.js';
+import { makeProject, removeTempDirs, shadowGit, snapshot, tempDir, textOf, useStorage } from './helpers/fixtures.js';
 
 let project: string;
 let other: string;
@@ -108,16 +108,17 @@ describe('git_command file escapes', () => {
 
   // git reads a -S file as graft data and reports its lines on stderr only, which runGit drops: nothing to prove above.
   it.each([
-    'blame -wS /etc/hosts README.md',
+    'blame -wS secret.txt README.md',
     'log -p -O/etc/hosts',
     'log -pO/etc/hosts',
     'show --orderfile=/etc/hosts',
     'ls-files --exclude-from=/etc/hosts',
-    'ls-files -X /etc/hosts',
+    'ls-files -X secret.txt',
     'ls-files --exclude-per-directory=.secret',
-    'rev-parse --resolve-git-dir /etc',
+    'rev-parse --resolve-git-dir secret',
   ])('refuses %s', async (command) => {
-    await expect(gitCommand({ command })).rejects.toThrow(/is refused/);
+    // Relative values keep the path rule out of it: only the option rules can produce this wording.
+    await expect(gitCommand({ command })).rejects.toThrow(/is refused: it reads or writes files outside the ShadowGit history\./);
   });
 });
 
@@ -150,5 +151,32 @@ describe('list_repos', () => {
 
     expect(result.structuredContent).toMatchObject({ app_running: false });
     expect(textOf(result)).toContain('The ShadowGit app is not running, so sessions and checkpoints are unavailable.');
+  });
+});
+
+describe('list_repos with a history that has no snapshots or is broken', () => {
+  function trackOnly(name: string, setup: (project: string) => void): string {
+    const project = path.join(tempDir('project'), name);
+    fs.mkdirSync(project);
+    setup(project);
+    useStorage([{ name, path: project }]);
+    return project;
+  }
+
+  it('reports last_snapshot null for a history with zero commits', async () => {
+    const project = trackOnly('fresh', (dir) => {
+      shadowGit(dir, ['init', '--quiet']);
+      fs.writeFileSync(path.join(dir, '.shadowgit.git', 'info', 'exclude'), '/.shadowgit.git/\n');
+    });
+    const result = await listRepos();
+
+    expect(result.structuredContent).toMatchObject({ repos: [{ name: 'fresh', path: project, last_snapshot: null }] });
+    expect(textOf(result)).toContain('no snapshots yet');
+  });
+
+  it('fails when git cannot read the history, instead of reporting no snapshots', async () => {
+    trackOnly('broken', (dir) => fs.mkdirSync(path.join(dir, '.shadowgit.git')));
+
+    await expect(listRepos()).rejects.toThrow(/not a git repository/);
   });
 });

@@ -65,10 +65,11 @@ async function sessionsIfRunning(): Promise<ActiveSession[] | null> {
 
 async function lastSnapshot(projectPath: string): Promise<string | null> {
   if (!fs.existsSync(path.join(projectPath, SHADOWGIT_DIR))) return null;
-  const result = await runGit(projectPath, ['log', '-1', '--format=%ct']);
-  // A history without snapshots yet makes git log fail; that project simply has no last snapshot.
-  const seconds = result.ok ? Number(result.stdout.trim()) : NaN;
-  return Number.isFinite(seconds) && seconds > 0 ? toLocalIso(new Date(seconds * 1000)) : null;
+  // --all makes a history without snapshots yet exit 0 with no output; any real failure (git, disk, corruption) must show.
+  const result = await runGit(projectPath, ['log', '-1', '--all', '--format=%ct']);
+  if (!result.ok) throw new Error(result.error);
+  const seconds = result.stdout.trim();
+  return seconds === '' ? null : toLocalIso(new Date(Number(seconds) * 1000));
 }
 
 function render(listing: Listing): string {

@@ -224,6 +224,13 @@ runs on `status`, `diff` and `ls-files`), `diff.submodule=short` and `submodule.
 config cannot make git open submodule repositories outside the project). Environment: `GIT_OPTIONAL_LOCKS=0`, so
 `status` never rewrites the shadow index the app stages into, `GIT_TERMINAL_PROMPT=0` and `GIT_PAGER=cat`.
 
+**Trust.** The server trusts the project's `.shadowgit.git`, which the ShadowGit app creates. Git honours that
+history's configuration and layout, so a planted one (a clean filter, a diff or textconv driver, a signature program, a
+promisor remote, a gitfile or alternates pointing elsewhere) can make git run programs or read other repositories, and
+no flag turns filter drivers off without naming each one. The app runs `git add` and `git commit` on the same history
+every few seconds, so a planted history runs code there first. The boundary is the app refusing to adopt a
+`.shadowgit.git` it did not create (a shadowgit-app follow-up); this server refuses what the model can type.
+
 **Output.** At most 25,000 characters, below Claude Code's 10,000-token warning. A cut output starts with
 `[Truncated: showing the first 25,000 characters of 312,480 characters. Narrow it with -n, --since, --stat or a path.]`;
 when git's output overflows the 1 MB buffer, git is stopped and the note reads "of more than 1 MB". A non-zero exit

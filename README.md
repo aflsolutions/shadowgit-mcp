@@ -59,6 +59,10 @@ forms), the ones that run helper commands from git's configuration (`--ext-diff`
 outside the project. Checkpoints are made by the ShadowGit app, only in projects you added to it. The
 server itself only talks to the ShadowGit app on localhost; what it returns goes to your assistant like any tool result.
 
+The server trusts the project's `.shadowgit.git` history, which the ShadowGit app creates. Git honours that history's
+configuration, so a planted one can make git run programs, through the app's own snapshots as much as through this
+server. Don't add a project to ShadowGit that arrived with a `.shadowgit.git` folder you didn't create.
+
 ## Configuration
 
 | Variable | Default | Purpose |

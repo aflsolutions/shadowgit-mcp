@@ -16,6 +16,13 @@ describe('tokenize', () => {
     expect(tokenize('log --grep ""')).toEqual(['log', '--grep', '']);
   });
 
+  it('keeps a quote escaped inside its own quotes, and every other backslash', () => {
+    expect(tokenize(`log --grep="it's \\"done\\"" --grep='a\\.b' -G"\\d+"`)).toEqual([
+      'log', `--grep=it's "done"`, '--grep=a\\.b', '-G\\d+',
+    ]);
+    expect(tokenize(`log --grep='don\\'t'`)).toEqual(['log', "--grep=don't"]);
+  });
+
   it('rejects an unterminated quote', () => {
     expect(() => tokenize('log --grep "fix')).toThrow('Unterminated quote in command.');
   });

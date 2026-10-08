@@ -55,15 +55,22 @@ const DENIED: Record<string, DeniedOptions> = {
   'rev-parse': { long: ['--resolve-git-dir'], short: [] },
 };
 
-/** Splits a command line into arguments: whitespace separates, single or double quotes group. No shell is involved. */
+/**
+ * Splits a command line into arguments: whitespace separates, single or double quotes group, and a backslash before the
+ * enclosing quote keeps it literal (any other backslash stays, so regex patterns pass through). No shell is involved.
+ */
 export function tokenize(command: string): string[] {
   const args: string[] = [];
   let current = '';
   let inArgument = false;
   let quote: string | null = null;
-  for (const char of command) {
+  for (let i = 0; i < command.length; i++) {
+    const char = command.charAt(i);
     if (quote) {
-      if (char === quote) quote = null;
+      if (char === '\\' && command.charAt(i + 1) === quote) {
+        current += quote;
+        i++;
+      } else if (char === quote) quote = null;
       else current += char;
     } else if (char === '"' || char === "'") {
       quote = char;

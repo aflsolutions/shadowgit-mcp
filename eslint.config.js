@@ -8,4 +8,5 @@ export default defineConfig(
   js.configs.recommended,
   tseslint.configs.recommended,
   { languageOptions: { globals: globals.node } },
+  { files: ['**/*.ts'], rules: { '@typescript-eslint/no-non-null-assertion': 'error' } },
 );

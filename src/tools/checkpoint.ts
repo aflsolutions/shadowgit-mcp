@@ -26,7 +26,7 @@ export function registerCheckpoint(server: McpServer): void {
       description:
         "Save the project's current changes to ShadowGit history as one named checkpoint, applying the project's .shadowgit-ignore rules. Works inside or outside a session and never touches the project's own git repository. Returns the commit hash. Needs the ShadowGit app running.",
       inputSchema: z.object({
-        title: z.string().min(1).max(72).describe('One line saying what changed, e.g. "Fix login redirect loop"'),
+        title: z.string().trim().min(1).max(72).describe('One line saying what changed, e.g. "Fix login redirect loop"'),
         message: z.string().max(1_000).optional().describe('Optional details: why, and anything a reviewer should know'),
         repo: repoParam,
       }),

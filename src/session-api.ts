@@ -13,7 +13,7 @@ export class AppNotRunningError extends Error {
 /** No answer in time: the app may be busy rather than closed, and may still act on the request. */
 export class AppTimeoutError extends Error {
   constructor(seconds: number, options?: ErrorOptions) {
-    super(`ShadowGit did not answer within ${seconds} s.`, options);
+    super(`ShadowGit did not answer within ${seconds} s. The app may be busy with a large project; try again in a moment.`, options);
   }
 }
 

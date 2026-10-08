@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest
 import fs from 'node:fs';
 import path from 'node:path';
 import { capOutput, runGit } from '../src/git.js';
-import { makeProject, removeTempDirs, snapshot, tempDir } from './helpers/fixtures.js';
+import { makeProject, removeTempDirs, shadowGit, snapshot, tempDir } from './helpers/fixtures.js';
 
 let project: string;
 
@@ -41,6 +41,15 @@ describe('runGit', () => {
     const result = await runGit(project, ['diff', '--exit-code', '--stat']);
     fs.writeFileSync(path.join(project, 'a.txt'), 'hello\n');
     expect(result.ok && result.stdout).toContain('a.txt');
+  });
+
+  // Git for Windows sets core.autocrlf=true, and then a diff that exits 1 also warns about line endings on stderr.
+  it('returns the diff when core.autocrlf warns about line endings', async () => {
+    const crlf = makeProject('crlf', { 'a.txt': 'hello\n' });
+    shadowGit(crlf, ['config', 'core.autocrlf', 'true']);
+    fs.writeFileSync(path.join(crlf, 'a.txt'), 'hello again\n');
+    const result = await runGit(crlf, ['diff', '--exit-code', '--stat']);
+    expect(result).toMatchObject({ ok: true, stdout: expect.stringContaining('a.txt') });
   });
 
   it("leaves the history's index alone on status", async () => {

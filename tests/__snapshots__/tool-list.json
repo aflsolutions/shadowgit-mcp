@@ -31,6 +31,12 @@
               "current": {
                 "type": "boolean"
               },
+              "error": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "last_snapshot": {
                 "type": [
                   "string",
@@ -76,6 +82,7 @@
               "path",
               "current",
               "last_snapshot",
+              "error",
               "session"
             ],
             "type": "object"

@@ -61,6 +61,11 @@ describe('refusal', () => {
     expect(refusal(tokenize(command))).toMatch(PATH_REFUSAL);
   });
 
+  it.each(['log --help', 'diff --hel', 'show --he HEAD', 'blame a.txt --help', 'rev-parse --help'])('refuses %s', (command) => {
+    const help = command.split(' ').find((arg) => arg.startsWith('--he'));
+    expect(refusal(tokenize(command))).toBe(`${help} is refused: it opens git's manual instead of answering.`);
+  });
+
   it.each([
     'log --since="1 hour ago" --stat',
     'log -S needle',
@@ -76,6 +81,8 @@ describe('refusal', () => {
     'show HEAD:src/app.ts',
     'blame -L/^func/,/^}/ a.txt',
     'log --grep=/api/users',
+    'log --grep=help',
+    'log --grep help',
   ])('allows %s', (command) => {
     expect(refusal(tokenize(command))).toBeNull();
   });

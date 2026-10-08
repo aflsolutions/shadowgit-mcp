@@ -78,6 +78,14 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(app.requests.find((r) => r.path === '/checkpoint')?.body).toMatchObject({ author: 'shadowgit-e2e' });
   });
 
+  it('trims a checkpoint title and refuses a blank one', async () => {
+    const blank = await client.callTool({ name: 'checkpoint', arguments: { title: '   ' } });
+    expect(blank.isError).toBe(true);
+
+    await client.callTool({ name: 'checkpoint', arguments: { title: '  Padded title  ' } });
+    expect(app.requests.filter((r) => r.path === '/checkpoint').at(-1)?.body).toMatchObject({ title: 'Padded title' });
+  });
+
   it('returns a refused git command as a tool error', async () => {
     const result = await client.callTool({ name: 'git_command', arguments: { command: 'log --output=out.txt' } });
     expect(result.isError).toBe(true);

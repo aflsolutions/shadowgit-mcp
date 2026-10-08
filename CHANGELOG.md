@@ -8,7 +8,8 @@ Rewritten on the MCP TypeScript SDK v2, serving the 2026-07-28 and 2025-11-25 pr
 
 ### Changed
 - The tools other than `list_repos` work on the current project when `repo` is omitted (Claude Code's project directory,
-  or the only tracked project). `end_session` no longer needs a session id: it ends the project's active session.
+  or the only tracked project when the client names no project directory). `end_session` no longer needs a session id:
+  it ends the project's active session.
 - `end_session` takes an optional `session_id` (was `sessionId`); `commitHash` is gone.
 - `checkpoint` is made by the ShadowGit app, so it follows `.shadowgit-ignore`; it needs an app release with
   `POST /api/checkpoint`. The `author` parameter is gone (the assistant's name is used), and titles may run to 72
@@ -18,13 +19,17 @@ Rewritten on the MCP TypeScript SDK v2, serving the 2026-07-28 and 2025-11-25 pr
 - `git_command` output is capped at 25,000 characters, git runs asynchronously, and `status` no longer touches the
   snapshot index.
 - `SHADOWGIT_STORAGE_DIR` points the server at a non-default ShadowGit storage folder, as it does for the app.
-- Requires Node.js 20.
+- `git_command` accepts `-C`, `-c` and `-e` again (copy detection, combined diffs, `cat-file -e`).
+- Tool failures come back as MCP errors (`isError`) instead of a `success: false` field.
+- `list_repos` reports a project whose history cannot be read in its own row, and keeps listing the others.
+- Requires Node.js 20 or later.
 
 ### Security
 - `git_command` refuses options that read or write files outside the snapshot history: `--output` and
   `-O`/`--orderfile` on every subcommand, `diff --no-index`, `blame --contents`/`--ignore-revs-file`/`-S`,
   `ls-files --exclude-from`/`-X`/`--exclude-per-directory` and `rev-parse --resolve-git-dir`, abbreviated or bundled,
   and any path outside the project (which `diff` would otherwise compare with `--no-index`).
+- `git_command` refuses `--help`, which would open git's manual.
 - Projects not tracked by ShadowGit are refused even when they contain a `.shadowgit.git` folder.
 
 ### Removed

@@ -38,7 +38,11 @@ export function readRepos(): Repo[] {
   }
 }
 
-/** The project the tools default to: the one containing the client's project directory, else the only one. */
+/**
+ * The project the tools default to: the one containing the client's project directory. When the client names none
+ * (Cursor, Claude Desktop: CLAUDE_PROJECT_DIR unset), the only tracked project; a named directory no project contains
+ * must not fall back to another project's history.
+ */
 export function currentRepo(repos: Repo[]): Repo | null {
   const start = canonical(startDir());
   const containing = repos
@@ -46,7 +50,7 @@ export function currentRepo(repos: Repo[]): Repo | null {
     .filter(({ root }) => isInside(start, root))
     .sort((a, b) => b.root.length - a.root.length)[0];
   if (containing) return containing.repo;
-  return repos.length === 1 ? (repos[0] ?? null) : null;
+  return repos.length === 1 && !process.env.CLAUDE_PROJECT_DIR ? (repos[0] ?? null) : null;
 }
 
 export function resolveRepo(repo?: string): Repo {
@@ -96,8 +100,8 @@ function canonical(p: string): string {
   try {
     resolved = fs.realpathSync.native(p);
   } catch (error) {
-    if (!hasCode(error, 'ENOENT', 'ENOTDIR')) throw error;
-    // A tracked project can be deleted; its recorded path still names where it was.
+    if (!hasCode(error, 'ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'ELOOP')) throw error;
+    // A tracked project can be deleted or unreadable; its recorded path still names it, and git on it reports the real failure.
     resolved = path.resolve(p);
   }
   return process.platform === 'linux' ? resolved : resolved.toLowerCase();

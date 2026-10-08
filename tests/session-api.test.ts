@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } from 'vitest';
 import {
-  AppNotRunningError, activeSessions, createCheckpoint, endSession, startSession,
+  AppNotRunningError, AppTimeoutError, activeSessions, createCheckpoint, endSession, startSession,
 } from '../src/session-api.js';
 import { startFakeApp, type FakeApp } from './helpers/fake-app.js';
 
@@ -59,7 +59,11 @@ describe('sessions', () => {
     app.hang = true;
     const error = await activeSessions().catch((e: unknown) => e);
     expect(error).not.toBeInstanceOf(AppNotRunningError);
-    expect(error).toHaveProperty('message', 'ShadowGit did not answer within 3 s.');
+    expect(error).toBeInstanceOf(AppTimeoutError);
+    expect(error).toHaveProperty(
+      'message',
+      'ShadowGit did not answer within 3 s. The app may be busy with a large project; try again in a moment.',
+    );
   });
 });
 

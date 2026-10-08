@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -19,6 +19,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   restore('CLAUDE_PROJECT_DIR');
   restore('SHADOWGIT_STORAGE_DIR');
   removeTempDirs();
@@ -67,11 +68,20 @@ describe('resolveRepo', () => {
     expect(resolveRepo().name).toBe('real');
   });
 
-  it('falls back to the only tracked project', () => {
+  it('falls back to the only tracked project when the client names no project directory', () => {
     const only = makeProject('only');
     useStorage([{ name: 'only', path: only }]);
-    process.env.CLAUDE_PROJECT_DIR = tempDir('elsewhere');
+    vi.spyOn(process, 'cwd').mockReturnValue(tempDir('elsewhere'));
     expect(resolveRepo().name).toBe('only');
+    process.env.CLAUDE_PROJECT_DIR = '';
+    expect(resolveRepo().name).toBe('only');
+  });
+
+  it('does not fall back to the only tracked project when the client names another directory', () => {
+    useStorage([{ name: 'only', path: makeProject('only') }]);
+    const elsewhere = tempDir('elsewhere');
+    process.env.CLAUDE_PROJECT_DIR = elsewhere;
+    expect(() => resolveRepo()).toThrow(`No ShadowGit project contains ${elsewhere}. Pass repo as one of: only (`);
   });
 
   it('lists the projects when none contains the directory', () => {
@@ -116,6 +126,34 @@ describe('resolveRepo', () => {
     useStorage([{ name: 'gone', path: path.join(tempDir('gone'), 'deleted') }, { name: 'kept', path: kept }]);
     process.env.CLAUDE_PROJECT_DIR = kept;
     expect(resolveRepo().name).toBe('kept');
+  });
+
+  // A permission error on the way to one folder must not break resolution for every other project (macOS protects ~/Documents).
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('skips a tracked project whose folder cannot be read', () => {
+    const kept = makeProject('kept');
+    const locked = tempDir('locked');
+    const project = inside(locked, 'app');
+    useStorage([{ name: 'locked', path: project }, { name: 'kept', path: kept }]);
+    process.env.CLAUDE_PROJECT_DIR = kept;
+    fs.chmodSync(locked, 0o000);
+    try {
+      expect(resolveRepo().name).toBe('kept');
+      expect(resolveRepo(project).name).toBe('locked');
+    } finally {
+      fs.chmodSync(locked, 0o700);
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')('skips a tracked project whose path loops through symlinks', () => {
+    const kept = makeProject('kept');
+    const loop = tempDir('loop');
+    const [a, b] = [path.join(loop, 'a'), path.join(loop, 'b')];
+    fs.symlinkSync(b, a);
+    fs.symlinkSync(a, b);
+    useStorage([{ name: 'loop', path: a }, { name: 'kept', path: kept }]);
+    process.env.CLAUDE_PROJECT_DIR = kept;
+    expect(resolveRepo().name).toBe('kept');
+    expect(resolveRepo(a).name).toBe('loop');
   });
 
   it.skipIf(process.platform === 'linux')('ignores case differences on macOS and Windows', () => {

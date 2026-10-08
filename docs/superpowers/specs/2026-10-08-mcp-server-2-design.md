@@ -81,7 +81,7 @@ keep working.
 
 | Tool | Title | Annotations | Input | Output |
 |---|---|---|---|---|
-| `list_repos` | List ShadowGit projects | read-only | none | `{ current, app_running, repos: [{ name, path, current, last_snapshot, session }] }` |
+| `list_repos` | List ShadowGit projects | read-only | none | `{ current, app_running, repos: [{ name, path, current, last_snapshot, error, session }] }` |
 | `git_command` | Query snapshot history with git | read-only, idempotent | `command`, `repo?` | git output as text |
 | `start_session` | Start a ShadowGit session | not read-only, not destructive, idempotent | `description` (1–200), `repo?` | `{ session_id, repo, already_active }` |
 | `checkpoint` | Create a ShadowGit checkpoint | not read-only, not destructive | `title` (1–72), `message?` (≤ 1000), `repo?` | `{ commit, title, files_changed, repo }` |
@@ -89,7 +89,9 @@ keep working.
 
 In `list_repos`, `current` names the project the other tools default to (`resolveRepo()` without an argument), or is
 `null` when that fails; `session` is `{ id, description, started_at }` or `null`; `last_snapshot` is `null` for a project
-without snapshots. `checkpoint` returns `commit: null` and `files_changed: 0` when nothing changed. `end_session` with a
+without snapshots. `error` is `null`, or says why the project's history could not be read ("Couldn't read the ShadowGit
+history of app (~/code/app): <git error>"); that row has `last_snapshot: null` and the other projects are still listed.
+`checkpoint` returns `commit: null` and `files_changed: 0` when nothing changed. `end_session` with a
 `session_id` skips project resolution: it ends that session if it is active and reports its project as `repo`, and
 returns `ended: []` otherwise (the app's `/api/session/end` reports success even for unknown ids).
 
@@ -134,8 +136,10 @@ One `resolveRepo(repo?)` serves every tool.
    case-insensitively; when two tracked projects share a folder name, the error lists both paths.
 3. **`repo` omitted.** The start directory is `CLAUDE_PROJECT_DIR`, which Claude Code sets for stdio servers, else the
    working directory. The tracked project whose path contains it wins, the most specific one when projects nest. Both
-   sides go through `realpath` first, so symlinks and case-insensitive file systems match.
-4. Else, if exactly one project is tracked, that one.
+   sides go through `realpath` first, so symlinks and case-insensitive file systems match; a folder that was deleted
+   or cannot be read keeps its recorded path.
+4. Else, if exactly one project is tracked and the client did not name a project directory (CLAUDE_PROJECT_DIR unset:
+   Cursor, Claude Desktop), that one.
 5. Else an error: "No ShadowGit project contains /Users/x/code. Pass repo as one of: app (~/code/app), site
    (~/code/site)."
 
@@ -194,7 +198,9 @@ abbreviations, and `blame --cont <file>` prints the file like `--contents`. Two 
 stay allowed: `blame --ignore-rev` and `ls-files --exclude`. Short options bundle (`log -pO<file>` is `-p` plus
 `-O<file>`; `blame -wS <file>` leaks the file as "bad graft data"), so a single-dash token is denied when any of its
 letters is a denied short option. A non-option argument is refused when it is an absolute path or contains `..` as a
-path segment; revision ranges (`HEAD~2..HEAD`, `main...feature`) are not path segments and pass. The first version of
+path segment; revision ranges (`HEAD~2..HEAD`, `main...feature`) are not path segments and pass. `--help` and its
+abbreviations of four or more characters (`--he`, `--hel`) are refused too: git would open its manual (a browser with
+Git for Windows' default `help.format=html`, `man` elsewhere) instead of answering. The first version of
 this table listed `--output` and `-O` for log, show and diff only, and missed diff's implicit `--no-index`; an automated
 security review of the implementation found both (verified with git 2.47). The old entries `-C`, `-c`, `-e`, `--exec`,
 `--upload-pack`, `--receive-pack`, `--git-dir`, `--work-tree` and `--config` go: after the subcommand they are harmless

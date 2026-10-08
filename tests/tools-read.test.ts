@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { runGit, tokenize } from '../src/git.js';
@@ -36,6 +36,10 @@ beforeAll(async () => {
   useStorage([{ name: 'webshop', path: project }, { name: 'blog', path: other }, { name: 'deleted', path: deleted }]);
   app = await startFakeApp();
   process.env.CLAUDE_PROJECT_DIR = project;
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 afterAll(async () => {
@@ -134,11 +138,14 @@ describe('list_repos', () => {
       app_running: true,
       repos: [
         {
-          name: 'webshop', path: project, current: true, last_snapshot: '2026-10-08T12:29:00+02:00',
+          name: 'webshop', path: project, current: true, last_snapshot: '2026-10-08T12:29:00+02:00', error: null,
           session: { id: 'claude-code-1', description: 'Fix login', started_at: '2026-10-08T12:00:00+02:00' },
         },
-        { name: 'blog', path: other, current: false, last_snapshot: expect.stringMatching(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d$/), session: null },
-        { name: 'deleted', path: deleted, current: false, last_snapshot: null, session: null },
+        {
+          name: 'blog', path: other, current: false, error: null, session: null,
+          last_snapshot: expect.stringMatching(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d$/),
+        },
+        { name: 'deleted', path: deleted, current: false, last_snapshot: null, error: null, session: null },
       ],
     });
     expect(textOf(result)).toContain('webshop (current)');
@@ -152,6 +159,20 @@ describe('list_repos', () => {
 
     expect(result.structuredContent).toMatchObject({ app_running: false });
     expect(textOf(result)).toContain('The ShadowGit app is not running, so sessions and checkpoints are unavailable.');
+  });
+
+  it('reports app_running false when the app is too busy to answer', async () => {
+    app.hang = true;
+    // Stands in for the 3 s wait: the real timeout is replaced by a 50 ms one, which fails the same way.
+    const timeout = AbortSignal.timeout.bind(AbortSignal);
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => timeout(50));
+    const result = await listRepos().finally(() => {
+      app.hang = false;
+    });
+
+    expect(result.structuredContent).toMatchObject({ app_running: false, repos: [{ name: 'webshop' }, { name: 'blog' }, { name: 'deleted' }] });
+    expect(textOf(result)).toContain('The ShadowGit app did not answer in time, so sessions and checkpoints may be unavailable.');
+    expect(textOf(result)).not.toContain('is not running');
   });
 });
 
@@ -175,11 +196,28 @@ describe('list_repos with a history that has no snapshots or is broken', () => {
     expect(textOf(result)).toContain('no snapshots yet');
   });
 
-  it('fails when git cannot read the history, instead of reporting no snapshots', async () => {
-    const project = trackOnly('broken', (dir) => fs.mkdirSync(path.join(dir, '.shadowgit.git')));
+  it("reports a history git cannot read in that project's row and keeps listing the others", async () => {
+    const healthy = makeProject('healthy');
+    const broken = path.join(tempDir('project'), 'broken');
+    fs.mkdirSync(path.join(broken, '.shadowgit.git'), { recursive: true });
+    useStorage([{ name: 'broken', path: broken }, { name: 'healthy', path: healthy }]);
+    const result = await listRepos();
 
-    await expect(listRepos()).rejects.toThrow(
-      `Couldn't read the ShadowGit history of broken (${tildify(project)}): fatal: not a git repository`,
-    );
+    expect(result.structuredContent).toEqual({
+      current: null,
+      app_running: true,
+      repos: [
+        {
+          name: 'broken', path: broken, current: false, last_snapshot: null, session: null,
+          error: expect.stringContaining(`Couldn't read the ShadowGit history of broken (${tildify(broken)}): fatal: not a git repository`),
+        },
+        { name: 'healthy', path: healthy, current: false, last_snapshot: expect.any(String), error: null, session: null },
+      ],
+    });
+    const [brokenLine, healthyLine] = textOf(result).split('\n');
+    expect(brokenLine).toContain(`broken: ${tildify(broken)}, history unreadable: fatal: not a git repository`);
+    expect(brokenLine).not.toContain("Couldn't read");
+    expect(healthyLine).toContain('healthy: ');
+    expect(healthyLine).toContain('last snapshot ');
   });
 });

@@ -80,6 +80,8 @@ export function refusal(args: string[]): string | null {
   if (!ALLOWED_SUBCOMMANDS.some((allowed) => allowed === subcommand)) {
     return `git ${subcommand} is not allowed. Allowed: ${ALLOWED_SUBCOMMANDS.join(', ')}.`;
   }
+  const help = options.find(isHelp);
+  if (help !== undefined) return `${help} is refused: it opens git's manual instead of answering.`;
   const denied = DENIED[subcommand];
   const option = options.find(
     (arg) =>
@@ -102,6 +104,11 @@ function leavesProject(arg: string): boolean {
   return path.isAbsolute(arg) || /(^|[\\/])\.\.([\\/]|$)/.test(arg) || /^[A-Za-z]:/.test(arg);
 }
 
+/** `--help` or an abbreviation of it (--he, --hel): git opens its manual, in a browser on Git for Windows and in man elsewhere. */
+function isHelp(arg: string): boolean {
+  return arg.length >= 4 && arg.startsWith('--') && '--help'.startsWith(arg);
+}
+
 function isDenied(option: string, denied: DeniedOptions): boolean {
   if (option.startsWith('--')) {
     const name = option.split('=')[0] ?? option;
@@ -121,7 +128,8 @@ export function runGit(projectPath: string, args: string[]): Promise<GitResult> 
     }
     const child = execFile(
       'git',
-      [`--git-dir=${path.join(projectPath, SHADOWGIT_DIR)}`, `--work-tree=${projectPath}`, ...args],
+      // safecrlf=false: with core.autocrlf=true (Git for Windows' default) a diff that exits 1 also warns on stderr, which would hide it.
+      ['-c', 'core.safecrlf=false', `--git-dir=${path.join(projectPath, SHADOWGIT_DIR)}`, `--work-tree=${projectPath}`, ...args],
       {
         cwd: projectPath,
         encoding: 'utf8',

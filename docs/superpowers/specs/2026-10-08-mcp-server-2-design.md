@@ -180,9 +180,10 @@ by a test that shows the escape:
 
 | Denied | Subcommands | Escape |
 |---|---|---|
-| `--output` | log, show, diff | writes any file |
+| `--output` | every subcommand (log, show, diff, rev-list, shortlog and blame accept it) | writes any file |
+| `-O`, `--orderfile` | every subcommand (log, show, diff, rev-list and shortlog accept it) | reads any file |
 | `--no-index` | diff | reads any two paths |
-| `-O`, `--orderfile` | log, show, diff | reads any file |
+| a path argument outside the project (absolute, or a `..` segment) | every subcommand | `diff <outside> <file>` switches to `--no-index` by itself and prints the outside file |
 | `--contents` | blame | prints any file |
 | `--ignore-revs-file`, `-S` | blame | reads any file; `-S` stays allowed elsewhere (pickaxe in `log`) |
 | `--exclude-from`, `-X`, `--exclude-per-directory` | ls-files | reads any file |
@@ -192,7 +193,10 @@ A long option is denied when its name, before any `=`, is a prefix of a denied n
 abbreviations, and `blame --cont <file>` prints the file like `--contents`. Two real options start with a denied name and
 stay allowed: `blame --ignore-rev` and `ls-files --exclude`. Short options bundle (`log -pO<file>` is `-p` plus
 `-O<file>`; `blame -wS <file>` leaks the file as "bad graft data"), so a single-dash token is denied when any of its
-letters is a denied short option. The old entries `-C`, `-c`, `-e`, `--exec`,
+letters is a denied short option. A non-option argument is refused when it is an absolute path or contains `..` as a
+path segment; revision ranges (`HEAD~2..HEAD`, `main...feature`) are not path segments and pass. The first version of
+this table listed `--output` and `-O` for log, show and diff only, and missed diff's implicit `--no-index`; an automated
+security review of the implementation found both (verified with git 2.47). The old entries `-C`, `-c`, `-e`, `--exec`,
 `--upload-pack`, `--receive-pack`, `--git-dir`, `--work-tree` and `--config` go: after the subcommand they are harmless
 or useful. The quote-aware tokenizer and the 1,000-character limit stay.
 

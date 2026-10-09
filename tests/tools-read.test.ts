@@ -1,0 +1,288 @@
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import { runGit, tokenize } from '../src/git.js';
+import { tildify } from '../src/repos.js';
+import { gitCommand } from '../src/tools/git-command.js';
+import { listRepos } from '../src/tools/list-repos.js';
+import { closedAppUrl, fakeSession, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { makeProject, removeTempDirs, restoreEnv, shadowGit, snapshot, tempDir, textOf, useStorage } from './helpers/fixtures.js';
+
+let project: string;
+let other: string;
+let deleted: string;
+let app: FakeApp;
+
+beforeAll(async () => {
+  process.env.TZ = 'Europe/Paris';
+  project = makeProject('webshop', { 'README.md': '# Webshop\n', 'src/login.ts': 'export {};\n' }, '2026-10-08T10:00:00Z');
+  snapshot(project, { 'src/login.ts': 'export const fixed = true;\n' }, 'Fix login redirect', '2026-10-08T10:29:00Z');
+  other = makeProject('blog');
+  deleted = path.join(tempDir('gone'), 'deleted');
+  useStorage([{ name: 'webshop', path: project }, { name: 'blog', path: other }, { name: 'deleted', path: deleted }]);
+  app = await startFakeApp();
+  process.env.CLAUDE_PROJECT_DIR = project;
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
+
+afterAll(async () => {
+  restoreEnv();
+  await app.close();
+  removeTempDirs();
+});
+
+describe('git_command', () => {
+  it('runs read-only git on the current project', async () => {
+    expect(textOf(await gitCommand({ command: 'log --format=%s' }))).toBe('Fix login redirect\nInitial ShadowGit Snapshot\n');
+  });
+
+  it('accepts a leading "git" and quoted arguments with spaces', async () => {
+    expect(textOf(await gitCommand({ command: 'git log --grep "login redirect" --format=%s' }))).toBe('Fix login redirect\n');
+  });
+
+  it('runs on another project by name', async () => {
+    expect(textOf(await gitCommand({ command: 'log --format=%s', repo: 'blog' }))).toBe('Initial ShadowGit Snapshot\n');
+  });
+
+  it("turns a git failure into an error carrying git's message", async () => {
+    await expect(gitCommand({ command: 'log HEAD~50' })).rejects.toThrow(/unknown revision|ambiguous argument/);
+  });
+
+  it('refuses subcommands outside the allowlist', async () => {
+    await expect(gitCommand({ command: 'push' })).rejects.toThrow('git push is not allowed.');
+  });
+
+  it('says so when git exits non-zero without a message', async () => {
+    const missing = '0'.repeat(40);
+    expect(textOf(await gitCommand({ command: `cat-file -e ${missing}` }))).toBe('(no output; git exited with status 1)');
+    expect(textOf(await gitCommand({ command: 'cat-file -e HEAD' }))).toBe('(no output)');
+  });
+
+  it('puts the exit status after output that came with it', async () => {
+    fs.writeFileSync(path.join(project, 'README.md'), '# Webshop, edited\n');
+    const text = textOf(await gitCommand({ command: 'diff --exit-code' }));
+    fs.writeFileSync(path.join(project, 'README.md'), '# Webshop\n');
+    expect(text).toContain('+# Webshop, edited\n');
+    expect(text.endsWith('\n[git exited with status 1]')).toBe(true);
+  });
+
+  it('puts the exit status after truncated output too', async () => {
+    fs.writeFileSync(path.join(project, 'README.md'), 'z'.repeat(40_000));
+    const text = textOf(await gitCommand({ command: 'diff --exit-code' }));
+    fs.writeFileSync(path.join(project, 'README.md'), '# Webshop\n');
+    expect(text.startsWith('[Truncated: showing the first 25,000 characters of ')).toBe(true);
+    expect(text.endsWith('\n[git exited with status 1]')).toBe(true);
+  });
+
+  it('truncates long output and says so first', async () => {
+    snapshot(other, { 'big.txt': 'z'.repeat(40_000) }, 'Big file');
+    const text = textOf(await gitCommand({ command: 'show HEAD:big.txt', repo: 'blog' }));
+    expect(text.startsWith('[Truncated: showing the first 25,000 characters of 40,000 characters.')).toBe(true);
+  });
+});
+
+describe('git_command file escapes', () => {
+  const CANARY = 'CANARY-7f3a';
+  let outside: string;
+  let canary: string;
+
+  beforeAll(() => {
+    outside = tempDir('outside');
+    canary = path.join(outside, 'canary.txt');
+    fs.writeFileSync(canary, `${CANARY}\n`);
+  });
+
+  it('refuses each escape that plain git would run', async () => {
+    const written = path.join(outside, 'written.txt');
+    const escapes = [
+      `log -1 --output=${written}`,
+      `diff --no-index ${canary} README.md`,
+      `blame --contents ${canary} README.md`,
+      `blame --cont ${canary} README.md`,
+      `blame --ignore-revs-file ${canary} README.md`,
+      `diff ${canary} README.md`,
+      `rev-list --output=${written} HEAD`,
+      `shortlog --output=${written} HEAD`,
+      `blame --output=${written} README.md`,
+    ];
+    for (const command of escapes) {
+      const raw = await runGit(project, tokenize(command));
+      const leaked = (raw.ok ? raw.stdout : raw.error).includes(CANARY) || fs.existsSync(written);
+      expect(leaked, `plain git escapes with: ${command}`).toBe(true);
+      fs.rmSync(written, { force: true });
+
+      await expect(gitCommand({ command })).rejects.toThrow(/is refused/);
+      expect(fs.existsSync(written)).toBe(false);
+    }
+  });
+
+  // git reads a -S file as graft data and reports its lines on stderr only, which runGit drops: nothing to prove above.
+  it.each([
+    'blame -wS secret.txt README.md',
+    'log -p -O/etc/hosts',
+    'log -pO/etc/hosts',
+    'show --orderfile=/etc/hosts',
+    'ls-files --exclude-from=/etc/hosts',
+    'ls-files -X secret.txt',
+    'ls-files --exclude-per-directory=.secret',
+    'rev-parse --resolve-git-dir secret',
+  ])('refuses %s', async (command) => {
+    // Relative values keep the path rule out of it: only the option rules can produce this wording.
+    await expect(gitCommand({ command })).rejects.toThrow(/is refused: it reads or writes files outside the ShadowGit history\./);
+  });
+});
+
+// Helpers named in the history's own config run when an option asks for them; the scripts leave a marker file behind.
+describe.skipIf(process.platform === 'win32')('git_command helper commands', () => {
+  it('refuses each option that makes git run a configured helper', async () => {
+    const dir = tempDir('helpers');
+    const marker = path.join(dir, 'ran');
+    const script = path.join(dir, 'helper.sh');
+    // Called with one file (textconv), no argument (smudge filter) or seven (external diff); cats the file when given one.
+    fs.writeFileSync(script, `#!/bin/sh\necho ran >> '${marker}'\n[ "$#" -le 1 ] && cat "$@"\nexit 0\n`, { mode: 0o755 });
+    snapshot(other, { 'helper.txt': 'one\n' }, 'Helper one');
+    snapshot(other, { 'helper.txt': 'two\n' }, 'Helper two');
+    shadowGit(other, ['config', 'diff.canary.textconv', script]);
+    shadowGit(other, ['config', 'filter.canary.smudge', script]);
+    shadowGit(other, ['config', 'diff.external', script]);
+    fs.writeFileSync(path.join(other, '.shadowgit.git', 'info', 'attributes'), 'helper.txt diff=canary filter=canary\n');
+
+    const commands = [
+      'diff --ext-diff HEAD~1 HEAD',
+      'show --textconv HEAD:helper.txt',
+      'cat-file --textconv HEAD:helper.txt',
+      'cat-file --filters HEAD:helper.txt',
+      'blame --textconv helper.txt',
+    ];
+    for (const command of commands) {
+      fs.rmSync(marker, { force: true });
+      await runGit(other, tokenize(command));
+      expect(fs.existsSync(marker), `plain git runs the helper with: ${command}`).toBe(true);
+
+      fs.rmSync(marker, { force: true });
+      await expect(gitCommand({ command, repo: 'blog' })).rejects.toThrow(/is refused/);
+      expect(fs.existsSync(marker), `git_command ran the helper with: ${command}`).toBe(false);
+    }
+  });
+});
+
+describe('list_repos', () => {
+  it('reports every project, the current one, the last snapshot and any session', async () => {
+    app.sessions.push(fakeSession({ repoPath: project }));
+    const result = await listRepos();
+    app.sessions.length = 0;
+
+    expect(result.structuredContent).toEqual({
+      current: 'webshop',
+      app_running: true,
+      repos: [
+        {
+          name: 'webshop', path: project, current: true, last_snapshot: '2026-10-08T12:29:00+02:00', error: null,
+          session: { id: 'claude-code-1', description: 'Fix login', started_at: '2026-10-08T12:00:00+02:00' },
+        },
+        {
+          name: 'blog', path: other, current: false, error: null, session: null,
+          last_snapshot: expect.stringMatching(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d$/),
+        },
+        { name: 'deleted', path: deleted, current: false, last_snapshot: null, error: null, session: null },
+      ],
+    });
+    expect(textOf(result)).toContain('webshop (current)');
+  });
+
+  it('still lists the projects when the app is not running', async () => {
+    vi.stubEnv('SHADOWGIT_SESSION_API', await closedAppUrl());
+    const result = await listRepos();
+
+    expect(result.structuredContent).toMatchObject({ app_running: false });
+    expect(textOf(result)).toContain('The ShadowGit app is not running, so sessions and checkpoints are unavailable.');
+  });
+
+  it('reports app_running false when the app is too busy to answer', async () => {
+    app.hang = true;
+    // Stands in for the 3 s wait: the real timeout is replaced by a 50 ms one, which fails the same way.
+    const timeout = AbortSignal.timeout.bind(AbortSignal);
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => timeout(50));
+    const result = await listRepos().finally(() => {
+      app.hang = false;
+    });
+
+    expect(result.structuredContent).toMatchObject({ app_running: false, repos: [{ name: 'webshop' }, { name: 'blog' }, { name: 'deleted' }] });
+    expect(textOf(result)).toContain('The ShadowGit app did not answer in time, so sessions and checkpoints may be unavailable.');
+    expect(textOf(result)).not.toContain('is not running');
+  });
+});
+
+describe('list_repos with a history that has no snapshots or is broken', () => {
+  function trackOnly(name: string, setup: (project: string) => void): string {
+    const project = path.join(tempDir('project'), name);
+    fs.mkdirSync(project);
+    setup(project);
+    useStorage([{ name, path: project }]);
+    return project;
+  }
+
+  it('reports last_snapshot null for a history with zero commits', async () => {
+    const project = trackOnly('fresh', (dir) => {
+      shadowGit(dir, ['init', '--quiet']);
+      fs.writeFileSync(path.join(dir, '.shadowgit.git', 'info', 'exclude'), '/.shadowgit.git/\n');
+    });
+    const result = await listRepos();
+
+    expect(result.structuredContent).toMatchObject({ repos: [{ name: 'fresh', path: project, last_snapshot: null }] });
+    expect(textOf(result)).toContain('no snapshots yet');
+  });
+
+  // macOS protects folders such as ~/Documents; existsSync reads that as "no history", which hides the real problem.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('reports a project whose folder cannot be read, not a history without snapshots', async () => {
+    const locked = tempDir('locked');
+    const protectedProject = path.join(locked, 'app');
+    fs.mkdirSync(path.join(protectedProject, '.shadowgit.git'), { recursive: true });
+    useStorage([{ name: 'protected', path: protectedProject }]);
+    fs.chmodSync(locked, 0o000);
+    let result: Awaited<ReturnType<typeof listRepos>>;
+    try {
+      result = await listRepos();
+    } finally {
+      fs.chmodSync(locked, 0o700);
+    }
+
+    expect(result.structuredContent).toMatchObject({
+      repos: [{
+        name: 'protected', last_snapshot: null,
+        error: expect.stringContaining(`Couldn't read the ShadowGit history of protected (${tildify(protectedProject)}): EACCES`),
+      }],
+    });
+    expect(textOf(result)).toContain(`protected: ${tildify(protectedProject)}, history unreadable: EACCES`);
+    expect(textOf(result)).not.toContain('no snapshots yet');
+  });
+
+  it("reports a history git cannot read in that project's row and keeps listing the others", async () => {
+    const healthy = makeProject('healthy');
+    const broken = path.join(tempDir('project'), 'broken');
+    fs.mkdirSync(path.join(broken, '.shadowgit.git'), { recursive: true });
+    useStorage([{ name: 'broken', path: broken }, { name: 'healthy', path: healthy }]);
+    const result = await listRepos();
+
+    expect(result.structuredContent).toEqual({
+      current: null,
+      app_running: true,
+      repos: [
+        {
+          name: 'broken', path: broken, current: false, last_snapshot: null, session: null,
+          error: expect.stringContaining(`Couldn't read the ShadowGit history of broken (${tildify(broken)}): fatal: not a git repository`),
+        },
+        { name: 'healthy', path: healthy, current: false, last_snapshot: expect.any(String), error: null, session: null },
+      ],
+    });
+    const [brokenLine, healthyLine] = textOf(result).split('\n');
+    expect(brokenLine).toContain(`broken: ${tildify(broken)}, history unreadable: fatal: not a git repository`);
+    expect(brokenLine).not.toContain("Couldn't read");
+    expect(healthyLine).toContain('healthy: ');
+    expect(healthyLine).toContain('last snapshot ');
+  });
+});

@@ -155,8 +155,9 @@ const GIT_SETTINGS = [
 /** Runs git on a project's ShadowGit history. The arguments go to git as they are; no shell is involved. */
 export function runGit(projectPath: string, args: string[]): Promise<GitResult> {
   const timeout = timeoutMs();
-  // Not GIT_*: a client started from a git hook would otherwise aim git at another repository's index or objects.
-  const inherited = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
+  // Not git's variables, in any case (Windows names are case-insensitive): a client started from a git hook would
+  // otherwise aim git at another repository's index or objects.
+  const inherited = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^git_/i.test(name)));
   return new Promise((resolve) => {
     const child = execFile(
       'git',

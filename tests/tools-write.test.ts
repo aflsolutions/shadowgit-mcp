@@ -122,6 +122,24 @@ describe('end_session', () => {
     expect(textOf(result)).toBe('No active session; automatic snapshots are already on.');
   });
 
+  it('names the project that has the session when the current one has none', async () => {
+    app.sessions.push(fakeSession({ id: 'cursor-2', repoPath: other }));
+    const result = await endSession({});
+    expect(result.structuredContent).toEqual({ ended: [], repo: 'webshop' });
+    expect(textOf(result)).toBe(
+      'No active session on webshop; its automatic snapshots are already on. Active elsewhere: blog (session cursor-2). Pass session_id to end one.',
+    );
+    expect(app.requestsTo('/session/end')).toEqual([]);
+  });
+
+  it('lists every session elsewhere, naming an untracked project by its path', async () => {
+    app.sessions.push(fakeSession({ id: 'cursor-2', repoPath: other }), fakeSession({ id: 'cursor-3', repoPath: '/projects/untracked' }));
+    const result = await endSession({});
+    expect(textOf(result)).toBe(
+      'No active session on webshop; its automatic snapshots are already on. Active elsewhere: blog (session cursor-2), /projects/untracked (session cursor-3). Pass session_id to end one.',
+    );
+  });
+
   it('ends a session by id on another project without resolving the current one', async () => {
     app.sessions.push(fakeSession({ id: 'cursor-2', repoPath: other, description: 'Blog post' }));
     process.env.CLAUDE_PROJECT_DIR = tempDir('nowhere');

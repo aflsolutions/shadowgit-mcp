@@ -37,6 +37,8 @@ Rewritten on the MCP TypeScript SDK v2, serving the 2026-07-28 and 2025-11-25 pr
   repository outside the project. git always runs with `core.fsmonitor`, `diff.submodule` and `submodule.recurse` fixed,
   so the history's own config cannot run a program or switch submodule recursion on.
 - `git_command` refuses `--help`, which would open git's manual.
+- `git_command` runs git without the `GIT_*` variables the server inherited (`GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`,
+  `GIT_DIR`...), which would otherwise point it at another repository when a client starts from a git hook.
 - Projects not tracked by ShadowGit are refused even when they contain a `.shadowgit.git` folder.
 
 ### Removed

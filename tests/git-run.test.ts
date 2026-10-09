@@ -67,6 +67,23 @@ describe('runGit', () => {
     expect(fs.statSync(index).mtimeMs).toBe(before);
   });
 
+  // A client started from a git hook, or from a shell that exported these, would point git at another repository.
+  it("ignores GIT_* variables that point git at another repository's index and objects", async () => {
+    const elsewhere = makeProject('elsewhere', { 'other.txt': 'not this project\n' });
+    const inherited = {
+      GIT_INDEX_FILE: path.join(elsewhere, '.shadowgit.git', 'index'),
+      GIT_OBJECT_DIRECTORY: path.join(elsewhere, '.shadowgit.git', 'objects'),
+    };
+    const head = shadowGit(project, ['rev-parse', 'HEAD']);
+    // Control: --git-dir and --work-tree do not override these two, so plain git reads the other repository.
+    expect(shadowGit(project, ['ls-files'], inherited)).toBe('other.txt');
+    expect(() => shadowGit(project, ['cat-file', '-e', head], inherited)).toThrow();
+
+    for (const [name, value] of Object.entries(inherited)) vi.stubEnv(name, value);
+    expect(await runGit(project, ['ls-files'])).toMatchObject({ ok: true, stdout: 'a.txt\n' });
+    expect(await runGit(project, ['cat-file', '-e', head])).toMatchObject({ ok: true, exitCode: 0 });
+  });
+
   it('does not wait for input on stdin', async () => {
     expect((await runGit(project, ['cat-file', '--batch'])).ok).toBe(true);
   }, 5_000);

@@ -67,6 +67,42 @@ describe('runGit', () => {
     expect(fs.statSync(index).mtimeMs).toBe(before);
   });
 
+  // A client started from a git hook, or from a shell that exported these, would point git at another repository.
+  it("ignores GIT_* variables that point git at another repository's index and objects", async () => {
+    const elsewhere = makeProject('elsewhere', { 'other.txt': 'not this project\n' });
+    const inherited = {
+      GIT_INDEX_FILE: path.join(elsewhere, '.shadowgit.git', 'index'),
+      GIT_OBJECT_DIRECTORY: path.join(elsewhere, '.shadowgit.git', 'objects'),
+    };
+    const head = shadowGit(project, ['rev-parse', 'HEAD']);
+    // Control: --git-dir and --work-tree do not override these two, so plain git reads the other repository.
+    expect(shadowGit(project, ['ls-files'], inherited)).toBe('other.txt');
+    expect(() => shadowGit(project, ['cat-file', '-e', head], inherited)).toThrow();
+
+    for (const [name, value] of Object.entries(inherited)) vi.stubEnv(name, value);
+    expect(await runGit(project, ['ls-files'])).toMatchObject({ ok: true, stdout: 'a.txt\n' });
+    expect(await runGit(project, ['cat-file', '-e', head])).toMatchObject({ ok: true, exitCode: 0 });
+  });
+
+  // Windows environment names are case-insensitive, so git there reads Git_Index_File too. On Linux and macOS git
+  // ignores them and this passes with or without the fix; the structural test below covers those platforms.
+  it('ignores git variables spelled in mixed case', async () => {
+    const elsewhere = makeProject('elsewhere', { 'other.txt': 'not this project\n' });
+    vi.stubEnv('Git_Index_File', path.join(elsewhere, '.shadowgit.git', 'index'));
+    vi.stubEnv('git_object_directory', path.join(elsewhere, '.shadowgit.git', 'objects'));
+    expect(await runGit(project, ['ls-files'])).toMatchObject({ ok: true, stdout: 'a.txt\n' });
+  });
+
+  it.skipIf(process.platform === 'win32')('does not pass a git variable on in any case', async () => {
+    stubGit('env');
+    vi.stubEnv('Git_Index_File', '/elsewhere');
+    const result = await runGit(project, ['log']);
+    const env = result.ok ? result.stdout.split('\n') : [];
+    // Booleans, so a failure does not print the whole environment.
+    expect(env.some((line) => line.startsWith('Git_Index_File='))).toBe(false);
+    expect(env.includes('GIT_OPTIONAL_LOCKS=0')).toBe(true);
+  });
+
   it('does not wait for input on stdin', async () => {
     expect((await runGit(project, ['cat-file', '--batch'])).ok).toBe(true);
   }, 5_000);

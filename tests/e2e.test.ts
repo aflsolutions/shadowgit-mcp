@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { Client } from '@modelcontextprotocol/client';
 import { INSTRUCTIONS } from '../src/server.js';
 import { ERAS, connect } from './helpers/client.js';
-import { startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { fakeSession, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { makeProject, removeTempDirs, restoreEnv, useStorage } from './helpers/fixtures.js';
 
 // The two protocol revisions put "$schema" in different places; key order is not content.
@@ -63,6 +63,16 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
 
     expect(app.requestsTo('/session/start')[0]).toMatchObject({ aiTool: 'shadowgit-e2e', repoPath: project });
     expect(app.requestsTo('/checkpoint')[0]).toMatchObject({ author: 'shadowgit-e2e' });
+  });
+
+  it('names the project that has the session when the current one has none', async () => {
+    app.sessions.push(fakeSession({ id: 'cursor-9', repoPath: '/projects/elsewhere' }));
+    const end = await client.callTool({ name: 'end_session', arguments: {} });
+    app.sessions.length = 0;
+    expect(end.content).toEqual([{
+      type: 'text',
+      text: 'No active session on demo; its automatic snapshots are already on. Active elsewhere: /projects/elsewhere (session cursor-9). Pass session_id to end one.',
+    }]);
   });
 
   it('trims a checkpoint title and refuses a blank one', async () => {

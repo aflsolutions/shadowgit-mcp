@@ -155,6 +155,9 @@ const GIT_SETTINGS = [
 /** Runs git on a project's ShadowGit history. The arguments go to git as they are; no shell is involved. */
 export function runGit(projectPath: string, args: string[]): Promise<GitResult> {
   const timeout = timeoutMs();
+  // Not git's variables, in any case (Windows names are case-insensitive): a client started from a git hook would
+  // otherwise aim git at another repository's index or objects.
+  const inherited = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^git_/i.test(name)));
   return new Promise((resolve) => {
     const child = execFile(
       'git',
@@ -166,7 +169,7 @@ export function runGit(projectPath: string, args: string[]): Promise<GitResult> 
         timeout,
         windowsHide: true,
         // GIT_OPTIONAL_LOCKS=0: status must not rewrite the index the app stages snapshots into.
-        env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GIT_PAGER: 'cat', PAGER: 'cat' },
+        env: { ...inherited, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GIT_PAGER: 'cat', PAGER: 'cat' },
       },
       (error, stdout, stderr) => {
         if (!error) return resolve({ ok: true, stdout, overflowed: false, exitCode: 0 });

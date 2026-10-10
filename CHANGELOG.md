@@ -11,6 +11,7 @@ Rewritten on the MCP TypeScript SDK v2, serving the 2026-07-28 and 2025-11-25 pr
   or the only tracked project when the client names no project directory). `end_session` no longer needs a session id:
   it ends the project's active session.
 - `end_session` takes an optional `session_id` (was `sessionId`); `commitHash` is gone.
+- `end_session` with no session on the current project names the project that has one, with its session id.
 - `checkpoint` is made by the ShadowGit app, so it follows `.shadowgit-ignore`; it needs an app release with
   `POST /api/checkpoint`. The `author` parameter is gone (the assistant's name is used), and titles may run to 72
   characters.
@@ -37,6 +38,9 @@ Rewritten on the MCP TypeScript SDK v2, serving the 2026-07-28 and 2025-11-25 pr
   repository outside the project. git always runs with `core.fsmonitor`, `diff.submodule` and `submodule.recurse` fixed,
   so the history's own config cannot run a program or switch submodule recursion on.
 - `git_command` refuses `--help`, which would open git's manual.
+- `git_command` runs git without the `GIT_*` variables the server inherited, in any case (`GIT_INDEX_FILE`,
+  `GIT_OBJECT_DIRECTORY`, `GIT_DIR`...), which would otherwise point it at another repository when a client starts from
+  a git hook.
 - Projects not tracked by ShadowGit are refused even when they contain a `.shadowgit.git` folder.
 
 ### Removed

@@ -2,7 +2,7 @@
 
 All notable changes to the ShadowGit MCP Server will be documented in this file.
 
-## [2.0.0] - 2026-10-08
+## [2.0.0] - 2026-10-11
 
 Rewritten on the MCP TypeScript SDK v2, serving the 2026-07-28 and 2025-11-25 protocol revisions.
 
@@ -12,8 +12,8 @@ Rewritten on the MCP TypeScript SDK v2, serving the 2026-07-28 and 2025-11-25 pr
   it ends the project's active session.
 - `end_session` takes an optional `session_id` (was `sessionId`); `commitHash` is gone.
 - `end_session` with no session on the current project names the project that has one, with its session id.
-- `checkpoint` is made by the ShadowGit app, so it follows `.shadowgit-ignore`; it needs an app release with
-  `POST /api/checkpoint`. The `author` parameter is gone (the assistant's name is used), and titles may run to 72
+- `checkpoint` is made by the ShadowGit app, so it follows `.shadowgit-ignore`; it needs ShadowGit 0.3.4 or
+  later. The `author` parameter is gone (the assistant's name is used), and titles may run to 72
   characters.
 - A slow ShadowGit app is reported as slow, not as closed; checkpoints wait up to 55 s.
 - The "ShadowGit isn't running" error names the host that `SHADOWGIT_SESSION_API` points at.

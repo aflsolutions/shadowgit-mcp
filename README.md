@@ -7,8 +7,8 @@ changed and when, and can save its own edits as one named checkpoint instead of 
 ## Requirements
 
 - Node.js 20 or later
-- The ShadowGit app, tracking at least one project. Reading history works while the app is closed; sessions and
-  checkpoints need it running.
+- The ShadowGit app (0.3.4 or later for checkpoints), tracking at least one project. Reading history works while the
+  app is closed; sessions and checkpoints need it running.
 - Git on your PATH
 
 ## Setup

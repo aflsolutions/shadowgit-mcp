@@ -4,6 +4,10 @@
   "title": "ShadowGit",
   "description": "Read ShadowGit's snapshot history and save AI edits as sessions and checkpoints.",
   "websiteUrl": "https://shadowgit.com",
+  "repository": {
+    "url": "https://github.com/aflsolutions/shadowgit-mcp",
+    "source": "github"
+  },
   "version": "2.0.0",
   "packages": [
     {

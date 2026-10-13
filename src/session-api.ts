@@ -21,6 +21,9 @@ export class AppTimeoutError extends Error {
 const CHECKPOINT_TIMEOUT_MS = 55_000;
 
 const APP_TOO_OLD = "This version of ShadowGit can't create checkpoints for AI assistants. Ask the user to update the ShadowGit app.";
+const APP_WITHOUT_LENS = 'This version of ShadowGit has no Lens for AI assistants. Ask the user to update the ShadowGit app.';
+// The app may draw the range's lens inside the request: its worker stops at 120 s, but most ranges draw in seconds.
+const LENS_TIMEOUT_MS = 55_000;
 
 const Session = z.object({
   id: z.string(),
@@ -33,6 +36,32 @@ const Sessions = z.object({ sessions: z.array(Session) });
 const StartedSession = z.object({ sessionId: z.string() });
 const Checkpoint = z.object({ commit: z.string(), filesChanged: z.number() });
 const ErrorReply = z.object({ error: z.string() });
+
+export const LensRange = z.object({ base: z.string().nullable(), head: z.string() });
+export const LensSkeleton = z.object({
+  title: z.string(),
+  words: z.object({ source: z.string(), author: z.string().nullable() }),
+  summary: z.string().nullable(),
+  steps: z.array(z.object({ id: z.string(), title: z.string(), body: z.string().nullable(), components: z.array(z.string()), files: z.array(z.string()), diff: z.string() })),
+  components: z.array(z.object({
+    id: z.string(), name: z.string(), kind: z.string(), delta: z.string(), context: z.boolean(), role: z.string().nullable(), path: z.string(), symbols: z.array(z.string()),
+  })),
+  layers: z.array(z.object({ id: z.string(), name: z.string() })),
+  flows: z.array(z.object({ id: z.string(), from: z.string(), to: z.string(), label: z.string() })),
+});
+export const LensLimits = z.record(z.string(), z.number());
+const LensRead = z.object({ range: LensRange, lens: LensSkeleton.nullable(), limits: LensLimits });
+export const LensApplied = z.object({ summary: z.boolean(), steps: z.number(), components: z.number(), layers: z.number(), flows: z.number() });
+const WordsWritten = z.object({ applied: LensApplied, ignored: z.array(z.string()) });
+
+/** The words an agent writes over a lens, by the ids get_lens gave: the app's author contract. */
+export interface LensWords {
+  summary?: string;
+  steps?: { id: string; title?: string; body?: string }[];
+  components?: { id: string; role: string }[];
+  layers?: { id: string; name: string }[];
+  flows?: { id: string; label: string }[];
+}
 
 export type ActiveSession = z.infer<typeof Session>;
 
@@ -111,4 +140,19 @@ export async function createCheckpoint(input: {
   if (status === 404) throw new Error(APP_TOO_OLD);
   if (status === 409) return { commit: null, filesChanged: 0 };
   return Checkpoint.parse(json);
+}
+
+/** The lens of a range for the agent to word: the latest AI session's without a head. */
+export async function readLens(input: { repoPath: string; base?: string; head?: string }): Promise<z.infer<typeof LensRead>> {
+  const query = new URLSearchParams({ repoPath: input.repoPath, ...(input.base ? { base: input.base } : {}), ...(input.head ? { head: input.head } : {}) });
+  const { status, json } = await request(`/lens?${query}`, undefined, { timeoutMs: LENS_TIMEOUT_MS, accept: [404] });
+  if (status === 404) throw new Error(APP_WITHOUT_LENS);
+  return LensRead.parse(json);
+}
+
+/** The agent's words for a range; the app keeps them in its history, next to the range's newest snapshot. */
+export async function sendLensWords(input: { repoPath: string; base: string | null; head: string; author: string; words: LensWords }): Promise<z.infer<typeof WordsWritten>> {
+  const { status, json } = await request('/lens/words', input, { timeoutMs: LENS_TIMEOUT_MS, accept: [404] });
+  if (status === 404) throw new Error(APP_WITHOUT_LENS);
+  return WordsWritten.parse(json);
 }

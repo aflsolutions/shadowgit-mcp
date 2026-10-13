@@ -47,6 +47,16 @@ const CASES: { phrase: string; prepare?: (app: FakeApp, project: string) => void
     },
     passed: ({ app }) => app.requestsTo('/session/end').some((b) => b.sessionId === 'claude-code-1'),
   },
+  {
+    phrase: 'Write the Lens words for this session',
+    // It reads the lens first, then words a step by the id the lens gave
+    passed: ({ app }) =>
+      app.requests.some((r) => r.path.startsWith('/lens?')) &&
+      app.requestsTo('/lens/words').some((b) => {
+        const words = b.words as { steps?: { id: string; title?: string }[] } | undefined;
+        return words?.steps?.some((step) => step.id === 'c1' && Boolean(step.title?.trim())) === true;
+      }),
+  },
 ];
 
 const Output = z.object({ is_error: z.boolean(), result: z.string() });

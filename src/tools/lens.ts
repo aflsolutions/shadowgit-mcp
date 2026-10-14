@@ -34,7 +34,8 @@ function describeLens(repo: string, range: z.infer<typeof LensRange>, lens: z.in
 }
 
 export async function getLens({ base, head, repo }: { base?: string | null; head?: string; repo?: string }): Promise<CallToolResult> {
-  if (head !== undefined && base === undefined) throw new Error('Name base with head: the snapshot the range starts from, or null to start from the beginning of the history.');
+  // A range is both its ends; leave both out for the latest AI session
+  if ((head === undefined) !== (base === undefined)) throw new Error('Name base and head together (base null starts from the beginning of the history), or neither for the latest AI session.');
   const project = resolveRepo(repo);
   const read = await readLens({ repoPath: project.path, base, head });
   const data = { repo: project.name, ...read };

@@ -53,9 +53,10 @@ describe('get_lens', () => {
     expect(text).toContain(`base null and head "${FAKE_RANGE.head}"`);
   });
 
-  it('asks for the base with a head, before calling the app', async () => {
+  it('asks for base and head together, before calling the app', async () => {
     const before = app.requests.length;
-    await expect(getLens({ head: 'def5678' })).rejects.toThrow('base');
+    await expect(getLens({ head: 'def5678' })).rejects.toThrow('base and head together');
+    await expect(getLens({ base: 'abc1234' })).rejects.toThrow('base and head together');
     expect(app.requests).toHaveLength(before);
   });
 

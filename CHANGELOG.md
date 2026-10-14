@@ -9,8 +9,10 @@ All notable changes to the ShadowGit MCP Server will be documented in this file.
   files and diff, the components and flows on its canvas, each by id with its words so far.
 - `write_lens_words` writes the Lens's words for that range by those ids: a summary, step titles and sentences,
   component roles, layer names and flow labels. The app keeps them in its history; a component's role shows in later
-  ranges while its code is unchanged. Both need a ShadowGit release after 0.3.5.
+  ranges while its code is unchanged.
 - Server instructions suggest wording the Lens at the end of a session, after its checkpoint.
+
+Both tools need a ShadowGit release after 0.3.5.
 
 ## [2.0.0] - 2026-10-11
 

@@ -23,10 +23,12 @@ export interface FakeApp {
   sessions: FakeSession[];
   /** 200 commits; 409 has nothing to commit; 404 is an app without the route; 500 is a crash page. */
   checkpointStatus: 200 | 404 | 409 | 500;
-  /** 200 answers; 404 is an app without the Lens routes; 409 is a range that changes no code. */
-  lensStatus: 200 | 404 | 409;
-  /** The range GET /lens answers. */
-  lensRange: { base: string | null; head: string };
+  /** False is an app without the Lens routes: they answer the catch-all 404. */
+  lensRoutes: boolean;
+  /** What GET /lens answers: a range, and its lens or null for a range that changes no code. */
+  lensAnswer: { range: { base: string | null; head: string }; lens: typeof FAKE_LENS | null };
+  /** 200 keeps the words; 409 is a range that changes no code. */
+  wordsStatus: 200 | 409;
   /** Leaves every request unanswered, like an app busy with a large project. */
   hang: boolean;
   /** Sends the headers and part of the body, then never ends it, like an app that stalls mid-answer. */
@@ -75,8 +77,9 @@ async function listen(): Promise<FakeApp> {
     requestsTo: (route) => app.requests.filter((r) => r.path === route).map((r) => r.body),
     sessions: [],
     checkpointStatus: 200,
-    lensStatus: 200,
-    lensRange: FAKE_RANGE,
+    lensRoutes: true,
+    lensAnswer: { range: FAKE_RANGE, lens: FAKE_LENS },
+    wordsStatus: 200,
     hang: false,
     hangBody: false,
     close: () => {
@@ -126,11 +129,10 @@ async function listen(): Promise<FakeApp> {
       if (app.checkpointStatus === 500) return page(500, '<h1>Internal Server Error</h1>');
       return json(200, { success: true, commit: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678', filesChanged: 2 });
     }
-    if (route.startsWith('/lens?') || route === '/lens/words') {
-      if (app.lensStatus === 404) return json(404, { success: false, error: 'Not found' });
-      if (app.lensStatus === 409) return json(409, { success: false, error: 'Nothing in this range changes code: it has no lens to word' });
-      if (route === '/lens/words') return json(200, { success: true, applied: { summary: true, steps: 1, components: 1, layers: 0, flows: 0 }, ignored: ['c99'] });
-      return json(200, { success: true, range: app.lensRange, lens: FAKE_LENS, limits: FAKE_LIMITS });
+    if (app.lensRoutes && route.startsWith('/lens?')) return json(200, { success: true, ...app.lensAnswer, limits: FAKE_LIMITS });
+    if (app.lensRoutes && route === '/lens/words') {
+      if (app.wordsStatus === 409) return json(409, { success: false, error: 'Nothing in this range changes code: it has no lens to word' });
+      return json(200, { success: true, applied: { summary: true, steps: 1, components: 1, layers: 0, flows: 0 }, ignored: ['c99'] });
     }
     json(404, { success: false, error: `No route ${route}` });
   });

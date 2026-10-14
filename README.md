@@ -38,7 +38,7 @@ webshop") when ShadowGit tracks more than one.
 - "Show me the history of Header.tsx"
 - "Start a ShadowGit session for this refactor", then "Create a checkpoint: Fixed login redirect", then "End the
   ShadowGit session"
-- "Write the Lens words for this session": the assistant reads the session's Lens and words each step and component
+- "Write the Lens words for this session"
 
 ## Tools
 
@@ -49,8 +49,8 @@ webshop") when ShadowGit tracks more than one.
 | `start_session` | Pauses automatic snapshots while the assistant edits |
 | `checkpoint` | Saves the current changes as one named checkpoint, following `.shadowgit-ignore` |
 | `end_session` | Resumes automatic snapshots |
-| `get_lens` | Reads ShadowGit's Lens of a range (by default the latest AI session): its steps with their code, its components and flows, by id |
-| `write_lens_words` | Writes the Lens's words for that range (a summary, step titles and sentences, component roles), kept in the history |
+| `get_lens` | Reads ShadowGit's Lens of a range, by default the latest AI session |
+| `write_lens_words` | Writes the Lens's words for that range, kept in the history |
 
 The other tools work on the current project unless given `repo`.
 

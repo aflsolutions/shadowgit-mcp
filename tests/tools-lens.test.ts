@@ -21,8 +21,9 @@ afterAll(async () => {
 beforeEach(() => {
   process.env.CLAUDE_PROJECT_DIR = project;
   app.requests.length = 0;
-  app.lensStatus = 200;
-  app.lensRange = FAKE_RANGE;
+  app.lensRoutes = true;
+  app.lensAnswer = { range: FAKE_RANGE, lens: FAKE_LENS };
+  app.wordsStatus = 200;
 });
 
 describe('get_lens', () => {
@@ -48,27 +49,36 @@ describe('get_lens', () => {
   });
 
   it('says to pass a range from the start of the history with base null, not the string "null"', async () => {
-    app.lensRange = { base: null, head: FAKE_RANGE.head };
+    app.lensAnswer = { range: { base: null, head: FAKE_RANGE.head }, lens: FAKE_LENS };
     const text = textOf(await getLens({}));
     expect(text).toContain(`base null and head "${FAKE_RANGE.head}"`);
   });
 
   it('asks for base and head together, before calling the app', async () => {
-    const before = app.requests.length;
     await expect(getLens({ head: 'def5678' })).rejects.toThrow('base and head together');
     await expect(getLens({ base: 'abc1234' })).rejects.toThrow('base and head together');
-    expect(app.requests).toHaveLength(before);
+    expect(app.requests).toHaveLength(0);
   });
 
-  it('asks for an app update when the routes are missing, and passes on why a range has no lens', async () => {
-    app.lensStatus = 404;
+  it('asks for an app update when the routes are missing', async () => {
+    app.lensRoutes = false;
     await expect(getLens({})).rejects.toThrow('no Lens for AI assistants');
-    app.lensStatus = 409;
-    await expect(getLens({})).rejects.toThrow('Nothing in this range changes code');
+  });
+
+  it('says a range that changes no code has no lens to word', async () => {
+    app.lensAnswer = { range: FAKE_RANGE, lens: null };
+    const result = await getLens({});
+    expect(textOf(result)).toContain('has no lens to word');
+    expect(result.structuredContent).toEqual({ repo: 'webshop', range: FAKE_RANGE, lens: null, limits: FAKE_LIMITS });
   });
 });
 
 describe('write_lens_words', () => {
+  it("passes on the app's reason when it keeps no words: a range that changes no code", async () => {
+    app.wordsStatus = 409;
+    await expect(writeLensWords({ ...FAKE_RANGE, summary: 'A summary.' }, 'Claude Code')).rejects.toThrow('Nothing in this range changes code');
+  });
+
   it('sends the words for the range, with the client as author, and says what the lens took', async () => {
     const result = await writeLensWords(
       { ...FAKE_RANGE, summary: 'Failed payments wait for another try.', steps: [{ id: 'c1', title: 'Queue failed charges' }], components: [{ id: 'k1', role: 'Retries failed charges' }] },
@@ -89,7 +99,7 @@ describe('write_lens_words', () => {
   });
 
   it('asks for an app update when the route is missing', async () => {
-    app.lensStatus = 404;
+    app.lensRoutes = false;
     await expect(writeLensWords({ ...FAKE_RANGE, steps: [{ id: 'c1', title: 'A title' }] }, 'Claude Code')).rejects.toThrow('no Lens for AI assistants');
   });
 });

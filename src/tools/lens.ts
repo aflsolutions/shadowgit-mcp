@@ -2,27 +2,30 @@ import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { clientName } from '../client-name.js';
 import { resolveRepo } from '../repos.js';
-import { LensApplied, LensLimits, LensRange, LensSkeleton, readLens, sendLensWords, type LensWords } from '../session-api.js';
+import { LensRead, readLens, sendLensWords, WordsWritten, type LensWords } from '../session-api.js';
 import { dataResult, repoParam } from './shared.js';
 
-const LensOutput = z.object({ repo: z.string(), range: LensRange, lens: LensSkeleton.nullable(), limits: LensLimits });
-const WordsOutput = z.object({ repo: z.string(), applied: LensApplied, ignored: z.array(z.string()) });
+const LensOutput = z.object({ repo: z.string(), ...LensRead.shape });
+const WordsOutput = z.object({ repo: z.string(), ...WordsWritten.shape });
+const Snapshot = z.string().regex(/^[0-9a-f]{7,40}$/, 'a snapshot hash');
 
-const LIMIT_NAMES: Record<string, string> = { summary: 'summary', stepTitle: 'step title', stepBody: 'step body', role: 'role', layerName: 'layer name', flowLabel: 'flow label' };
+type Read = z.infer<typeof LensRead>;
 
 /** The lens as the model reads it: what to send back, then every step with its code, every card, layer and flow by id. */
-function describeLens(repo: string, range: z.infer<typeof LensRange>, lens: z.infer<typeof LensSkeleton>, limits: Record<string, number>): string {
-  const caps = Object.entries(limits).map(([key, max]) => `${LIMIT_NAMES[key] ?? key} ${max}`).join(', ');
+function describeLens(repo: string, range: Read['range'], lens: NonNullable<Read['lens']>, limits: Read['limits']): string {
+  // stepTitle reads "step title"
+  const caps = Object.entries(limits).map(([key, max]) => `${key.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`)} ${max}`).join(', ');
   return [
     `The Lens of ${repo}, snapshots ${range.base === null ? 'from the start' : range.base.slice(0, 8)}..${range.head.slice(0, 8)}; its words now: ${lens.words.source}${lens.words.author ? ` (${lens.words.author})` : ''}.`,
-    `Word it with write_lens_words, passing base ${range.base === null ? 'null' : `"${range.base}"`} and head "${range.head}": a summary of two sentences, for each step a title and one or two sentences, for each changed card the role it plays. Name only the ids below; text past its limit is cut (characters: ${caps}).`,
+    `Word it with write_lens_words, passing base ${JSON.stringify(range.base)} and head ${JSON.stringify(range.head)}: a summary of two sentences, for each step a title and one or two sentences, for each changed card the role it plays. Name only the ids below; text past its limit is cut (characters: ${caps}).`,
     '',
     ...lens.steps.flatMap((step) => [
       `Step ${step.id} "${step.title}": cards ${step.components.join(', ')}; files ${step.files.join(', ') || 'none'}`,
       ...(step.body ? [`  ${step.body}`] : []),
-      '```diff',
+      // Four backticks: a diff of a Markdown file may hold a fence of three
+      '````diff',
       step.diff,
-      '```',
+      '````',
     ]),
     'Cards:',
     ...lens.components.map((card) => `- ${card.id} ${card.name} (${card.kind}, ${card.context ? 'context, unchanged' : card.delta}) ${card.path}${card.role ? `: ${card.role}` : ''}`),
@@ -34,7 +37,6 @@ function describeLens(repo: string, range: z.infer<typeof LensRange>, lens: z.in
 }
 
 export async function getLens({ base, head, repo }: { base?: string | null; head?: string; repo?: string }): Promise<CallToolResult> {
-  // A range is both its ends; leave both out for the latest AI session
   if ((head === undefined) !== (base === undefined)) throw new Error('Name base and head together (base null starts from the beginning of the history), or neither for the latest AI session.');
   const project = resolveRepo(repo);
   const read = await readLens({ repoPath: project.path, base, head });
@@ -57,8 +59,6 @@ export async function writeLensWords(
   return dataResult(WordsOutput, text, { repo: project.name, applied, ignored });
 }
 
-const Snapshot = z.string().regex(/^[0-9a-f]{7,40}$/i, 'a snapshot hash');
-
 export function registerLens(server: McpServer): void {
   server.registerTool(
     'get_lens',
@@ -74,7 +74,7 @@ export function registerLens(server: McpServer): void {
       outputSchema: LensOutput,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
-    (args) => getLens(args),
+    getLens,
   );
   server.registerTool(
     'write_lens_words',

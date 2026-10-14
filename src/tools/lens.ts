@@ -20,14 +20,17 @@ function describeLens(repo: string, range: Read['range'], lens: NonNullable<Read
     ...(lens.summary ? [`Summary: ${lens.summary}`] : []),
     `Word it with write_lens_words, passing base ${JSON.stringify(range.base)} and head ${JSON.stringify(range.head)}: a summary of two sentences, for each step a title and one or two sentences, for each changed card the role it plays. Name only the ids below; text past its limit is cut (characters: ${caps}).`,
     '',
-    ...lens.steps.flatMap((step) => [
-      `Step ${step.id} "${step.title}": cards ${step.components.join(', ')}; files ${step.files.join(', ') || 'none'}`,
-      ...(step.body ? [`  ${step.body}`] : []),
-      // Four backticks: a diff of a Markdown file may hold a fence of three
-      '````diff',
-      step.diff,
-      '````',
-    ]),
+    ...lens.steps.flatMap((step) => {
+      // Longer than any backtick run in the diff: a Markdown file's own fence would close a shorter one
+      const fence = '`'.repeat(Math.max(3, ...[...step.diff.matchAll(/`+/g)].map(([run]) => run.length + 1)));
+      return [
+        `Step ${step.id} "${step.title}": cards ${step.components.join(', ')}; files ${step.files.join(', ') || 'none'}`,
+        ...(step.body ? [`  ${step.body}`] : []),
+        `${fence}diff`,
+        step.diff,
+        fence,
+      ];
+    }),
     'Cards:',
     ...lens.components.map((card) => `- ${card.id} ${card.name} (${card.kind}, ${card.context ? 'context, unchanged' : card.delta}) ${card.path}${card.role ? `: ${card.role}` : ''}`),
     'Layers:',
@@ -94,7 +97,8 @@ export function registerLens(server: McpServer): void {
         repo: repoParam,
       }),
       outputSchema: WordsOutput,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      // Destructive: words written for an id replace the ones it had
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
     (args, ctx) => writeLensWords(args, clientName(server, ctx)),
   );

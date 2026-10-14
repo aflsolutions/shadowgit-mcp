@@ -59,6 +59,12 @@ describe('get_lens', () => {
     expect(textOf(await getLens({}))).toContain('Summary: Failed payments wait for another try.');
   });
 
+  it("fences a step's diff past the longest backtick run inside it, so a Markdown fence in the diff cannot close it", async () => {
+    const diff = ' ````ts\n+const a = 1;\n ````';
+    app.lensAnswer = { range: FAKE_RANGE, lens: { ...FAKE_LENS, steps: FAKE_LENS.steps.map((step) => ({ ...step, diff })) } };
+    expect(textOf(await getLens({}))).toContain(`\`\`\`\`\`diff\n${diff}\n\`\`\`\`\`\n`);
+  });
+
   it('asks for base and head together, before calling the app', async () => {
     await expect(getLens({ head: 'def5678' })).rejects.toThrow('base and head together');
     await expect(getLens({ base: 'abc1234' })).rejects.toThrow('base and head together');

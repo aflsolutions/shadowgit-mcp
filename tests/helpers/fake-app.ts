@@ -42,7 +42,7 @@ export const FAKE_LIMITS = { summary: 400, stepTitle: 60, stepBody: 280, role: 1
 export const FAKE_LENS = {
   title: 'This AI session',
   words: { source: 'offline', author: null },
-  summary: null,
+  summary: null as string | null,
   steps: [{ id: 'c1', title: 'Add RetryQueue', body: null, components: ['k1', 'k2'], files: ['src/retry-queue.ts'], diff: '+export class RetryQueue {}' }],
   components: [
     { id: 'k1', name: 'RetryQueue', kind: 'class', delta: 'added', context: false, role: null, path: 'src/retry-queue.ts', symbols: ['RetryQueue', 'RetryQueue.retry'] },

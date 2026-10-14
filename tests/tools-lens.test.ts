@@ -54,6 +54,11 @@ describe('get_lens', () => {
     expect(text).toContain(`base null and head "${FAKE_RANGE.head}"`);
   });
 
+  it('shows the summary written so far, so a model can keep or improve it', async () => {
+    app.lensAnswer = { range: FAKE_RANGE, lens: { ...FAKE_LENS, summary: 'Failed payments wait for another try.' } };
+    expect(textOf(await getLens({}))).toContain('Summary: Failed payments wait for another try.');
+  });
+
   it('asks for base and head together, before calling the app', async () => {
     await expect(getLens({ head: 'def5678' })).rejects.toThrow('base and head together');
     await expect(getLens({ base: 'abc1234' })).rejects.toThrow('base and head together');

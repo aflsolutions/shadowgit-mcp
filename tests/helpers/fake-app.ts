@@ -25,6 +25,8 @@ export interface FakeApp {
   checkpointStatus: 200 | 404 | 409 | 500;
   /** 200 answers; 404 is an app without the Lens routes; 409 is a range that changes no code. */
   lensStatus: 200 | 404 | 409;
+  /** The range GET /lens answers. */
+  lensRange: { base: string | null; head: string };
   /** Leaves every request unanswered, like an app busy with a large project. */
   hang: boolean;
   /** Sends the headers and part of the body, then never ends it, like an app that stalls mid-answer. */
@@ -74,6 +76,7 @@ async function listen(): Promise<FakeApp> {
     sessions: [],
     checkpointStatus: 200,
     lensStatus: 200,
+    lensRange: FAKE_RANGE,
     hang: false,
     hangBody: false,
     close: () => {
@@ -127,7 +130,7 @@ async function listen(): Promise<FakeApp> {
       if (app.lensStatus === 404) return json(404, { success: false, error: 'Not found' });
       if (app.lensStatus === 409) return json(409, { success: false, error: 'Nothing in this range changes code: it has no lens to word' });
       if (route === '/lens/words') return json(200, { success: true, applied: { summary: true, steps: 1, components: 1, layers: 0, flows: 0 }, ignored: ['c99'] });
-      return json(200, { success: true, range: FAKE_RANGE, lens: FAKE_LENS, limits: FAKE_LIMITS });
+      return json(200, { success: true, range: app.lensRange, lens: FAKE_LENS, limits: FAKE_LIMITS });
     }
     json(404, { success: false, error: `No route ${route}` });
   });

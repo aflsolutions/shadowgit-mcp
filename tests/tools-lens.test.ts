@@ -22,6 +22,7 @@ beforeEach(() => {
   process.env.CLAUDE_PROJECT_DIR = project;
   app.requests.length = 0;
   app.lensStatus = 200;
+  app.lensRange = FAKE_RANGE;
 });
 
 describe('get_lens', () => {
@@ -44,6 +45,12 @@ describe('get_lens', () => {
     expect(app.requests.at(-1)?.path).toBe(`/lens?${new URLSearchParams({ repoPath: project, base: 'abc1234', head: 'def5678' })}`);
     await getLens({ base: null, head: 'def5678' });
     expect(app.requests.at(-1)?.path).toBe(`/lens?${new URLSearchParams({ repoPath: project, base: '', head: 'def5678' })}`);
+  });
+
+  it('says to pass a range from the start of the history with base null, not the string "null"', async () => {
+    app.lensRange = { base: null, head: FAKE_RANGE.head };
+    const text = textOf(await getLens({}));
+    expect(text).toContain(`base null and head "${FAKE_RANGE.head}"`);
   });
 
   it('asks for the base with a head, before calling the app', async () => {

@@ -15,7 +15,7 @@ function describeLens(repo: string, range: z.infer<typeof LensRange>, lens: z.in
   const caps = Object.entries(limits).map(([key, max]) => `${LIMIT_NAMES[key] ?? key} ${max}`).join(', ');
   return [
     `The Lens of ${repo}, snapshots ${range.base === null ? 'from the start' : range.base.slice(0, 8)}..${range.head.slice(0, 8)}; its words now: ${lens.words.source}${lens.words.author ? ` (${lens.words.author})` : ''}.`,
-    `Word it with write_lens_words, passing base "${range.base}" and head "${range.head}": a summary of two sentences, for each step a title and one or two sentences, for each changed card the role it plays. Name only the ids below; text past its limit is cut (characters: ${caps}).`,
+    `Word it with write_lens_words, passing base ${range.base === null ? 'null' : `"${range.base}"`} and head "${range.head}": a summary of two sentences, for each step a title and one or two sentences, for each changed card the role it plays. Name only the ids below; text past its limit is cut (characters: ${caps}).`,
     '',
     ...lens.steps.flatMap((step) => [
       `Step ${step.id} "${step.title}": cards ${step.components.join(', ')}; files ${step.files.join(', ') || 'none'}`,

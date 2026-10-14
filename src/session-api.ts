@@ -143,8 +143,13 @@ export async function createCheckpoint(input: {
 }
 
 /** The lens of a range for the agent to word: the latest AI session's without a head. */
-export async function readLens(input: { repoPath: string; base?: string; head?: string }): Promise<z.infer<typeof LensRead>> {
-  const query = new URLSearchParams({ repoPath: input.repoPath, ...(input.base ? { base: input.base } : {}), ...(input.head ? { head: input.head } : {}) });
+export async function readLens(input: { repoPath: string; base?: string | null; head?: string }): Promise<z.infer<typeof LensRead>> {
+  // An empty base is the empty tree: a range from the start of the history
+  const query = new URLSearchParams({ repoPath: input.repoPath });
+  if (input.head !== undefined) {
+    query.set('base', input.base ?? '');
+    query.set('head', input.head);
+  }
   const { status, json } = await request(`/lens?${query}`, undefined, { timeoutMs: LENS_TIMEOUT_MS, accept: [404] });
   if (status === 404) throw new Error(APP_WITHOUT_LENS);
   return LensRead.parse(json);

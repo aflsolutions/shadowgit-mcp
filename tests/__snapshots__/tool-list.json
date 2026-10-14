@@ -308,9 +308,16 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "base": {
-          "description": "The snapshot the range starts from; with head. Leave both out for the latest AI session",
-          "pattern": "^[0-9a-f]{7,40}$",
-          "type": "string"
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{7,40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The snapshot the range starts from, with head (null: the start of the history). Leave both out for the latest AI session"
         },
         "head": {
           "description": "The range's newest snapshot; leave out for the latest AI session",

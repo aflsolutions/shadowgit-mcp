@@ -39,9 +39,17 @@ describe('get_lens', () => {
     expect(text).toContain('step title 60');
   });
 
-  it('asks for the snapshots it is given', async () => {
+  it('asks for the snapshots it is given, a null base from the start of the history', async () => {
     await getLens({ base: 'abc1234', head: 'def5678' });
     expect(app.requests.at(-1)?.path).toBe(`/lens?${new URLSearchParams({ repoPath: project, base: 'abc1234', head: 'def5678' })}`);
+    await getLens({ base: null, head: 'def5678' });
+    expect(app.requests.at(-1)?.path).toBe(`/lens?${new URLSearchParams({ repoPath: project, base: '', head: 'def5678' })}`);
+  });
+
+  it('asks for the base with a head, before calling the app', async () => {
+    const before = app.requests.length;
+    await expect(getLens({ head: 'def5678' })).rejects.toThrow('base');
+    expect(app.requests).toHaveLength(before);
   });
 
   it('asks for an app update when the routes are missing, and passes on why a range has no lens', async () => {

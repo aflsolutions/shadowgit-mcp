@@ -33,7 +33,8 @@ function describeLens(repo: string, range: z.infer<typeof LensRange>, lens: z.in
   ].join('\n');
 }
 
-export async function getLens({ base, head, repo }: { base?: string; head?: string; repo?: string }): Promise<CallToolResult> {
+export async function getLens({ base, head, repo }: { base?: string | null; head?: string; repo?: string }): Promise<CallToolResult> {
+  if (head !== undefined && base === undefined) throw new Error('Name base with head: the snapshot the range starts from, or null to start from the beginning of the history.');
   const project = resolveRepo(repo);
   const read = await readLens({ repoPath: project.path, base, head });
   const data = { repo: project.name, ...read };
@@ -65,7 +66,7 @@ export function registerLens(server: McpServer): void {
       description:
         "Read ShadowGit's Lens of a range of snapshots, by default the latest AI session's: its steps with their code, the cards (components) and flows on its canvas, each with an id and its words so far. Read it at the end of a session, after the checkpoint, to word it with write_lens_words. Needs the ShadowGit app running.",
       inputSchema: z.object({
-        base: Snapshot.optional().describe('The snapshot the range starts from; with head. Leave both out for the latest AI session'),
+        base: Snapshot.nullable().optional().describe('The snapshot the range starts from, with head (null: the start of the history). Leave both out for the latest AI session'),
         head: Snapshot.optional().describe("The range's newest snapshot; leave out for the latest AI session"),
         repo: repoParam,
       }),

@@ -295,5 +295,451 @@
       "type": "object"
     },
     "title": "End a ShadowGit session"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Read ShadowGit's Lens of a range of snapshots, by default the latest AI session's: its steps with their code, the cards (components) and flows on its canvas, each with an id and its words so far. Read it at the end of a session, after the checkpoint, to word it with write_lens_words. Needs the ShadowGit app running.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "base": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{7,40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The snapshot the range starts from, with head (null: the start of the history). Leave both out for the latest AI session"
+        },
+        "head": {
+          "description": "The range's newest snapshot; leave out for the latest AI session",
+          "pattern": "^[0-9a-f]{7,40}$",
+          "type": "string"
+        },
+        "repo": {
+          "description": "Project name or absolute path. Defaults to the current project.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "get_lens",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "lens": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "components": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "context": {
+                        "type": "boolean"
+                      },
+                      "delta": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "path": {
+                        "type": "string"
+                      },
+                      "role": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "symbols": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "kind",
+                      "delta",
+                      "context",
+                      "role",
+                      "path",
+                      "symbols"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "flows": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "from": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "to": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "from",
+                      "to",
+                      "label"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "layers": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "steps": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "body": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "components": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "diff": {
+                        "type": "string"
+                      },
+                      "files": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "title",
+                      "body",
+                      "components",
+                      "files",
+                      "diff"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "summary": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "words": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "author": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "source": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "author"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "title",
+                "words",
+                "summary",
+                "steps",
+                "components",
+                "layers",
+                "flows"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limits": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "range": {
+          "additionalProperties": false,
+          "properties": {
+            "base": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "head": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "base",
+            "head"
+          ],
+          "type": "object"
+        },
+        "repo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo",
+        "range",
+        "lens",
+        "limits"
+      ],
+      "type": "object"
+    },
+    "title": "Read a range's Lens"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Write the words the user reads in ShadowGit's Lens for a range get_lens read: a summary, each step's title and body, each card's role, by the ids get_lens gave. Plain text; text past its limit is cut; unknown ids are left out. The app keeps the words in its history: a card's role shows in any later range while its code is unchanged.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "base": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{7,40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The base get_lens answered (null: from the start of the history)"
+        },
+        "components": {
+          "description": "Per changed card: the role it plays, in a few words",
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "role"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "flows": {
+          "description": "Per flow: a verb phrase, e.g. \"draws a range\"",
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "label"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "head": {
+          "description": "The head get_lens answered",
+          "pattern": "^[0-9a-f]{7,40}$",
+          "type": "string"
+        },
+        "layers": {
+          "description": "Per layer: a short name, where the default does not say where code runs",
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "repo": {
+          "description": "Project name or absolute path. Defaults to the current project.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "steps": {
+          "description": "Per step: a title naming what it does, and one or two sentences",
+          "items": {
+            "properties": {
+              "body": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "summary": {
+          "description": "What the change does and why, in two sentences",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base",
+        "head"
+      ],
+      "type": "object"
+    },
+    "name": "write_lens_words",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "applied": {
+          "additionalProperties": false,
+          "properties": {
+            "components": {
+              "type": "number"
+            },
+            "flows": {
+              "type": "number"
+            },
+            "layers": {
+              "type": "number"
+            },
+            "steps": {
+              "type": "number"
+            },
+            "summary": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "summary",
+            "steps",
+            "components",
+            "layers",
+            "flows"
+          ],
+          "type": "object"
+        },
+        "ignored": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "repo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo",
+        "applied",
+        "ignored"
+      ],
+      "type": "object"
+    },
+    "title": "Write a range's Lens words"
   }
 ]

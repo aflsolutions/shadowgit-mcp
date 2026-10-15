@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { Client } from '@modelcontextprotocol/client';
 import { INSTRUCTIONS } from '../src/server.js';
 import { ERAS, connect } from './helpers/client.js';
-import { fakeSession, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { FAKE_RANGE, fakeSession, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { makeProject, removeTempDirs, restoreEnv, useStorage } from './helpers/fixtures.js';
 
 // The two protocol revisions put "$schema" in different places; key order is not content.
@@ -39,9 +39,9 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(INSTRUCTIONS.length).toBeLessThanOrEqual(1250);
   });
 
-  it('lists the five tools exactly as pinned', async () => {
+  it('lists the seven tools exactly as pinned', async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name)).toEqual(['list_repos', 'git_command', 'start_session', 'checkpoint', 'end_session']);
+    expect(tools.map((t) => t.name)).toEqual(['list_repos', 'git_command', 'start_session', 'checkpoint', 'end_session', 'get_lens', 'write_lens_words']);
     await expect(JSON.stringify(tools, sortKeys, 2)).toMatchFileSnapshot('__snapshots__/tool-list.json');
   });
 
@@ -61,8 +61,14 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     const end = await client.callTool({ name: 'end_session', arguments: {} });
     expect(end.structuredContent).toMatchObject({ ended: [expect.any(String)], repo: 'demo' });
 
+    const lens = await client.callTool({ name: 'get_lens', arguments: {} });
+    expect(lens.structuredContent).toMatchObject({ repo: 'demo', range: FAKE_RANGE });
+    const words = await client.callTool({ name: 'write_lens_words', arguments: { ...FAKE_RANGE, steps: [{ id: 'c1', title: 'Queue failed charges' }] } });
+    expect(words.structuredContent).toMatchObject({ repo: 'demo', applied: { steps: 1 } });
+
     expect(app.requestsTo('/session/start')[0]).toMatchObject({ aiTool: 'shadowgit-e2e', repoPath: project });
     expect(app.requestsTo('/checkpoint')[0]).toMatchObject({ author: 'shadowgit-e2e' });
+    expect(app.requestsTo('/lens/words')[0]).toMatchObject({ author: 'shadowgit-e2e', repoPath: project, words: { steps: [{ id: 'c1', title: 'Queue failed charges' }] } });
   });
 
   it('names the project that has the session when the current one has none', async () => {

@@ -11,6 +11,7 @@ import * as z from 'zod/v4';
 import { BINARY } from '../tests/helpers/client.js';
 import { fakeSession, startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
 import { makeProject, removeTempDirs, snapshot, tempDir, useStorage } from '../tests/helpers/fixtures.js';
+import type { LensWords } from '../src/session-api.js';
 
 const run = promisify(execFile);
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
@@ -46,6 +47,16 @@ const CASES: { phrase: string; prepare?: (app: FakeApp, project: string) => void
       app.sessions.push(fakeSession({ repoPath: project, description: 'debugging' }));
     },
     passed: ({ app }) => app.requestsTo('/session/end').some((b) => b.sessionId === 'claude-code-1'),
+  },
+  {
+    phrase: 'Write the Lens words for this session',
+    // It reads the lens, and words a step by the id the lens gave
+    passed: ({ app }) =>
+      app.requests.some((r) => r.path.startsWith('/lens?')) &&
+      app.requestsTo('/lens/words').some((b) => {
+        const words = b.words as LensWords | undefined;
+        return words?.steps?.some((step) => step.id === 'c1' && Boolean(step.title?.trim())) === true;
+      }),
   },
 ];
 

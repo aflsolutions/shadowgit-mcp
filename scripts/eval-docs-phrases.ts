@@ -9,8 +9,8 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import * as z from 'zod/v4';
 import { BINARY } from '../tests/helpers/client.js';
-import { fakeSession, startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
-import { makeProject, removeTempDirs, snapshot, tempDir, useStorage } from '../tests/helpers/fixtures.js';
+import { FAKE_LENS, fakeSession, startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
+import { makeProject, removeTempDirs, shadowGit, snapshot, tempDir, useStorage } from '../tests/helpers/fixtures.js';
 import type { LensWords } from '../src/session-api.js';
 
 const run = promisify(execFile);
@@ -50,6 +50,10 @@ const CASES: { phrase: string; prepare?: (app: FakeApp, project: string) => void
   },
   {
     phrase: 'Write the Lens words for this session',
+    // The Lens of a change the project's history really holds: an assistant that checks it against git finds it there
+    prepare: (app, project) => {
+      app.lensAnswer = { range: { base: shadowGit(project, ['rev-parse', 'HEAD~1']), head: shadowGit(project, ['rev-parse', 'HEAD']) }, lens: CHECKOUT_LENS };
+    },
     // It reads the lens, and words a step by the id the lens gave
     passed: ({ app }) =>
       app.requests.some((r) => r.path.startsWith('/lens?')) &&
@@ -59,6 +63,14 @@ const CASES: { phrase: string; prepare?: (app: FakeApp, project: string) => void
       }),
   },
 ];
+
+/** The Lens the app would draw of webshop's last snapshot, "Add checkout page": src/checkout.ts added. */
+const CHECKOUT_LENS: typeof FAKE_LENS = {
+  ...FAKE_LENS,
+  steps: [{ id: 'c1', title: 'Add checkout', body: null, components: ['k1'], files: ['src/checkout.ts'], diff: '+export const checkout = true;' }],
+  components: [{ id: 'k1', name: 'checkout', kind: 'constant', delta: 'added', context: false, role: null, path: 'src/checkout.ts', symbols: ['checkout'] }],
+  flows: [],
+};
 
 const Output = z.object({ is_error: z.boolean(), result: z.string() });
 const firstLines = (text: string) => text.split('\n').slice(0, 5).join('\n').slice(0, 400);

@@ -2,7 +2,8 @@
 
 1. Ship any app change the release depends on first (2.0.0 needs the app's `POST /api/checkpoint`).
 2. Set the new version in `package.json` and in both places in `server.json`; add the CHANGELOG entry.
-3. `npm test` and `npm run eval`: the eval must pass every phrase.
+3. `npm test`, `npm run eval` and `npm run eval:lens`: the eval must pass every phrase, and eval:lens must see Claude Code
+   word the Lens unprompted in every run.
 4. Merge to `main`, then from `main`:
 
 ```bash

@@ -2,6 +2,13 @@
 
 All notable changes to the ShadowGit MCP Server will be documented in this file.
 
+## [2.1.1] - 2026-10-15
+
+### Changed
+- The server instructions put wording the Lens inside the session flow: checkpoint, end_session, then get_lens and
+  write_lens_words. Asked for a normal two-file task without a word about the Lens, Claude Code wrote the Lens's words
+  in 5 of 5 runs, against 3 of 5 when it was a separate line (`npm run eval:lens`).
+
 ## [2.1.0] - 2026-10-15
 
 ### Added

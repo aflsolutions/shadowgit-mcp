@@ -2,7 +2,7 @@
 
 All notable changes to the ShadowGit MCP Server will be documented in this file.
 
-## [Unreleased]
+## [2.1.0] - 2026-10-15
 
 ### Added
 - `get_lens` reads ShadowGit's Lens of a range of snapshots, by default the latest AI session's: each step with its

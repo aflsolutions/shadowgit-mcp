@@ -10,6 +10,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { BINARY } from '../tests/helpers/client.js';
 import { FAKE_RANGE, startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
+import type { LensWords } from '../src/session-api.js';
 import { makeProject, removeTempDirs, snapshot, tempDir, useStorage } from '../tests/helpers/fixtures.js';
 
 const run = promisify(execFile);
@@ -79,7 +80,13 @@ for (let i = 1; i <= RUNS; i++) {
       checkpoint: app.requestsTo('/checkpoint').length > 0,
       ended: app.requestsTo('/session/end').length > 0,
       read: app.requests.some((r) => r.path.startsWith('/lens?')),
-      worded: app.requestsTo('/lens/words').length > 0,
+      // Words for this very range, a summary, the step's title and a role: a call with empty words or another range is no wording
+      worded: app.requestsTo('/lens/words').some((body) => {
+        const words = body.words as LensWords | undefined;
+        return body.base === FAKE_RANGE.base && body.head === FAKE_RANGE.head && Boolean(words?.summary?.trim()) &&
+          words?.steps?.some((step) => step.id === 'c1' && Boolean(step.title?.trim())) === true &&
+          words.components?.some((card) => Boolean(card.role.trim())) === true;
+      }),
     };
     for (const key of Object.keys(hit) as (keyof typeof hit)[]) if (hit[key]) tally[key]++;
     console.log(`run ${i}: edited=${edited} ${Object.entries(hit).map(([k, v]) => `${k}=${v}`).join(' ')} cost=$${cost.toFixed(2)}`);

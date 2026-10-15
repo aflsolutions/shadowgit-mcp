@@ -67,6 +67,19 @@ const DISCOUNT_LENS = {
   flows: [{ id: 'f1', from: 'k2', to: 'k1', label: 'applyDiscount()' }],
 };
 
+/**
+ * Whether words cover a lens as the server's instructions ask: a summary, a title and a sentence for every step, and a
+ * role for every changed card, each by the lens's own ids.
+ */
+function coversLens(words: LensWords | undefined, lens: typeof DISCOUNT_LENS): boolean {
+  const said = (text: string | undefined) => Boolean(text?.trim());
+  return (
+    said(words?.summary) &&
+    lens.steps.every(({ id }) => words?.steps?.some((step) => step.id === id && said(step.title) && said(step.body)) === true) &&
+    lens.components.filter((card) => !card.context).every(({ id }) => words?.components?.some((card) => card.id === id && said(card.role)) === true)
+  );
+}
+
 const tally = { session: 0, checkpoint: 0, ended: 0, read: 0, worded: 0, flowed: 0 };
 for (let i = 1; i <= RUNS; i++) {
   const app = await startFakeApp();
@@ -85,13 +98,10 @@ for (let i = 1; i <= RUNS; i++) {
       checkpoint: app.requestsTo('/checkpoint').length > 0,
       ended: app.requestsTo('/session/end').length > 0,
       read: app.requests.some((r) => r.path.startsWith('/lens?')),
-      // Words for this very range, a summary, the step's title and a role: a call with empty words or another range is no wording
+      // Words for this very range that cover the lens: a call with partial words or another range is no wording
       worded: app.requestsTo('/lens/words').some((body) => {
-        const words = body.words as LensWords | undefined;
         const { head } = range();
-        return body.base === base && body.head === head && head !== base && Boolean(words?.summary?.trim()) &&
-          words?.steps?.some((step) => step.id === 'c1' && Boolean(step.title?.trim())) === true &&
-          words.components?.some((card) => Boolean(card.role.trim())) === true;
+        return body.base === base && body.head === head && head !== base && coversLens(body.words as LensWords | undefined, DISCOUNT_LENS);
       }),
     };
     // The session, then the Lens, in the order the instructions give: start, checkpoint, end, read, write

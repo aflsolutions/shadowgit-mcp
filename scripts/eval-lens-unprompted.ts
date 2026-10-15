@@ -1,7 +1,8 @@
 /**
  * Whether Claude Code words ShadowGit's Lens on its own: a normal two-file task in a tracked project, with no word
- * about the Lens, and the server's instructions as the only hint. Records which ShadowGit routes each run reached,
- * and fails unless every run wrote the Lens's words. Spends tokens and its results vary, so it runs by hand before a
+ * about the Lens, and the server's instructions as the only hint. Its checkpoints are real, and the Lens it reads is
+ * of its own change: from the snapshot before the task to its checkpoint. Records which ShadowGit routes each run
+ * reached, and fails unless every run went through the session, then wrote the Lens's words. Spends tokens and its results vary, so it runs by hand before a
  * release, beside `npm run eval`.
  */
 import { execFile } from 'node:child_process';
@@ -9,9 +10,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { BINARY } from '../tests/helpers/client.js';
-import { FAKE_RANGE, startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
+import { startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
 import type { LensWords } from '../src/session-api.js';
-import { makeProject, removeTempDirs, snapshot, tempDir, useStorage } from '../tests/helpers/fixtures.js';
+import { makeProject, removeTempDirs, shadowGit, snapshot, tempDir, useStorage } from '../tests/helpers/fixtures.js';
 
 const run = promisify(execFile);
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
@@ -66,12 +67,16 @@ const DISCOUNT_LENS = {
   flows: [{ id: 'f1', from: 'k2', to: 'k1', label: 'applyDiscount()' }],
 };
 
-const tally = { session: 0, checkpoint: 0, ended: 0, read: 0, worded: 0 };
+const tally = { session: 0, checkpoint: 0, ended: 0, read: 0, worded: 0, flowed: 0 };
 for (let i = 1; i <= RUNS; i++) {
   const app = await startFakeApp();
-  app.lensAnswer = { range: FAKE_RANGE, lens: DISCOUNT_LENS };
   try {
     const project = makeWebshop();
+    // The Lens of the task's own change, read when it is asked for: the snapshot before the task to the checkpoint
+    const base = shadowGit(project, ['rev-parse', 'HEAD']);
+    const range = () => ({ base, head: shadowGit(project, ['rev-parse', 'HEAD']) });
+    app.checkpointsIn = project;
+    Object.defineProperty(app, 'lensAnswer', { get: () => ({ range: range(), lens: DISCOUNT_LENS }) });
     const stdout = await runTask(app, project);
     const { result, total_cost_usd: cost } = JSON.parse(stdout) as { result: string; total_cost_usd: number };
     const edited = fs.existsSync(path.join(project, 'src/discount.ts'));
@@ -83,13 +88,19 @@ for (let i = 1; i <= RUNS; i++) {
       // Words for this very range, a summary, the step's title and a role: a call with empty words or another range is no wording
       worded: app.requestsTo('/lens/words').some((body) => {
         const words = body.words as LensWords | undefined;
-        return body.base === FAKE_RANGE.base && body.head === FAKE_RANGE.head && Boolean(words?.summary?.trim()) &&
+        const { head } = range();
+        return body.base === base && body.head === head && head !== base && Boolean(words?.summary?.trim()) &&
           words?.steps?.some((step) => step.id === 'c1' && Boolean(step.title?.trim())) === true &&
           words.components?.some((card) => Boolean(card.role.trim())) === true;
       }),
     };
+    // The session, then the Lens, in the order the instructions give: start, checkpoint, end, read, write
+    const order = app.requests.map((r) => r.path.split('?')[0]);
+    const steps = ['/session/start', '/checkpoint', '/session/end', '/lens', '/lens/words'].map((route) => order.indexOf(route));
+    const flowed = hit.worded && steps.every((at, k) => at !== -1 && (k === 0 || at > (steps[k - 1] ?? -1)));
     for (const key of Object.keys(hit) as (keyof typeof hit)[]) if (hit[key]) tally[key]++;
-    console.log(`run ${i}: edited=${edited} ${Object.entries(hit).map(([k, v]) => `${k}=${v}`).join(' ')} cost=$${cost.toFixed(2)}`);
+    if (flowed) tally.flowed++;
+    console.log(`run ${i}: edited=${edited} ${Object.entries(hit).map(([k, v]) => `${k}=${v}`).join(' ')} flowed=${flowed} cost=$${cost.toFixed(2)}`);
     console.log(`  order: ${app.requests.map((r) => r.path.split('?')[0]).join(' → ') || 'no request'}`);
     console.log(`  says: ${result.replace(/\s+/g, ' ').slice(0, 220)}`);
   } catch (error) {
@@ -100,4 +111,4 @@ for (let i = 1; i <= RUNS; i++) {
   }
 }
 console.log(`\nof ${RUNS} runs: ${Object.entries(tally).map(([k, v]) => `${k} ${v}`).join(', ')}`);
-process.exitCode = tally.worded === RUNS ? 0 : 1;
+process.exitCode = tally.flowed === RUNS ? 0 : 1;

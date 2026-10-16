@@ -437,6 +437,12 @@
                   },
                   "type": "array"
                 },
+                "quotes": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
                 "steps": {
                   "items": {
                     "additionalProperties": false,
@@ -464,6 +470,88 @@
                       },
                       "id": {
                         "type": "string"
+                      },
+                      "symbols": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "base": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "end": {
+                                      "maximum": 9007199254740991,
+                                      "minimum": -9007199254740991,
+                                      "type": "integer"
+                                    },
+                                    "start": {
+                                      "maximum": 9007199254740991,
+                                      "minimum": -9007199254740991,
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "start",
+                                    "end"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "basePath": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "head": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "end": {
+                                      "maximum": 9007199254740991,
+                                      "minimum": -9007199254740991,
+                                      "type": "integer"
+                                    },
+                                    "start": {
+                                      "maximum": 9007199254740991,
+                                      "minimum": -9007199254740991,
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "start",
+                                    "end"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "path": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "path",
+                            "basePath",
+                            "base",
+                            "head"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
                       },
                       "title": {
                         "type": "string"
@@ -575,7 +663,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Write the words the user reads in ShadowGit's Lens for a range get_lens read: a summary, each step's title and body, each card's role, by the ids get_lens gave. Plain text; text past its limit is cut; unknown ids are left out. The app keeps the words in its history: a card's role shows in any later range while its code is unchanged.",
+    "description": "Write the words the user reads in ShadowGit's Lens for a range get_lens read: a summary, each step's title and body, with a why and an excerpt, each card's role, by the ids get_lens gave. An older ShadowGit takes plain text alone; text past its limit is cut; unknown ids are left out. The app keeps the words in its history: a card's role shows in any later range while its code is unchanged.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -659,17 +747,100 @@
           "type": "string"
         },
         "steps": {
-          "description": "Per step: a title naming what it does, and one or two sentences",
+          "description": "Per step: a title naming what it does, and its words; a step's entry replaces everything written for that step before, so send its title, body, why and excerpt together",
           "items": {
             "properties": {
               "body": {
-                "type": "string"
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "properties": {
+                        "card": {
+                          "type": "string"
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "text"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                ],
+                "description": "One or two sentences: plain text, or pieces, where a piece with a card links that card of the step by its id, only where the text names it"
+              },
+              "excerpt": {
+                "description": "At most 12 lines that changed, of one of the step's symbols as get_lens lists them: its path on that side, its name, the side and the lines",
+                "properties": {
+                  "lines": {
+                    "properties": {
+                      "end": {
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991,
+                        "type": "integer"
+                      },
+                      "start": {
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "start",
+                      "end"
+                    ],
+                    "type": "object"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "side": {
+                    "enum": [
+                      "base",
+                      "head"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "name",
+                  "side",
+                  "lines"
+                ],
+                "type": "object"
               },
               "id": {
                 "type": "string"
               },
               "title": {
                 "type": "string"
+              },
+              "why": {
+                "description": "Why, in the author's own words: one of get_lens's quotes, or part of one, word for word, within the why limit (a longer quote is left out, not cut); left out where none says why",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "const": "commit",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "quote",
+                  "source"
+                ],
+                "type": "object"
               }
             },
             "required": [

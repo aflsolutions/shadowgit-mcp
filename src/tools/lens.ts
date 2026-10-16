@@ -2,7 +2,7 @@ import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { clientName } from '../client-name.js';
 import { resolveRepo } from '../repos.js';
-import { LensRead, readLens, sendLensWords, WordsWritten, type LensWords } from '../session-api.js';
+import { LensLines, LensRead, readLens, sendLensWords, WordsWritten, type LensWords } from '../session-api.js';
 import { dataResult, repoParam } from './shared.js';
 
 const LensOutput = z.object({ repo: z.string(), ...LensRead.shape });
@@ -10,6 +10,19 @@ const WordsOutput = z.object({ repo: z.string(), ...WordsWritten.shape });
 const Snapshot = z.string().regex(/^[0-9a-f]{7,40}$/, 'a snapshot hash');
 
 type Read = z.infer<typeof LensRead>;
+type LensSymbol = NonNullable<NonNullable<Read['lens']>['steps'][number]['symbols']>[number];
+
+// code-graph's EXCERPT_MAX_LINES: the app leaves out a longer excerpt
+const EXCERPT_MAX_LINES = 12;
+
+/** A step's symbol as an excerpt names it: by its path on a side, so a renamed file's base gives its former path. */
+function symbolLine({ name, path, basePath, base, head }: LensSymbol): string {
+  const sides = [
+    head && `head ${head.start}–${head.end}`,
+    base && `base ${basePath !== null && basePath !== path ? `${basePath} ` : ''}${base.start}–${base.end}`,
+  ].filter(Boolean);
+  return `\`${name}\` (${path}, ${sides.join('; ')})`;
+}
 
 /** The lens as the model reads it: what to send back, then every step with its code, every card, layer and flow by id. */
 function describeLens(repo: string, range: Read['range'], lens: NonNullable<Read['lens']>, limits: Read['limits']): string {
@@ -19,12 +32,14 @@ function describeLens(repo: string, range: Read['range'], lens: NonNullable<Read
     `The Lens of ${repo}, snapshots ${range.base === null ? 'from the start' : range.base.slice(0, 8)}..${range.head.slice(0, 8)}; its words now: ${lens.words.source}${lens.words.author ? ` (${lens.words.author})` : ''}.`,
     ...(lens.summary ? [`Summary: ${lens.summary}`] : []),
     `Word it with write_lens_words, passing base ${JSON.stringify(range.base)} and head ${JSON.stringify(range.head)}: a summary of two sentences, for each step a title and one or two sentences, for each changed card the role it plays. Name only the ids below; text past its limit is cut (characters: ${caps}).`,
+    ...(lens.quotes?.length ? ['Checkpoint messages a why may quote:', ...lens.quotes.map((quote) => `- ${JSON.stringify(quote)}`)] : []),
     '',
     ...lens.steps.flatMap((step) => {
       // Longer than any backtick run in the diff: a Markdown file's own fence would close a shorter one
       const fence = '`'.repeat(Math.max(3, ...[...step.diff.matchAll(/`+/g)].map(([run]) => run.length + 1)));
       return [
         `Step ${step.id} "${step.title}": cards ${step.components.join(', ')}; files ${step.files.join(', ') || 'none'}`,
+        ...(step.symbols?.length ? [`  Symbols: ${step.symbols.map(symbolLine).join(', ')}`] : []),
         ...(step.body ? [`  ${step.body}`] : []),
         `${fence}diff`,
         step.diff,
@@ -85,12 +100,30 @@ export function registerLens(server: McpServer): void {
     {
       title: "Write a range's Lens words",
       description:
-        "Write the words the user reads in ShadowGit's Lens for a range get_lens read: a summary, each step's title and body, each card's role, by the ids get_lens gave. Plain text; text past its limit is cut; unknown ids are left out. The app keeps the words in its history: a card's role shows in any later range while its code is unchanged.",
+        "Write the words the user reads in ShadowGit's Lens for a range get_lens read: a summary, each step's title and body, with a why and an excerpt, each card's role, by the ids get_lens gave. An older ShadowGit takes plain text alone; text past its limit is cut; unknown ids are left out. The app keeps the words in its history: a card's role shows in any later range while its code is unchanged.",
       inputSchema: z.object({
         base: Snapshot.nullable().describe('The base get_lens answered (null: from the start of the history)'),
         head: Snapshot.describe('The head get_lens answered'),
         summary: z.string().optional().describe('What the change does and why, in two sentences'),
-        steps: z.array(z.object({ id: z.string(), title: z.string().optional(), body: z.string().optional() })).optional().describe('Per step: a title naming what it does, and one or two sentences'),
+        steps: z
+          .array(z.object({
+            id: z.string(),
+            title: z.string().optional(),
+            body: z
+              .union([z.string(), z.array(z.object({ text: z.string(), card: z.string().optional() }))])
+              .optional()
+              .describe("One or two sentences: plain text, or pieces, where a piece with a card links that card of the step by its id, only where the text names it"),
+            why: z
+              .object({ quote: z.string(), source: z.literal('commit') })
+              .optional()
+              .describe("Why, in the author's own words: one of get_lens's quotes, or part of one, word for word, within the why limit (a longer quote is left out, not cut); left out where none says why"),
+            excerpt: z
+              .object({ path: z.string(), name: z.string(), side: z.enum(['base', 'head']), lines: LensLines })
+              .optional()
+              .describe(`At most ${EXCERPT_MAX_LINES} lines that changed, of one of the step's symbols as get_lens lists them: its path on that side, its name, the side and the lines`),
+          }))
+          .optional()
+          .describe("Per step: a title naming what it does, and its words; a step's entry replaces everything written for that step before, so send its title, body, why and excerpt together"),
         components: z.array(z.object({ id: z.string(), role: z.string() })).optional().describe('Per changed card: the role it plays, in a few words'),
         layers: z.array(z.object({ id: z.string(), name: z.string() })).optional().describe('Per layer: a short name, where the default does not say where code runs'),
         flows: z.array(z.object({ id: z.string(), label: z.string() })).optional().describe('Per flow: a verb phrase, e.g. "draws a range"'),

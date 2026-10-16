@@ -75,7 +75,8 @@ function coversLens(words: LensWords | undefined, lens: typeof DISCOUNT_LENS): b
   const said = (text: string | undefined) => Boolean(text?.trim());
   return (
     said(words?.summary) &&
-    lens.steps.every(({ id }) => words?.steps?.some((step) => step.id === id && said(step.title) && said(step.body)) === true) &&
+    // A body of pieces says what its pieces' text says
+    lens.steps.every(({ id }) => words?.steps?.some((step) => step.id === id && said(step.title) && said(typeof step.body === 'string' ? step.body : step.body?.map(({ text }) => text).join(''))) === true) &&
     lens.components.filter((card) => !card.context).every(({ id }) => words?.components?.some((card) => card.id === id && said(card.role)) === true)
   );
 }

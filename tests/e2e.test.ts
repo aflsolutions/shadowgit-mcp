@@ -39,6 +39,19 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(INSTRUCTIONS.length).toBeLessThanOrEqual(1250);
   });
 
+  // Claude Code shows the model a tool's structured output alone, never its text: the rules must be in the schema
+  it("puts the rules for links, a why and an excerpt in write_lens_words' schema, never in get_lens's text", async () => {
+    const { tools } = await client.listTools();
+    const write = JSON.stringify(tools.find((tool) => tool.name === 'write_lens_words'));
+    expect(write).toContain('only where the text names it');
+    expect(write).toContain('word for word');
+    expect(write).toContain('At most 12 lines that changed');
+    expect(write).not.toMatch(/get_lens (says|describes)/);
+    // The app leaves out a why past its limit, where other text is cut; and a step's entry replaces its earlier one
+    expect(write).toContain('a longer quote is left out, not cut');
+    expect(write).toContain('replaces everything written for that step before');
+  });
+
   it('lists the seven tools exactly as pinned', async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name)).toEqual(['list_repos', 'git_command', 'start_session', 'checkpoint', 'end_session', 'get_lens', 'write_lens_words']);
@@ -69,6 +82,18 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(app.requestsTo('/session/start')[0]).toMatchObject({ aiTool: 'shadowgit-e2e', repoPath: project });
     expect(app.requestsTo('/checkpoint')[0]).toMatchObject({ author: 'shadowgit-e2e' });
     expect(app.requestsTo('/lens/words')[0]).toMatchObject({ author: 'shadowgit-e2e', repoPath: project, words: { steps: [{ id: 'c1', title: 'Queue failed charges' }] } });
+  });
+
+  it('sends linked pieces, a why and an excerpt as given', async () => {
+    const step = {
+      id: 'c1',
+      body: [{ text: 'RetryQueue', card: 'k1' }, { text: ' calls chargeCard again.' }],
+      why: { quote: 'Retry failed charges', source: 'commit' },
+      excerpt: { path: 'src/retry-queue.ts', name: 'RetryQueue', side: 'head', lines: { start: 1, end: 4 } },
+    };
+    const words = await client.callTool({ name: 'write_lens_words', arguments: { ...FAKE_RANGE, steps: [step] } });
+    expect(words.isError).not.toBe(true);
+    expect(app.requestsTo('/lens/words').at(-1)).toMatchObject({ words: { steps: [step] } });
   });
 
   it('names the project that has the session when the current one has none', async () => {

@@ -47,6 +47,9 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(write).toContain('word for word');
     expect(write).toContain('At most 12 lines that changed');
     expect(write).not.toMatch(/get_lens (says|describes)/);
+    // The app leaves out a why past its limit, where other text is cut; and a step's entry replaces its earlier one
+    expect(write).toContain('a longer quote is left out, not cut');
+    expect(write).toContain('replaces everything written for that step before');
   });
 
   it('lists the seven tools exactly as pinned', async () => {

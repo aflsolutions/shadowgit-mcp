@@ -116,14 +116,14 @@ export function registerLens(server: McpServer): void {
             why: z
               .object({ quote: z.string(), source: z.literal('commit') })
               .optional()
-              .describe("Why, in the author's own words: one of get_lens's quotes, or part of one, word for word; left out where none says why"),
+              .describe("Why, in the author's own words: one of get_lens's quotes, or part of one, word for word, within the why limit (a longer quote is left out, not cut); left out where none says why"),
             excerpt: z
               .object({ path: z.string(), name: z.string(), side: z.enum(['base', 'head']), lines: LensLines })
               .optional()
               .describe(`At most ${EXCERPT_MAX_LINES} lines that changed, of one of the step's symbols as get_lens lists them: its path on that side, its name, the side and the lines`),
           }))
           .optional()
-          .describe('Per step: a title naming what it does, and its words'),
+          .describe("Per step: a title naming what it does, and its words; a step's entry replaces everything written for that step before, so send its title, body, why and excerpt together"),
         components: z.array(z.object({ id: z.string(), role: z.string() })).optional().describe('Per changed card: the role it plays, in a few words'),
         layers: z.array(z.object({ id: z.string(), name: z.string() })).optional().describe('Per layer: a short name, where the default does not say where code runs'),
         flows: z.array(z.object({ id: z.string(), label: z.string() })).optional().describe('Per flow: a verb phrase, e.g. "draws a range"'),

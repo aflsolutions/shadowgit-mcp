@@ -747,7 +747,7 @@
           "type": "string"
         },
         "steps": {
-          "description": "Per step: a title naming what it does, and its words",
+          "description": "Per step: a title naming what it does, and its words; a step's entry replaces everything written for that step before, so send its title, body, why and excerpt together",
           "items": {
             "properties": {
               "body": {
@@ -826,7 +826,7 @@
                 "type": "string"
               },
               "why": {
-                "description": "Why, in the author's own words: one of get_lens's quotes, or part of one, word for word; left out where none says why",
+                "description": "Why, in the author's own words: one of get_lens's quotes, or part of one, word for word, within the why limit (a longer quote is left out, not cut); left out where none says why",
                 "properties": {
                   "quote": {
                     "type": "string"

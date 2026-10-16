@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { getLens, writeLensWords } from '../src/tools/lens.js';
-import { FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { FAKE_CITED_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { makeProject, removeTempDirs, restoreEnv, textOf, useStorage } from './helpers/fixtures.js';
 
 let project: string;
@@ -52,6 +52,23 @@ describe('get_lens', () => {
     app.lensAnswer = { range: { base: null, head: FAKE_RANGE.head }, lens: FAKE_LENS };
     const text = textOf(await getLens({}));
     expect(text).toContain(`base null and head "${FAKE_RANGE.head}"`);
+  });
+
+  it("lists each step's symbols with their lines and the range's checkpoint quotes", async () => {
+    app.lensAnswer = { range: FAKE_RANGE, lens: FAKE_CITED_LENS };
+    const text = textOf(await getLens({}));
+    expect(text).toContain('`ProjectIndex.familyOf` (src/project.ts, head 12–40)');
+    // A renamed file's base is read at its old path: an excerpt on the base side names that one
+    expect(text).toContain('`chargeCard` (src/charge.ts, head 2–10; base src/old-charge.ts 2–8)');
+    expect(text).toContain('"Retry failed charges"');
+  });
+
+  it('tells how to link, quote and excerpt only an agent whose app reads them', async () => {
+    app.lensAnswer = { range: FAKE_RANGE, lens: FAKE_CITED_LENS };
+    expect(textOf(await getLens({}))).toContain('only where the text names it');
+    // An app older than linked words refuses pieces and drops a why or an excerpt: its skeleton carries no quotes
+    app.lensAnswer = { range: FAKE_RANGE, lens: FAKE_LENS };
+    expect(textOf(await getLens({}))).not.toContain('pieces');
   });
 
   it('shows the summary written so far, so a model can keep or improve it', async () => {
@@ -112,5 +129,13 @@ describe('write_lens_words', () => {
   it('asks for an app update when the route is missing', async () => {
     app.lensRoutes = false;
     await expect(writeLensWords({ ...FAKE_RANGE, steps: [{ id: 'c1', title: 'A title' }] }, 'Claude Code')).rejects.toThrow('no Lens for AI assistants');
+  });
+
+  it('tells the agent to update an app that refuses pieces', async () => {
+    app.wordsStatus = 400;
+    const linked = { ...FAKE_RANGE, steps: [{ id: 'c1', body: [{ text: 'RetryQueue', card: 'k1' }, { text: ' calls chargeCard again.' }] }] };
+    const refused = writeLensWords(linked, 'Claude Code');
+    await expect(refused).rejects.toThrow('update the ShadowGit app');
+    await expect(writeLensWords(linked, 'Claude Code')).rejects.toThrow('plain text');
   });
 });

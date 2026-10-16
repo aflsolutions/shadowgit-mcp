@@ -23,6 +23,7 @@ const SLOW_REQUEST_TIMEOUT_MS = 55_000;
 
 const APP_TOO_OLD = "This version of ShadowGit can't create checkpoints for AI assistants. Ask the user to update the ShadowGit app.";
 const APP_WITHOUT_LENS = 'This version of ShadowGit has no Lens for AI assistants. Ask the user to update the ShadowGit app.';
+const APP_WITHOUT_PIECES = "This version of ShadowGit reads a step's body as plain text only: ask the user to update the ShadowGit app, or send each body as plain text.";
 
 const Session = z.object({
   id: z.string(),
@@ -37,11 +38,18 @@ const Checkpoint = z.object({ commit: z.string(), filesChanged: z.number() });
 const ErrorReply = z.object({ error: z.string() });
 
 const LensRange = z.object({ base: z.string().nullable(), head: z.string() });
+export const LensLines = z.object({ start: z.number().int(), end: z.number().int() });
+/** A symbol of a step, with its lines on each side it has; `basePath` is its file in the base, null when the change added it. */
+const LensSymbol = z.object({ name: z.string(), path: z.string(), basePath: z.string().nullable(), base: LensLines.nullable(), head: LensLines.nullable() });
+// An app older than linked words sends no quotes and no symbols
 const LensSkeleton = z.object({
   title: z.string(),
   words: z.object({ source: z.string(), author: z.string().nullable() }),
   summary: z.string().nullable(),
-  steps: z.array(z.object({ id: z.string(), title: z.string(), body: z.string().nullable(), components: z.array(z.string()), files: z.array(z.string()), diff: z.string() })),
+  quotes: z.array(z.string()).optional(),
+  steps: z.array(z.object({
+    id: z.string(), title: z.string(), body: z.string().nullable(), components: z.array(z.string()), files: z.array(z.string()), diff: z.string(), symbols: z.array(LensSymbol).optional(),
+  })),
   components: z.array(z.object({
     id: z.string(), name: z.string(), kind: z.string(), delta: z.string(), context: z.boolean(), role: z.string().nullable(), path: z.string(), symbols: z.array(z.string()),
   })),
@@ -52,10 +60,19 @@ export const LensRead = z.object({ range: LensRange, lens: LensSkeleton.nullable
 const LensApplied = z.object({ summary: z.boolean(), steps: z.number(), components: z.number(), layers: z.number(), flows: z.number() });
 export const WordsWritten = z.object({ applied: LensApplied, ignored: z.array(z.string()) });
 
-/** The words an agent writes over a lens, by the ids get_lens gave: the app's author contract. */
+/**
+ * The words an agent writes over a lens, by the ids get_lens gave: the app's author contract. A body's pieces link the
+ * cards their text names; a why quotes a checkpoint message, the only text ShadowGit holds in its author's own words.
+ */
 export interface LensWords {
   summary?: string;
-  steps?: { id: string; title?: string; body?: string }[];
+  steps?: {
+    id: string;
+    title?: string;
+    body?: string | { text: string; card?: string }[];
+    why?: { quote: string; source: 'commit' };
+    excerpt?: { path: string; name: string; side: 'base' | 'head'; lines: z.infer<typeof LensLines> };
+  }[];
   components?: { id: string; role: string }[];
   layers?: { id: string; name: string }[];
   flows?: { id: string; label: string }[];
@@ -155,7 +172,13 @@ export async function readLens(input: { repoPath: string; base?: string | null; 
 
 /** The agent's words for a range; the app keeps them in its history, next to the range's newest snapshot. */
 export async function sendLensWords(input: { repoPath: string; base: string | null; head: string; author: string; words: LensWords }): Promise<z.infer<typeof WordsWritten>> {
-  const { status, json } = await request('/lens/words', input, { timeoutMs: SLOW_REQUEST_TIMEOUT_MS, accept: [404] });
+  const { status, json } = await request('/lens/words', input, { timeoutMs: SLOW_REQUEST_TIMEOUT_MS, accept: [400, 404] });
   if (status === 404) throw new Error(APP_WITHOUT_LENS);
+  if (status === 400) {
+    const refused = failure(status, json);
+    // An app older than linked words reads a body as text alone: it refuses pieces as not its words
+    const pieces = input.words.steps?.some((step) => Array.isArray(step.body)) ?? false;
+    throw pieces && refused.message.includes("Not the Lens's words") ? new Error(`${refused.message} ${APP_WITHOUT_PIECES}`) : refused;
+  }
   return WordsWritten.parse(json);
 }

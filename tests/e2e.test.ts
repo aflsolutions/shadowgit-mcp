@@ -71,6 +71,18 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(app.requestsTo('/lens/words')[0]).toMatchObject({ author: 'shadowgit-e2e', repoPath: project, words: { steps: [{ id: 'c1', title: 'Queue failed charges' }] } });
   });
 
+  it('sends linked pieces, a why and an excerpt as given', async () => {
+    const step = {
+      id: 'c1',
+      body: [{ text: 'RetryQueue', card: 'k1' }, { text: ' calls chargeCard again.' }],
+      why: { quote: 'Retry failed charges', source: 'commit' },
+      excerpt: { path: 'src/retry-queue.ts', name: 'RetryQueue', side: 'head', lines: { start: 1, end: 4 } },
+    };
+    const words = await client.callTool({ name: 'write_lens_words', arguments: { ...FAKE_RANGE, steps: [step] } });
+    expect(words.isError).not.toBe(true);
+    expect(app.requestsTo('/lens/words').at(-1)).toMatchObject({ words: { steps: [step] } });
+  });
+
   it('names the project that has the session when the current one has none', async () => {
     app.sessions.push(fakeSession({ id: 'cursor-9', repoPath: '/projects/elsewhere' }));
     const end = await client.callTool({ name: 'end_session', arguments: {} });

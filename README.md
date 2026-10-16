@@ -7,8 +7,9 @@ changed and when, and can save its own edits as one named checkpoint instead of 
 ## Requirements
 
 - Node.js 20 or later
-- The ShadowGit app (0.3.4 or later for checkpoints, a release after 0.3.5 for the Lens), tracking at least one
-  project. Reading history works while the app is closed; sessions, checkpoints and the Lens need it running.
+- The ShadowGit app (0.3.4 or later for checkpoints, a release after 0.3.5 for the Lens, after 0.3.7 for its linked
+  words), tracking at least one project. Reading history works while the app is closed; sessions, checkpoints and the
+  Lens need it running.
 - Git on your PATH
 
 ## Setup
@@ -50,7 +51,7 @@ webshop") when ShadowGit tracks more than one.
 | `checkpoint` | Saves the current changes as one named checkpoint, following `.shadowgit-ignore` |
 | `end_session` | Resumes automatic snapshots |
 | `get_lens` | Reads ShadowGit's Lens of a range, by default the latest AI session |
-| `write_lens_words` | Writes the Lens's words for that range, kept in the history |
+| `write_lens_words` | Writes the Lens's words for that range, kept in the history, with links, a why and an excerpt |
 
 The other tools work on the current project unless given `repo`.
 

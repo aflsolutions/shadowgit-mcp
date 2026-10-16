@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } from 'vitest';
 import {
-  AppNotRunningError, AppTimeoutError, activeSessions, createCheckpoint, endSession, startSession,
+  AppNotRunningError, AppTimeoutError, LensRead, activeSessions, createCheckpoint, endSession, startSession,
 } from '../src/session-api.js';
-import { closedAppUrl, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { FAKE_CITED_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, closedAppUrl, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { restoreEnv } from './helpers/fixtures.js';
 
 let app: FakeApp;
@@ -75,6 +75,15 @@ describe('sessions', () => {
       'message',
       'ShadowGit did not answer within 3 s. The app may be busy with a large project; try again in a moment.',
     );
+  });
+});
+
+describe('the lens an app answers', () => {
+  it('reads a skeleton from an app that cites no evidence, and one that does', () => {
+    expect(LensRead.parse({ range: FAKE_RANGE, lens: FAKE_LENS, limits: FAKE_LIMITS }).lens?.steps[0]?.symbols).toBeUndefined();
+    const cited = LensRead.parse({ range: FAKE_RANGE, lens: FAKE_CITED_LENS, limits: FAKE_LIMITS }).lens;
+    expect(cited?.quotes).toEqual(['Retry failed charges']);
+    expect(cited?.steps[0]?.symbols?.[0]).toEqual({ name: 'ProjectIndex.familyOf', path: 'src/project.ts', basePath: null, base: null, head: { start: 12, end: 40 } });
   });
 });
 

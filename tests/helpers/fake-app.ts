@@ -33,8 +33,8 @@ export interface FakeApp {
   lensRoutes: boolean;
   /** What GET /lens answers: a range, and its lens or null for a range that changes no code. */
   lensAnswer: { range: { base: string | null; head: string }; lens: typeof FAKE_LENS | null };
-  /** 200 keeps the words; 409 is a range that changes no code. */
-  wordsStatus: 200 | 409;
+  /** 200 keeps the words; 400 is an app older than linked words refusing them; 409 is a range that changes no code. */
+  wordsStatus: 200 | 400 | 409;
   /** Leaves every request unanswered, like an app busy with a large project. */
   hang: boolean;
   /** Sends the headers and part of the body, then never ends it, like an app that stalls mid-answer. */
@@ -56,6 +56,19 @@ export const FAKE_LENS = {
   ],
   layers: [{ id: 'code', name: 'Code' }],
   flows: [{ id: 'f1', from: 'k1', to: 'k2', label: 'chargeCard()' }],
+};
+
+/** The lens as an app that cites its evidence answers it: the range's checkpoint quotes, each step's symbols with their lines. */
+export const FAKE_CITED_LENS = {
+  ...FAKE_LENS,
+  quotes: ['Retry failed charges'],
+  steps: FAKE_LENS.steps.map((step) => ({
+    ...step,
+    symbols: [
+      { name: 'ProjectIndex.familyOf', path: 'src/project.ts', basePath: null, base: null, head: { start: 12, end: 40 } },
+      { name: 'chargeCard', path: 'src/charge.ts', basePath: 'src/old-charge.ts', base: { start: 2, end: 8 }, head: { start: 2, end: 10 } },
+    ],
+  })),
 };
 
 /** A stand-in for the ShadowGit app's Session API on an ephemeral port; points SHADOWGIT_SESSION_API at it. */
@@ -144,6 +157,7 @@ async function listen(): Promise<FakeApp> {
     if (app.lensRoutes && route.startsWith('/lens?')) return json(200, { success: true, ...app.lensAnswer, limits: FAKE_LIMITS });
     if (app.lensRoutes && route === '/lens/words') {
       if (app.wordsStatus === 409) return json(409, { success: false, error: 'Nothing in this range changes code: it has no lens to word' });
+      if (app.wordsStatus === 400) return json(400, { success: false, error: "Not the Lens's words: ✖ Invalid input: expected string, received array\n  → at steps[0].body" });
       return json(200, { success: true, applied: { summary: true, steps: 1, components: 1, layers: 0, flows: 0 }, ignored: ['c99'] });
     }
     json(404, { success: false, error: `No route ${route}` });

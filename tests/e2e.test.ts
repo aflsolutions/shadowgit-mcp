@@ -39,6 +39,16 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(INSTRUCTIONS.length).toBeLessThanOrEqual(1250);
   });
 
+  // Claude Code shows the model a tool's structured output alone, never its text: the rules must be in the schema
+  it("puts the rules for links, a why and an excerpt in write_lens_words' schema, never in get_lens's text", async () => {
+    const { tools } = await client.listTools();
+    const write = JSON.stringify(tools.find((tool) => tool.name === 'write_lens_words'));
+    expect(write).toContain('only where the text names it');
+    expect(write).toContain('word for word');
+    expect(write).toContain('At most 12 lines that changed');
+    expect(write).not.toMatch(/get_lens (says|describes)/);
+  });
+
   it('lists the seven tools exactly as pinned', async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name)).toEqual(['list_repos', 'git_command', 'start_session', 'checkpoint', 'end_session', 'get_lens', 'write_lens_words']);

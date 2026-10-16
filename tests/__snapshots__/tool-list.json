@@ -663,7 +663,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Write the words the user reads in ShadowGit's Lens for a range get_lens read: a summary, each step's title and body, each card's role, by the ids get_lens gave. Plain text, or where get_lens says the app reads them, a body of pieces linking the cards it names, a why quoted from a checkpoint message and an excerpt of changed lines; text past its limit is cut; unknown ids are left out. The app keeps the words in its history: a card's role shows in any later range while its code is unchanged.",
+    "description": "Write the words the user reads in ShadowGit's Lens for a range get_lens read: a summary, each step's title and body, with a why and an excerpt, each card's role, by the ids get_lens gave. An older ShadowGit takes plain text alone; text past its limit is cut; unknown ids are left out. The app keeps the words in its history: a card's role shows in any later range while its code is unchanged.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -747,7 +747,7 @@
           "type": "string"
         },
         "steps": {
-          "description": "Per step: a title naming what it does, and one or two sentences as text or pieces; a why and an excerpt, as get_lens describes them",
+          "description": "Per step: a title naming what it does, and its words",
           "items": {
             "properties": {
               "body": {
@@ -772,9 +772,11 @@
                     },
                     "type": "array"
                   }
-                ]
+                ],
+                "description": "One or two sentences: plain text, or pieces, where a piece with a card links that card of the step by its id, only where the text names it"
               },
               "excerpt": {
+                "description": "At most 12 lines that changed, of one of the step's symbols as get_lens lists them: its path on that side, its name, the side and the lines",
                 "properties": {
                   "lines": {
                     "properties": {
@@ -824,6 +826,7 @@
                 "type": "string"
               },
               "why": {
+                "description": "Why, in the author's own words: one of get_lens's quotes, or part of one, word for word; left out where none says why",
                 "properties": {
                   "quote": {
                     "type": "string"

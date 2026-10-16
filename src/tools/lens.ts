@@ -32,15 +32,7 @@ function describeLens(repo: string, range: Read['range'], lens: NonNullable<Read
     `The Lens of ${repo}, snapshots ${range.base === null ? 'from the start' : range.base.slice(0, 8)}..${range.head.slice(0, 8)}; its words now: ${lens.words.source}${lens.words.author ? ` (${lens.words.author})` : ''}.`,
     ...(lens.summary ? [`Summary: ${lens.summary}`] : []),
     `Word it with write_lens_words, passing base ${JSON.stringify(range.base)} and head ${JSON.stringify(range.head)}: a summary of two sentences, for each step a title and one or two sentences, for each changed card the role it plays. Name only the ids below; text past its limit is cut (characters: ${caps}).`,
-    // An app that sends quotes reads linked words; an older one refuses pieces and drops a why or an excerpt
-    ...(lens.quotes
-      ? [
-          `A body may be pieces, [{"text": "<a card's name>", "card": "<its id>"}, {"text": "<more words>"}], linking a card of its step only where the text names it. An excerpt shows at most ${EXCERPT_MAX_LINES} lines that changed of one of the step's symbols: {"path", "name", "side": "head" or "base", "lines": {"start", "end"}}, with the path on that side.`,
-          ...(lens.quotes.length > 0
-            ? ['A why quotes one of these checkpoint messages word for word, as {"quote", "source": "commit"}; leave it out where none says why:', ...lens.quotes.map((quote) => `- ${JSON.stringify(quote)}`)]
-            : []),
-        ]
-      : []),
+    ...(lens.quotes?.length ? ['Checkpoint messages a why may quote:', ...lens.quotes.map((quote) => `- ${JSON.stringify(quote)}`)] : []),
     '',
     ...lens.steps.flatMap((step) => {
       // Longer than any backtick run in the diff: a Markdown file's own fence would close a shorter one
@@ -108,7 +100,7 @@ export function registerLens(server: McpServer): void {
     {
       title: "Write a range's Lens words",
       description:
-        "Write the words the user reads in ShadowGit's Lens for a range get_lens read: a summary, each step's title and body, each card's role, by the ids get_lens gave. Plain text, or where get_lens says the app reads them, a body of pieces linking the cards it names, a why quoted from a checkpoint message and an excerpt of changed lines; text past its limit is cut; unknown ids are left out. The app keeps the words in its history: a card's role shows in any later range while its code is unchanged.",
+        "Write the words the user reads in ShadowGit's Lens for a range get_lens read: a summary, each step's title and body, with a why and an excerpt, each card's role, by the ids get_lens gave. An older ShadowGit takes plain text alone; text past its limit is cut; unknown ids are left out. The app keeps the words in its history: a card's role shows in any later range while its code is unchanged.",
       inputSchema: z.object({
         base: Snapshot.nullable().describe('The base get_lens answered (null: from the start of the history)'),
         head: Snapshot.describe('The head get_lens answered'),
@@ -117,12 +109,21 @@ export function registerLens(server: McpServer): void {
           .array(z.object({
             id: z.string(),
             title: z.string().optional(),
-            body: z.union([z.string(), z.array(z.object({ text: z.string(), card: z.string().optional() }))]).optional(),
-            why: z.object({ quote: z.string(), source: z.literal('commit') }).optional(),
-            excerpt: z.object({ path: z.string(), name: z.string(), side: z.enum(['base', 'head']), lines: LensLines }).optional(),
+            body: z
+              .union([z.string(), z.array(z.object({ text: z.string(), card: z.string().optional() }))])
+              .optional()
+              .describe("One or two sentences: plain text, or pieces, where a piece with a card links that card of the step by its id, only where the text names it"),
+            why: z
+              .object({ quote: z.string(), source: z.literal('commit') })
+              .optional()
+              .describe("Why, in the author's own words: one of get_lens's quotes, or part of one, word for word; left out where none says why"),
+            excerpt: z
+              .object({ path: z.string(), name: z.string(), side: z.enum(['base', 'head']), lines: LensLines })
+              .optional()
+              .describe(`At most ${EXCERPT_MAX_LINES} lines that changed, of one of the step's symbols as get_lens lists them: its path on that side, its name, the side and the lines`),
           }))
           .optional()
-          .describe('Per step: a title naming what it does, and one or two sentences as text or pieces; a why and an excerpt, as get_lens describes them'),
+          .describe('Per step: a title naming what it does, and its words'),
         components: z.array(z.object({ id: z.string(), role: z.string() })).optional().describe('Per changed card: the role it plays, in a few words'),
         layers: z.array(z.object({ id: z.string(), name: z.string() })).optional().describe('Per layer: a short name, where the default does not say where code runs'),
         flows: z.array(z.object({ id: z.string(), label: z.string() })).optional().describe('Per flow: a verb phrase, e.g. "draws a range"'),

@@ -63,12 +63,11 @@ describe('get_lens', () => {
     expect(text).toContain('"Retry failed charges"');
   });
 
-  it('tells how to link, quote and excerpt only an agent whose app reads them', async () => {
+  it("lists the checkpoint messages a why may quote, as data: the rules are write_lens_words' schema", async () => {
     app.lensAnswer = { range: FAKE_RANGE, lens: FAKE_CITED_LENS };
-    expect(textOf(await getLens({}))).toContain('only where the text names it');
-    // An app older than linked words refuses pieces and drops a why or an excerpt: its skeleton carries no quotes
-    app.lensAnswer = { range: FAKE_RANGE, lens: FAKE_LENS };
-    expect(textOf(await getLens({}))).not.toContain('pieces');
+    const text = textOf(await getLens({}));
+    expect(text).toContain('Checkpoint messages a why may quote:\n- "Retry failed charges"');
+    expect(text).not.toContain('only where the text names it');
   });
 
   it('shows the summary written so far, so a model can keep or improve it', async () => {

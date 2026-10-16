@@ -2,6 +2,18 @@
 
 All notable changes to the ShadowGit MCP Server will be documented in this file.
 
+## [2.2.0] - 2026-10-16
+
+### Added
+- `write_lens_words` takes a step's body as pieces: runs of text, and runs naming one of the step's components, by id,
+  which the Lens links to that component. A step may also carry a why, quoted word for word from one of the range's
+  checkpoint messages, and an excerpt: up to 12 changed lines of one of its symbols, by path, name, side and lines.
+- `get_lens` lists each step's symbols with their lines on each side and the checkpoint messages a why may quote, and
+  says how to link, quote and excerpt when the app reads them.
+
+Links, a why and an excerpt need a ShadowGit release after 0.3.7. Plain text still works with every release that has
+the Lens; an older one refuses a body of pieces with a message asking for the update.
+
 ## [2.1.1] - 2026-10-15
 
 ### Changed

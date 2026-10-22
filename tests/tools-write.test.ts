@@ -152,6 +152,18 @@ describe('end_session', () => {
     expect(result.structuredContent).toEqual({ ended: ['cursor-2'], repo: 'blog', next: expect.stringMatching(/^For blog, pass repo "blog" to each tool\. If its edits are in a checkpoint: get_lens/) });
   });
 
+  it('names another project by its path in the steps that follow when its name is shared', async () => {
+    const twin = makeProject('blog');
+    useStorage([{ name: 'webshop', path: project }, { name: 'blog', path: other }, { name: 'blog', path: twin }]);
+    try {
+      app.sessions.push(fakeSession({ id: 'cursor-5', repoPath: twin }));
+      const result = await endSession({ session_id: 'cursor-5' });
+      expect(result.structuredContent).toMatchObject({ next: expect.stringMatching(new RegExp(`^For \\S+, pass repo "${twin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`)) });
+    } finally {
+      useStorage([{ name: 'webshop', path: project }, { name: 'blog', path: other }]);
+    }
+  });
+
   it('ends nothing for an id that is not active', async () => {
     const result = await endSession({ session_id: 'claude-code-404' });
     expect(result.structuredContent).toEqual({ ended: [], repo: null });

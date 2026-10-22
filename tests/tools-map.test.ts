@@ -92,6 +92,17 @@ describe('get_code_context', () => {
     expect(result.structuredContent).toMatchObject({ next: expect.stringMatching(/^For webshop, pass repo "webshop" to each tool\. Before editing several files: start_session/) });
   });
 
+  it('names the project by its path in the steps that follow when another project shares its name', async () => {
+    const twin = makeProject('webshop');
+    useStorage([{ name: 'webshop', path: project }, { name: 'webshop', path: twin }]);
+    try {
+      const result = await getCodeContext({ symbols: [{ name: 'chargeCard' }], repo: project }, 'Claude Code');
+      expect((result.structuredContent as { next: string }).next).toContain(`pass repo "${project}" to each tool`);
+    } finally {
+      useStorage([{ name: 'webshop', path: project }]);
+    }
+  });
+
   it('says what a file holds, what it imports and what imports it', async () => {
     app.mapAnswer.context = MAP_ANSWERS.file;
     const text = textOf(await getCodeContext({ files: ['src/billing/charge.ts'] }, 'Claude Code'));

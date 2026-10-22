@@ -2,7 +2,7 @@ import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { clientName } from '../client-name.js';
 import { ContextRead, MapRead } from '../map-shapes.js';
-import { resolveRepo } from '../repos.js';
+import { repoArgument, resolveRepo } from '../repos.js';
 import { readArea, readCodeContext, readMap } from '../session-api.js';
 import { dataResult, forRepo, repoParam } from './shared.js';
 
@@ -142,7 +142,7 @@ export async function getCodeContext(
   // The app refuses fewer than 1 or more than its 20 targets, in its own words: a newer one may take more
   const project = resolveRepo(repo);
   const read = await readCodeContext({ repoPath: project.path, files, symbols, aiTool });
-  const next = `${forRepo(repo === undefined ? undefined : project.name)}${NEXT}`;
+  const next = `${forRepo(repo === undefined ? undefined : repoArgument(project))}${NEXT}`;
   return dataResult(ContextOutput, `${describeContext(project.name, read.mapAsOf, read.context)}\n\nNext: ${next}`, { repo: project.name, ...read, next });
 }
 

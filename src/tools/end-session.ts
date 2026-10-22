@@ -1,6 +1,6 @@
 import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
-import { readRepos, resolveRepo } from '../repos.js';
+import { readRepos, repoArgument, resolveRepo } from '../repos.js';
 import { activeSessions, endSession as endAppSession } from '../session-api.js';
 import { dataResult, forRepo, repoParam } from './shared.js';
 
@@ -20,14 +20,16 @@ export async function endSession({ repo, session_id }: { repo?: string; session_
     if (!session) return dataResult(Output, `No active session ${session_id}; nothing to end.`, { ended: [], repo: null });
     await endAppSession(session.id);
     const name = projectName(session.repoPath);
-    // A session found by its id may be another project's
-    return dataResult(Output, `Ended session ${session.id} on ${name}. Automatic snapshots resumed. Next: ${next(name)}`, { ended: [session.id], repo: name, next: next(name) });
+    // A session found by its id may be another project's: its steps name it, by its path where its name is shared
+    const listed = readRepos().find((r) => r.path === session.repoPath);
+    const steps = next(listed ? repoArgument(listed) : session.repoPath);
+    return dataResult(Output, `Ended session ${session.id} on ${name}. Automatic snapshots resumed. Next: ${steps}`, { ended: [session.id], repo: name, next: steps });
   }
   const project = resolveRepo(repo);
   const ended = sessions.filter((s) => s.repoPath === project.path).map((s) => s.id);
   for (const id of ended) await endAppSession(id);
   if (ended.length > 0) {
-    const steps = next(repo === undefined ? undefined : project.name);
+    const steps = next(repo === undefined ? undefined : repoArgument(project));
     return dataResult(Output, `Ended ${ended.join(', ')} on ${project.name}. Automatic snapshots resumed. Next: ${steps}`, { ended, repo: project.name, next: steps });
   }
   if (sessions.length === 0) return dataResult(Output, 'No active session; automatic snapshots are already on.', { ended, repo: project.name });

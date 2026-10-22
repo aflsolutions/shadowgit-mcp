@@ -16,6 +16,9 @@ All notable changes to the ShadowGit MCP Server will be documented in this file.
 - The server instructions ask for `get_code_context` on the code an assistant will change, before its first edit.
   Asked to change chargeCard without a word about ShadowGit, Claude Code called it before its first edit in 5 of 5
   runs, with its default tool search on (`npm run eval:map`).
+- Each step's answer names the step after it, read at the moment the assistant acts: `get_code_context`'s gives the
+  session flow, and `end_session`'s, when it ended a session, gives `get_lens` then `write_lens_words`. With the map
+  rule alone the Lens flow fell to 7 of 10 runs; with the next steps it is back to 5 of 5 (`npm run eval:lens`).
 
 The map tools need a ShadowGit release after 0.3.9; an older app answers with a message asking for the update.
 

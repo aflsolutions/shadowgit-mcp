@@ -112,7 +112,9 @@ describe('end_session', () => {
   it('ends the active session of the current project without an id', async () => {
     app.sessions.push(fakeSession({ id: 'claude-code-7', repoPath: project }));
     const result = await endSession({});
-    expect(result.structuredContent).toEqual({ ended: ['claude-code-7'], repo: 'webshop' });
+    // The step after a session, in the answer the model reads at that moment: the Lens of what it changed
+    expect(result.structuredContent).toEqual({ ended: ['claude-code-7'], repo: 'webshop', next: expect.stringMatching(/^get_lens, then write_lens_words/) });
+    expect(textOf(result)).toContain('Next: get_lens, then write_lens_words');
     expect(app.requests.at(-1)).toEqual({ path: '/session/end', body: { sessionId: 'claude-code-7' } });
   });
 
@@ -144,7 +146,7 @@ describe('end_session', () => {
     app.sessions.push(fakeSession({ id: 'cursor-2', repoPath: other, description: 'Blog post' }));
     process.env.CLAUDE_PROJECT_DIR = tempDir('nowhere');
     const result = await endSession({ session_id: 'cursor-2' });
-    expect(result.structuredContent).toEqual({ ended: ['cursor-2'], repo: 'blog' });
+    expect(result.structuredContent).toEqual({ ended: ['cursor-2'], repo: 'blog', next: expect.stringMatching(/^get_lens, then write_lens_words/) });
   });
 
   it('ends nothing for an id that is not active', async () => {

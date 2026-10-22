@@ -1617,6 +1617,10 @@
           ],
           "type": "object"
         },
+        "next": {
+          "description": "The steps that follow",
+          "type": "string"
+        },
         "repo": {
           "type": "string"
         }
@@ -1624,7 +1628,8 @@
       "required": [
         "repo",
         "mapAsOf",
-        "context"
+        "context",
+        "next"
       ],
       "type": "object"
     },
@@ -1780,6 +1785,10 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "next": {
+          "description": "The step that follows a session",
+          "type": "string"
         },
         "repo": {
           "type": [

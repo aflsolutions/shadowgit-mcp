@@ -75,7 +75,8 @@ describe('get_code_context', () => {
   it('says where chargeCard sits, what it uses, what depends on it by area, and its reach', async () => {
     const result = await getCodeContext({ symbols: [{ name: 'chargeCard' }] }, 'Claude Code');
     expect(app.requestsTo('/map/context').at(-1)).toEqual({ repoPath: project, symbols: [{ name: 'chargeCard' }], aiTool: 'Claude Code' });
-    expect(result.structuredContent).toEqual({ repo: 'webshop', ...answered(MAP_ANSWERS.context) });
+    // The flow that follows, in the answer the model reads before it edits
+    expect(result.structuredContent).toEqual({ repo: 'webshop', ...answered(MAP_ANSWERS.context), next: expect.stringMatching(/^Before editing several files: start_session/) });
     const text = textOf(result);
     expect(text).toContain("From webshop's map, drawn from snapshot 9db22aff");
     expect(text).toContain('chargeCard (function, src/billing/charge.ts:5): area billing, layer billing.');

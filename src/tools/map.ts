@@ -7,7 +7,9 @@ import { ContextRead, MapRead, readCodeContext, readMap } from '../session-api.j
 import { dataResult, repoParam } from './shared.js';
 
 const MapOutput = z.object({ repo: z.string(), ...MapRead.shape });
-const ContextOutput = z.object({ repo: z.string(), ...ContextRead.shape });
+// The session flow that follows, in the answer the model reads before it edits
+const NEXT = 'Before editing several files: start_session, which pauses snapshots; when the edits are done: checkpoint, end_session, then get_lens and write_lens_words.';
+const ContextOutput = z.object({ repo: z.string(), ...ContextRead.shape, next: z.string().describe('The steps that follow') });
 // The app's MAX_TARGETS
 const MAX_TARGETS = 20;
 
@@ -139,7 +141,7 @@ export async function getCodeContext(
   if (asked < 1 || asked > MAX_TARGETS) throw new Error(`Ask about 1 to ${MAX_TARGETS} files and symbols, not ${asked}.`);
   const project = resolveRepo(repo);
   const read = await readCodeContext({ repoPath: project.path, files, symbols, aiTool });
-  return dataResult(ContextOutput, describeContext(project.name, read.mapAsOf, read.context), { repo: project.name, ...read });
+  return dataResult(ContextOutput, `${describeContext(project.name, read.mapAsOf, read.context)}\n\nNext: ${NEXT}`, { repo: project.name, ...read, next: NEXT });
 }
 
 export function registerMap(server: McpServer): void {

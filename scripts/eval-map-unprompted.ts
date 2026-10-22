@@ -5,16 +5,13 @@
  * called with the function or its file before the first edit; the eval passes at 4 runs of 5. Spends tokens and its
  * results vary, so it runs by hand before a release, beside `npm run eval` and `npm run eval:lens`.
  */
-import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import * as z from 'zod/v4';
-import { BINARY } from '../tests/helpers/client.js';
 import { MAP_ANSWERS, MAP_PROJECT, startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
-import { makeProject, removeTempDirs, tempDir, useStorage } from '../tests/helpers/fixtures.js';
+import { makeProject, removeTempDirs } from '../tests/helpers/fixtures.js';
+import { ago, runClaude } from './claude.js';
 
-const run = promisify(execFile);
 const RUNS = Number(process.env.RUNS ?? 5);
 const PASS_AT = 4;
 const TASK = 'Make chargeCard reject an amount below zero with a RangeError, and keep every caller working.';
@@ -29,23 +26,9 @@ const Line = z.object({
 });
 
 async function runTask(app: FakeApp, project: string): Promise<{ calls: { name: string; input: unknown }[]; cost: number }> {
-  const storage = useStorage([{ name: 'webshop', path: project }]);
-  const config = path.join(tempDir('eval'), 'mcp.json');
-  fs.writeFileSync(config, JSON.stringify({
-    mcpServers: { shadowgit: { command: process.execPath, args: [BINARY], env: { SHADOWGIT_STORAGE_DIR: storage, SHADOWGIT_SESSION_API: app.url } } },
-  }));
-  const claude = run(
-    'claude',
-    [
-      '-p', TASK, '--mcp-config', config, '--strict-mcp-config', '--allowedTools', 'mcp__shadowgit__*', 'Read', 'Edit', 'Write', 'Glob', 'Grep',
-      '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--max-budget-usd', '2',
-    ],
-    { cwd: project, timeout: 420_000, killSignal: 'SIGKILL', maxBuffer: 20 * 1024 * 1024 },
-  );
-  claude.child.stdin?.end();
-  const { stdout } = await claude.catch((error: unknown) => {
-    if (error instanceof Error && 'stdout' in error && typeof error.stdout === 'string' && error.stdout) return { stdout: error.stdout };
-    throw error;
+  const stdout = await runClaude({
+    prompt: TASK, project, app, timeoutMs: 420_000,
+    args: ['--allowedTools', 'mcp__shadowgit__*', 'Read', 'Edit', 'Write', 'Glob', 'Grep', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '2'],
   });
   const calls: { name: string; input: unknown }[] = [];
   let cost = 0;
@@ -72,7 +55,7 @@ for (let i = 1; i <= RUNS; i++) {
     },
   });
   try {
-    const project = makeProject('webshop', MAP_PROJECT, new Date(Date.now() - 2 * 24 * 60 * 60_000).toISOString());
+    const project = makeProject('webshop', MAP_PROJECT, ago(2 * 24 * 60));
     const { calls, cost } = await runTask(app, project);
     const asked = calls.findIndex((call) => call.name === 'mcp__shadowgit__get_code_context' && TARGETS.some((target) => JSON.stringify(call.input).includes(target)));
     const edited = calls.findIndex((call) => EDITS.has(call.name));

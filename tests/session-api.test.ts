@@ -149,7 +149,7 @@ describe('the map', () => {
     expect(app.requests.at(-1)?.path).toBe(`/map?${new URLSearchParams({ repoPath: ask.repoPath, area: 'billing', aiTool: ask.aiTool })}`);
   });
 
-  it.each(['context', 'landing', 'unresolved'] as const)('reads every field of the code context the app answered (%s)', async (name) => {
+  it.each(['context', 'landing', 'unresolved', 'file'] as const)('reads every field of the code context the app answered (%s)', async (name) => {
     app.mapAnswer.context = MAP_ANSWERS[name];
     expect(await readCodeContext(context)).toEqual(answered(MAP_ANSWERS[name]));
     expect(app.requestsTo('/map/context').at(-1)).toEqual(context);

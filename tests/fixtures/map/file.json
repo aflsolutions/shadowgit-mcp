@@ -1,0 +1,69 @@
+{
+  "success": true,
+  "mapAsOf": {
+    "snapshot": "475a11619243c70f1cadb8151b93deb295d2c0d7",
+    "time": "2026-10-22T08:50:07+02:00",
+    "behind": 0,
+    "changedFiles": {
+      "items": [],
+      "total": 0
+    }
+  },
+  "context": {
+    "targets": [
+      {
+        "kind": "file",
+        "target": "src/billing/charge.ts",
+        "file": "src/billing/charge.ts",
+        "area": "billing",
+        "layer": "billing",
+        "symbols": {
+          "items": [
+            {
+              "name": "chargeCard",
+              "kind": "function",
+              "file": "src/billing/charge.ts",
+              "line": 5,
+              "area": "billing",
+              "layer": "billing"
+            },
+            {
+              "name": "refundCard",
+              "kind": "function",
+              "file": "src/billing/charge.ts",
+              "line": 11,
+              "area": "billing",
+              "layer": "billing"
+            }
+          ],
+          "total": 2
+        },
+        "imports": {
+          "items": [
+            "src/billing/ledger.ts",
+            "src/billing/money.ts"
+          ],
+          "total": 2
+        },
+        "importedBy": {
+          "items": [
+            "src/api/checkout.ts",
+            "src/jobs/retry.ts"
+          ],
+          "total": 2
+        },
+        "dependentsByArea": [
+          {
+            "area": "api",
+            "count": 1
+          },
+          {
+            "area": "jobs",
+            "count": 1
+          }
+        ]
+      }
+    ],
+    "landing": null
+  }
+}

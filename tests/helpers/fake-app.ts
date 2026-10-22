@@ -81,7 +81,7 @@ export const FAKE_CITED_LENS = {
 const mapFixture = (name: string): object => JSON.parse(readFileSync(new URL(`../fixtures/map/${name}.json`, import.meta.url), 'utf8'));
 /**
  * The app's real answers for the webshop of `tests/fixtures/map/project.json`: its summary, its billing area,
- * chargeCard's context, chargeCard with checkout, and targets that don't resolve.
+ * chargeCard's context, chargeCard with checkout, targets that don't resolve, and src/billing/charge.ts.
  */
 export const MAP_ANSWERS = {
   summary: mapFixture('summary'),
@@ -89,6 +89,7 @@ export const MAP_ANSWERS = {
   context: mapFixture('context'),
   landing: mapFixture('landing'),
   unresolved: mapFixture('unresolved'),
+  file: mapFixture('file'),
 };
 /** The webshop the map answers are of: path → content. */
 export const MAP_PROJECT = mapFixture('project') as Record<string, string>;

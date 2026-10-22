@@ -4,6 +4,7 @@ import { registerEndSession } from './tools/end-session.js';
 import { registerGitCommand } from './tools/git-command.js';
 import { registerLens } from './tools/lens.js';
 import { registerListRepos } from './tools/list-repos.js';
+import { registerMap } from './tools/map.js';
 import { registerStartSession } from './tools/start-session.js';
 import { VERSION } from './version.js';
 
@@ -24,6 +25,7 @@ export function buildServer(): McpServer {
   );
   registerListRepos(server);
   registerGitCommand(server);
+  registerMap(server);
   registerStartSession(server);
   registerCheckpoint(server);
   registerEndSession(server);

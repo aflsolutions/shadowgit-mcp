@@ -52,9 +52,19 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(write).toContain('replaces everything written for that step before');
   });
 
-  it('lists the seven tools exactly as pinned', async () => {
+  it("puts the map tools' rules in their schemas, as facts", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name)).toEqual(['list_repos', 'git_command', 'start_session', 'checkpoint', 'end_session', 'get_lens', 'write_lens_words']);
+    const map = JSON.stringify(tools.filter((tool) => tool.name === 'get_map' || tool.name === 'get_code_context'));
+    expect(map).toContain('test files are not counted');
+    expect(map).toContain('its count is a floor');
+    expect(map).not.toMatch(/\b(careful|risky|should|consider)\b/i);
+  });
+
+  it('lists the nine tools exactly as pinned', async () => {
+    const { tools } = await client.listTools();
+    expect(tools.map((t) => t.name)).toEqual([
+      'list_repos', 'git_command', 'get_map', 'get_code_context', 'start_session', 'checkpoint', 'end_session', 'get_lens', 'write_lens_words',
+    ]);
     await expect(JSON.stringify(tools, sortKeys, 2)).toMatchFileSnapshot('__snapshots__/tool-list.json');
   });
 
@@ -64,6 +74,11 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
 
     const log = await client.callTool({ name: 'git_command', arguments: { command: 'log --format=%s' } });
     expect(log.content).toEqual([{ type: 'text', text: 'Initial ShadowGit Snapshot\n' }]);
+
+    const map = await client.callTool({ name: 'get_map', arguments: {} });
+    expect(map.structuredContent).toMatchObject({ repo: 'demo', summary: { counts: { areas: 3 } } });
+    const context = await client.callTool({ name: 'get_code_context', arguments: { symbols: [{ name: 'chargeCard' }] } });
+    expect(context.structuredContent).toMatchObject({ repo: 'demo', context: { targets: [{ kind: 'symbol' }] } });
 
     const start = await client.callTool({ name: 'start_session', arguments: { description: 'e2e' } });
     expect(start.structuredContent).toMatchObject({ repo: 'demo', already_active: false });
@@ -80,6 +95,7 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(words.structuredContent).toMatchObject({ repo: 'demo', applied: { steps: 1 } });
 
     expect(app.requestsTo('/session/start')[0]).toMatchObject({ aiTool: 'shadowgit-e2e', repoPath: project });
+    expect(app.requestsTo('/map/context')[0]).toMatchObject({ aiTool: 'shadowgit-e2e', repoPath: project, symbols: [{ name: 'chargeCard' }] });
     expect(app.requestsTo('/checkpoint')[0]).toMatchObject({ author: 'shadowgit-e2e' });
     expect(app.requestsTo('/lens/words')[0]).toMatchObject({ author: 'shadowgit-e2e', repoPath: project, words: { steps: [{ id: 'c1', title: 'Queue failed charges' }] } });
   });

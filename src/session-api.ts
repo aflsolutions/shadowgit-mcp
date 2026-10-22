@@ -1,4 +1,5 @@
 import * as z from 'zod/v4';
+import { AreaView, CodeContext, MapAsOf, MapSummary, MissingArea } from './map-shapes.js';
 import { toLocalIso } from './time.js';
 
 export class AppNotRunningError extends Error {
@@ -23,6 +24,7 @@ const SLOW_REQUEST_TIMEOUT_MS = 55_000;
 
 const APP_TOO_OLD = "This version of ShadowGit can't create checkpoints for AI assistants. Ask the user to update the ShadowGit app.";
 const APP_WITHOUT_LENS = 'This version of ShadowGit has no Lens for AI assistants. Ask the user to update the ShadowGit app.';
+const APP_WITHOUT_MAP = 'This version of ShadowGit has no map for AI assistants. Ask the user to update the ShadowGit app.';
 const APP_WITHOUT_PIECES = "This version of ShadowGit reads a step's body as plain text only: ask the user to update the ShadowGit app, or send each body as plain text.";
 
 const Session = z.object({
@@ -77,6 +79,9 @@ export interface LensWords {
   layers?: { id: string; name: string }[];
   flows?: { id: string; label: string }[];
 }
+
+export const MapRead = z.object({ mapAsOf: MapAsOf, summary: MapSummary.optional(), area: z.union([AreaView, MissingArea]).optional() });
+export const ContextRead = z.object({ mapAsOf: MapAsOf, context: CodeContext });
 
 export type ActiveSession = z.infer<typeof Session>;
 
@@ -181,4 +186,24 @@ export async function sendLensWords(input: { repoPath: string; base: string | nu
     throw pieces && refused.message.includes("Not the Lens's words") ? new Error(`${refused.message} ${APP_WITHOUT_PIECES}`) : refused;
   }
   return WordsWritten.parse(json);
+}
+
+/** The project's map, or one area of it; the app may draw the map in the request. */
+export async function readMap({ repoPath, area, aiTool }: { repoPath: string; area?: string; aiTool: string }): Promise<z.infer<typeof MapRead>> {
+  const query = new URLSearchParams({ repoPath, ...(area !== undefined && { area }), aiTool });
+  const { status, json } = await request(`/map?${query}`, undefined, { timeoutMs: SLOW_REQUEST_TIMEOUT_MS, accept: [404] });
+  if (status === 404) throw new Error(APP_WITHOUT_MAP);
+  return MapRead.parse(json);
+}
+
+/** Where files and symbols sit and what depends on them; the app may draw the map in the request. */
+export async function readCodeContext(input: {
+  repoPath: string;
+  files?: string[];
+  symbols?: { name: string; file?: string }[];
+  aiTool: string;
+}): Promise<z.infer<typeof ContextRead>> {
+  const { status, json } = await request('/map/context', input, { timeoutMs: SLOW_REQUEST_TIMEOUT_MS, accept: [404] });
+  if (status === 404) throw new Error(APP_WITHOUT_MAP);
+  return ContextRead.parse(json);
 }

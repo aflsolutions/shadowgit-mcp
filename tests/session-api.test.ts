@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } from 'vitest';
 import {
-  AppNotRunningError, AppTimeoutError, LensRead, activeSessions, createCheckpoint, endSession, startSession,
+  AppNotRunningError, AppTimeoutError, LensRead, activeSessions, createCheckpoint, endSession, readCodeContext, readMap, startSession,
 } from '../src/session-api.js';
-import { FAKE_CITED_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, closedAppUrl, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { FAKE_CITED_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, MAP_ANSWERS, closedAppUrl, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { restoreEnv } from './helpers/fixtures.js';
 
 let app: FakeApp;
@@ -126,5 +126,63 @@ describe('createCheckpoint', () => {
     await expect(createCheckpoint(checkpointInput)).rejects.toThrow(
       'ShadowGit did not answer within 55 s; the checkpoint may still be saving. Check with git_command (log -1) before trying again.',
     );
+  });
+});
+
+describe('the map', () => {
+  const ask = { repoPath: '/projects/webshop', aiTool: 'Claude Code' };
+  const context = { ...ask, files: ['src/gone.ts'], symbols: [{ name: 'chargeCard' }] };
+  /** An answer as the app sends it, less the success the request reads as its status. */
+  const answered = (body: object) => Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'success'));
+
+  beforeEach(() => {
+    app.requests.length = 0;
+    app.mapRoutes = true;
+    app.mapStatus = 200;
+    app.mapAnswer = { map: MAP_ANSWERS.summary, area: MAP_ANSWERS.area, context: MAP_ANSWERS.context };
+  });
+
+  it("reads the project's summary, and one area by its label, naming the assistant", async () => {
+    expect(await readMap(ask)).toEqual(answered(MAP_ANSWERS.summary));
+    expect(app.requests.at(-1)?.path).toBe(`/map?${new URLSearchParams(ask)}`);
+    expect(await readMap({ ...ask, area: 'billing' })).toEqual(answered(MAP_ANSWERS.area));
+    expect(app.requests.at(-1)?.path).toBe(`/map?${new URLSearchParams({ repoPath: ask.repoPath, area: 'billing', aiTool: ask.aiTool })}`);
+  });
+
+  it.each(['context', 'landing', 'unresolved'] as const)('reads every field of the code context the app answered (%s)', async (name) => {
+    app.mapAnswer.context = MAP_ANSWERS[name];
+    expect(await readCodeContext(context)).toEqual(answered(MAP_ANSWERS[name]));
+    expect(app.requestsTo('/map/context').at(-1)).toEqual(context);
+  });
+
+  it.each([
+    [202, "ShadowGit: ShadowGit is drawing this project's map; ask again in a minute"],
+    [409, 'ShadowGit: This project has no snapshot yet'],
+    [500, 'ShadowGit: The map stopped before answering (exit code 1)'],
+  ] as const)("passes the app's own words on for a %i", async (status, message) => {
+    app.mapStatus = status;
+    await expect(readMap(ask)).rejects.toThrow(message);
+    await expect(readCodeContext(context)).rejects.toThrow(message);
+  });
+
+  it('asks for an app update when the map routes are missing', async () => {
+    app.mapRoutes = false;
+    const update = 'This version of ShadowGit has no map for AI assistants. Ask the user to update the ShadowGit app.';
+    await expect(readMap(ask)).rejects.toThrow(update);
+    await expect(readCodeContext(context)).rejects.toThrow(update);
+  });
+
+  it('waits up to 55 s, as the app may draw the map in the request', async () => {
+    app.hang = true;
+    // Stands in for the 55 s wait: the real timeout is replaced by a 50 ms one, which fails the same way.
+    const timeout = AbortSignal.timeout.bind(AbortSignal);
+    const asked = vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => timeout(50));
+    await expect(readCodeContext(context)).rejects.toThrow('ShadowGit did not answer within 55 s.');
+    expect(asked).toHaveBeenCalledWith(55_000);
+  });
+
+  it('says ShadowGit is not running when nothing answers', async () => {
+    vi.stubEnv('SHADOWGIT_SESSION_API', await closedAppUrl());
+    await expect(readMap(ask)).rejects.toBeInstanceOf(AppNotRunningError);
   });
 });

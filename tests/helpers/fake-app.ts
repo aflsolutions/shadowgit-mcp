@@ -78,7 +78,12 @@ export const FAKE_CITED_LENS = {
   })),
 };
 
-const mapFixture = (name: string): object => JSON.parse(readFileSync(new URL(`../fixtures/map/${name}.json`, import.meta.url), 'utf8'));
+// Without the success the app sends beside each answer: the map routes add it, as the Lens route does
+const mapFixture = (name: string): object => {
+  const answer = JSON.parse(readFileSync(new URL(`../fixtures/map/${name}.json`, import.meta.url), 'utf8')) as Record<string, unknown>;
+  delete answer.success;
+  return answer;
+};
 /**
  * The app's real answers for the webshop of `tests/fixtures/map/project.json`: its summary, its billing area,
  * chargeCard's context, chargeCard with checkout, targets that don't resolve, and src/billing/charge.ts.
@@ -92,7 +97,9 @@ export const MAP_ANSWERS = {
   file: mapFixture('file'),
 };
 /** The webshop the map answers are of: path → content. */
-export const MAP_PROJECT = mapFixture('project') as Record<string, string>;
+export const MAP_PROJECT = JSON.parse(readFileSync(new URL('../fixtures/map/project.json', import.meta.url), 'utf8')) as Record<string, string>;
+/** What the map routes answer by default: the summary, the billing area, and chargeCard's context. */
+export const mapAnswers = () => ({ map: MAP_ANSWERS.summary, area: MAP_ANSWERS.area, context: MAP_ANSWERS.context });
 
 /** A stand-in for the ShadowGit app's Session API on an ephemeral port; points SHADOWGIT_SESSION_API at it. */
 export async function startFakeApp(): Promise<FakeApp> {
@@ -125,7 +132,7 @@ async function listen(): Promise<FakeApp> {
     wordsStatus: 200,
     mapRoutes: true,
     mapStatus: 200,
-    mapAnswer: { map: MAP_ANSWERS.summary, area: MAP_ANSWERS.area, context: MAP_ANSWERS.context },
+    mapAnswer: mapAnswers(),
     hang: false,
     hangBody: false,
     close: () => {
@@ -190,8 +197,13 @@ async function listen(): Promise<FakeApp> {
       if (app.mapStatus === 202) return json(202, { success: false, error: "ShadowGit is drawing this project's map; ask again in a minute" });
       if (app.mapStatus === 409) return json(409, { success: false, error: 'This project has no snapshot yet' });
       if (app.mapStatus === 500) return json(500, { success: false, error: 'The map stopped before answering (exit code 1)' });
-      if (route === '/map/context') return json(200, app.mapAnswer.context);
-      return json(200, new URLSearchParams(route.slice('/map?'.length)).has('area') ? app.mapAnswer.area : app.mapAnswer.map);
+      if (route === '/map/context') {
+        // The app's own refusal: 1 to 20 files and symbols
+        const asked = [body.files, body.symbols].reduce((sum: number, targets) => sum + (Array.isArray(targets) ? targets.length : 0), 0);
+        if (asked < 1 || asked > 20) return json(400, { success: false, error: `Ask about 1 to 20 files and symbols, not ${asked}` });
+        return json(200, { success: true, ...app.mapAnswer.context });
+      }
+      return json(200, { success: true, ...(new URLSearchParams(route.slice('/map?'.length)).has('area') ? app.mapAnswer.area : app.mapAnswer.map) });
     }
     json(404, { success: false, error: `No route ${route}` });
   });

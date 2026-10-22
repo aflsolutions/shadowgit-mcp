@@ -1,23 +1,23 @@
 import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { clientName } from '../client-name.js';
-import type { CodeContext, MapAsOf, MapSummary, AreaView, MissingArea } from '../map-shapes.js';
+import { ContextRead, MapRead } from '../map-shapes.js';
 import { resolveRepo } from '../repos.js';
-import { ContextRead, MapRead, readCodeContext, readMap } from '../session-api.js';
+import { readCodeContext, readMap } from '../session-api.js';
 import { dataResult, repoParam } from './shared.js';
 
 const MapOutput = z.object({ repo: z.string(), ...MapRead.shape });
 // The session flow that follows, in the answer the model reads before it edits
 const NEXT = 'Before editing several files: start_session, which pauses snapshots; when the edits are done: checkpoint, end_session, then get_lens and write_lens_words.';
 const ContextOutput = z.object({ repo: z.string(), ...ContextRead.shape, next: z.string().describe('The steps that follow') });
-// The app's MAX_TARGETS
-const MAX_TARGETS = 20;
 
 type Listed<T> = { items: readonly T[]; total: number };
-type Context = z.infer<typeof CodeContext>;
+type Read = z.infer<typeof MapRead>;
+type AsOf = Read['mapAsOf'];
+type Context = z.infer<typeof ContextRead>['context'];
 type Target = Context['targets'][number];
-type SymbolRef = Extract<Target, { kind: 'symbol' }>['symbol'];
-type Dependent = Extract<Target, { kind: 'symbol' }>['dependents']['items'][number];
+type SymbolTarget = Extract<Target, { kind: 'symbol' }>;
+type Ref = SymbolTarget['dependents']['items'][number];
 
 /** A capped list as text: its items, then how many more there are. */
 function list<T>({ items, total }: Listed<T>, show: (item: T) => string, separator = ', ', noun = ''): string {
@@ -28,38 +28,40 @@ function list<T>({ items, total }: Listed<T>, show: (item: T) => string, separat
 /** "a, b and c". */
 const andList = (words: readonly string[]) => (words.length < 2 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`);
 const counts = (byArea: readonly { area: string; count: number }[]) => andList(byArea.map(({ area, count }) => `${area} (${count})`));
-const at = (symbol: SymbolRef) => `${symbol.name} (${symbol.file}:${symbol.line})`;
-const dependent = (ref: Dependent) => ('symbol' in ref ? `${ref.symbol.name} (${ref.symbol.file}:${ref.symbol.line}, ${andList(ref.how)})` : `${ref.file} (${andList(ref.how)})`);
+/** What uses or depends on a target, and how: a symbol at its line, or a file. */
+const ref = (used: Ref) => ('symbol' in used ? `${used.symbol.name} (${used.symbol.file}:${used.symbol.line}, ${andList(used.how)})` : `${used.file} (${andList(used.how)})`);
+/** A capped list as bullets, "- none" when it is empty. */
+const bullets = <T>(listed: Listed<T>, noun: string, show: (item: T) => string) => (listed.total === 0 ? '- none' : list(listed, (item) => `- ${show(item)}`, '\n', noun));
 
-function drawnFrom({ snapshot, time, behind, changedFiles }: z.infer<typeof MapAsOf>): string {
+function drawnFrom({ snapshot, time, behind, changedFiles }: AsOf): string {
   const drawn = `drawn from snapshot ${snapshot.slice(0, 8)} (${time})`;
   if (behind === 0) return `${drawn}, the newest.`;
   const changed = changedFiles.total === 0 ? 'No file changed since.' : `${changedFiles.total} files changed since, whose facts may differ: ${list(changedFiles, (file) => file)}.`;
   return `${drawn}, ${behind} snapshot${behind === 1 ? '' : 's'} behind the newest. ${changed}`;
 }
 
-function describeSummary(repo: string, mapAsOf: z.infer<typeof MapAsOf>, summary: z.infer<typeof MapSummary>): string {
+function describeSummary(repo: string, mapAsOf: AsOf, summary: NonNullable<Read['summary']>): string {
   const { files, symbols, areas, calls, processes } = summary.counts;
   return [
     `${repo}'s map, ${drawnFrom(mapAsOf)}`,
     `${files} files, ${symbols} symbols, ${areas} areas, ${calls} calls, ${processes} processes.`,
     `Layers: ${summary.layers.map((layer) => `${layer.name} (${layer.kind}, ${layer.files} files)`).join(', ')}.`,
     'Areas, largest first:',
-    list(summary.areas, (area) => `- ${area.label} (${area.path}): ${area.files} files, ${area.symbols} symbols; layers ${area.layers.join(', ')}`, '\n', 'areas'),
+    bullets(summary.areas, 'areas', (area) => `${area.label} (${area.path}): ${area.files} files, ${area.symbols} symbols; layers ${area.layers.join(', ')}`),
     'Links between areas, heaviest first:',
-    summary.links.total === 0 ? '- none' : list(summary.links, (link) => `- ${link.from} → ${link.to}: ${link.count} calls and imports`, '\n', 'links'),
+    bullets(summary.links, 'links', (link) => `${link.from} → ${link.to}: ${link.count} calls and imports`),
     'Processes:',
-    summary.processes.total === 0 ? '- none' : list(summary.processes, (process) => `- ${process.label}: ${process.areas.join(' → ')}`, '\n', 'processes'),
+    bullets(summary.processes, 'processes', (process) => `${process.label}: ${process.areas.join(' → ')}`),
   ].join('\n');
 }
 
-function describeArea(repo: string, mapAsOf: z.infer<typeof MapAsOf>, area: z.infer<typeof AreaView> | z.infer<typeof MissingArea>): string {
+function describeArea(repo: string, mapAsOf: AsOf, area: NonNullable<Read['area']>): string {
   if (area.kind === 'missing') return `No area or folder "${area.target}" on ${repo}'s map.${area.near.length > 0 ? ` Near: ${area.near.join(', ')}.` : ''}`;
   const name = area.areas.length === 1 && area.areas[0] === area.target ? `The ${area.target} area of ${repo}'s map` : `${area.target} (areas ${andList(area.areas)}) on ${repo}'s map`;
   return [
     `${name}, ${drawnFrom(mapAsOf)}`,
     `${area.files.total} files, ${area.symbols} symbols: ${list(area.files, (file) => file)}.`,
-    area.mostDepended.total === 0 ? 'Nothing on the map depends on its symbols.' : `Most depended on: ${list(area.mostDepended, ({ symbol, dependents }) => `${at(symbol)}: ${dependents} dependents`, '; ')}.`,
+    area.mostDepended.total === 0 ? 'Nothing on the map depends on its symbols.' : `Most depended on: ${list(area.mostDepended, ({ symbol, dependents }) => `${symbol.name} (${symbol.file}:${symbol.line}): ${dependents} dependents`, '; ')}.`,
     `${area.dependsOn.length === 0 ? 'Depends on no other area.' : `Depends on ${counts(area.dependsOn)}.`} ${area.dependedOnBy.length === 0 ? 'No other area depends on it.' : `Depended on by ${counts(area.dependedOnBy)}.`}`,
     ...(area.processes.total > 0 ? [`Processes through it: ${list(area.processes, (process) => process)}.`] : []),
   ].join('\n');
@@ -72,7 +74,7 @@ const REASONS: Record<string, string> = {
   language: 'it is in a language the map does not read',
 };
 
-function reachLine(reach: Extract<Target, { kind: 'symbol' }>['reach']): string {
+function reachLine(reach: SymbolTarget['reach']): string {
   if (reach.symbols === 0) return 'Reach within 3 hops: none.';
   return `Reach within 3 hops: ${reach.symbols} symbols in ${reach.files} files (${andList(reach.byHop.map(String))} by hop), from ${counts(reach.byArea)}.`;
 }
@@ -84,10 +86,10 @@ function describeTarget(target: Target): string {
       const floor = symbol.kind === 'method' || symbol.kind === 'property' ? ' For a method or property, callers through a value whose type the map does not know are missing: this count is a floor.' : '';
       return [
         `${symbol.name} (${symbol.kind}, ${symbol.file}:${symbol.line}): area ${symbol.area}, layer ${symbol.layer}.`,
-        uses.total === 0 ? 'Uses nothing on the map.' : `Uses: ${list(uses, ({ symbol: used, how }) => `${used.name} (${used.file}:${used.line}, ${andList(how)})`)}.`,
+        uses.total === 0 ? 'Uses nothing on the map.' : `Uses: ${list(uses, ref)}.`,
         dependents.total === 0
           ? `Nothing on the map depends on ${symbol.name}.${floor}`
-          : `${dependents.total} depend on ${symbol.name}, from ${counts(dependentsByArea)}: ${list(dependents, dependent)}.${floor}`,
+          : `${dependents.total} depend on ${symbol.name}, from ${counts(dependentsByArea)}: ${list(dependents, ref)}.${floor}`,
         reachLine(reach),
         ...(processes.total > 0 ? [`Processes: ${list(processes, (process) => process)}.`] : []),
       ].join('\n');
@@ -108,20 +110,18 @@ function describeTarget(target: Target): string {
   }
 }
 
-function describeContext(repo: string, mapAsOf: z.infer<typeof MapAsOf>, { targets, landing }: Context): string {
+function describeLanding(landing: NonNullable<Context['landing']>): string {
   return [
-    `From ${repo}'s map, ${drawnFrom(mapAsOf)}`,
-    ...targets.map(describeTarget),
-    ...(landing === null
-      ? []
-      : [[
-          `Where they land: ${counts(landing.areas)}.`,
-          landing.dependents.total === 0
-            ? 'Nothing outside them on the map depends on them.'
-            : `${landing.dependents.total} depend on them from outside, from ${counts(landing.dependentsByArea)}: ${list(landing.dependents, dependent)}.`,
-          reachLine(landing.reach),
-        ].join('\n')]),
-  ].join('\n\n');
+    `Where they land: ${counts(landing.areas)}.`,
+    landing.dependents.total === 0
+      ? 'Nothing outside them on the map depends on them.'
+      : `${landing.dependents.total} depend on them from outside, from ${counts(landing.dependentsByArea)}: ${list(landing.dependents, ref)}.`,
+    reachLine(landing.reach),
+  ].join('\n');
+}
+
+function describeContext(repo: string, mapAsOf: AsOf, { targets, landing }: Context): string {
+  return [`From ${repo}'s map, ${drawnFrom(mapAsOf)}`, ...targets.map(describeTarget), ...(landing ? [describeLanding(landing)] : [])].join('\n\n');
 }
 
 export async function getMap({ area, repo }: { area?: string; repo?: string }, aiTool: string): Promise<CallToolResult> {
@@ -137,8 +137,7 @@ export async function getCodeContext(
   { files, symbols, repo }: { files?: string[]; symbols?: { name: string; file?: string }[]; repo?: string },
   aiTool: string,
 ): Promise<CallToolResult> {
-  const asked = (files?.length ?? 0) + (symbols?.length ?? 0);
-  if (asked < 1 || asked > MAX_TARGETS) throw new Error(`Ask about 1 to ${MAX_TARGETS} files and symbols, not ${asked}.`);
+  // The app refuses fewer than 1 or more than its 20 targets, in its own words: a newer one may take more
   const project = resolveRepo(repo);
   const read = await readCodeContext({ repoPath: project.path, files, symbols, aiTool });
   return dataResult(ContextOutput, `${describeContext(project.name, read.mapAsOf, read.context)}\n\nNext: ${NEXT}`, { repo: project.name, ...read, next: NEXT });

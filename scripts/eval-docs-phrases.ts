@@ -34,12 +34,12 @@ const CASES: { phrase: string; prepare?: (app: FakeApp, project: string) => void
   {
     phrase: 'How is this project organised?',
     // The webshop the fake app's map answers are of, so the code and the map agree
-    prepare: (_app, project) => writeMapProject(project),
+    prepare: (_app, project) => snapshot(project, MAP_PROJECT, 'Add the webshop'),
     passed: ({ app }) => app.requests.some((r) => r.path.startsWith('/map?') && !new URLSearchParams(r.path.slice('/map?'.length)).has('area')),
   },
   {
     phrase: 'What depends on chargeCard?',
-    prepare: (_app, project) => writeMapProject(project),
+    prepare: (_app, project) => snapshot(project, MAP_PROJECT, 'Add the webshop'),
     passed: ({ app, answer }) =>
       app.requestsTo('/map/context').some((b) => JSON.stringify(b.symbols ?? []).includes('chargeCard')) && answer.includes('retryFailedCharges'),
   },
@@ -83,14 +83,6 @@ const CHECKOUT_LENS: typeof FAKE_LENS = {
   components: [{ id: 'k1', name: 'checkout', kind: 'constant', delta: 'added', context: false, role: null, path: 'src/checkout.ts', symbols: ['checkout'] }],
   flows: [],
 };
-
-/** Writes the webshop the fake app's map answers are of into the project. */
-function writeMapProject(project: string): void {
-  for (const [file, content] of Object.entries(MAP_PROJECT)) {
-    fs.mkdirSync(path.dirname(path.join(project, file)), { recursive: true });
-    fs.writeFileSync(path.join(project, file), content);
-  }
-}
 
 const Output = z.object({ is_error: z.boolean(), result: z.string() });
 const firstLines = (text: string) => text.split('\n').slice(0, 5).join('\n').slice(0, 400);

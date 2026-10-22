@@ -1,14 +1,15 @@
 import * as z from 'zod/v4';
 
 // The app's map answers, as code-graph 0.6.0's map/query writes them: the package is private, so its shapes are
-// mirrored here. Claude Code shows the model the structured answer alone, so each rule rides on its field.
+// mirrored here. Open values (how, a missing target's reason) are strings, which a newer app may add to; the structure
+// is strict, and an answer of another shape asks for a server update (session-api.ts). The model reads the tools'
+// descriptions, never these schemas: the descriptions here are for clients that show them.
 
 /** A list as the app caps it: its first items, and how many there are in all. */
 const listed = <T extends z.ZodType>(item: T) =>
   z.object({ items: z.array(item), total: z.number().int().describe('How many there are in all; items holds the first of them') });
 
 const AreaCount = z.object({ area: z.string(), count: z.number().int() });
-// Strings, not enums: a newer app may add a kind, which an installed server passes on rather than refuse
 const How = z.string().describe('calls, imports, extends, implements or overrides');
 const SymbolRef = z.object({
   name: z.string(),
@@ -70,12 +71,12 @@ const Landing = z
   .object({ areas: z.array(AreaCount), dependents: listed(DependentRef).describe(DEPENDENTS), dependentsByArea: z.array(AreaCount), reach: Reach })
   .describe('Where the targets land together: the areas they are in, and the code outside them that depends on them');
 
-export const CodeContext = z.object({
+const CodeContext = z.object({
   targets: z.array(z.discriminatedUnion('kind', [SymbolContext, FileContext, AmbiguousTarget, MissingTarget])),
   landing: Landing.nullable().describe('For two or more targets that resolve; null otherwise'),
 });
 
-export const MapSummary = z.object({
+const MapSummary = z.object({
   repo: z.string(),
   commit: z.string(),
   counts: z.object({ files: z.number().int(), symbols: z.number().int(), areas: z.number().int(), calls: z.number().int(), processes: z.number().int() }),
@@ -87,7 +88,7 @@ export const MapSummary = z.object({
   processes: listed(z.object({ label: z.string(), areas: z.array(z.string()) })).describe('Flows through the code, each with the areas it passes through in order'),
 });
 
-export const AreaView = z.object({
+const AreaView = z.object({
   kind: z.literal('area'),
   target: z.string(),
   areas: z.array(z.string()).describe('The labels of the areas the label or folder covers'),
@@ -99,9 +100,9 @@ export const AreaView = z.object({
   processes: listed(z.string()),
 });
 
-export const MissingArea = z.object({ kind: z.literal('missing'), target: z.string(), near: z.array(z.string()).describe('Area labels spelled close to it') });
+const MissingArea = z.object({ kind: z.literal('missing'), target: z.string(), near: z.array(z.string()).describe('Area labels spelled close to it') });
 
-export const MapAsOf = z
+const MapAsOf = z
   .object({
     snapshot: z.string(),
     time: z.string().describe("The snapshot's time, ISO 8601"),
@@ -109,3 +110,6 @@ export const MapAsOf = z
     changedFiles: listed(z.string()).describe("Files changed since: their facts may differ from the newest snapshot's"),
   })
   .describe('The snapshot the answer is drawn from');
+
+export const MapRead = z.object({ mapAsOf: MapAsOf, summary: MapSummary.optional(), area: z.union([AreaView, MissingArea]).optional() });
+export const ContextRead = z.object({ mapAsOf: MapAsOf, context: CodeContext });

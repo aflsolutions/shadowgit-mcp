@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } 
 import {
   AppNotRunningError, AppTimeoutError, LensRead, activeSessions, createCheckpoint, endSession, readCodeContext, readMap, startSession,
 } from '../src/session-api.js';
-import { FAKE_CITED_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, MAP_ANSWERS, closedAppUrl, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { FAKE_CITED_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, MAP_ANSWERS, closedAppUrl, mapAnswers, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { restoreEnv } from './helpers/fixtures.js';
 
 let app: FakeApp;
@@ -120,11 +120,11 @@ describe('createCheckpoint', () => {
 
   it('warns that the checkpoint may still be saving when the app does not answer', async () => {
     app.hang = true;
-    // Stands in for the 55 s wait: the real timeout is replaced by a 50 ms one, which fails the same way.
+    // Stands in for the 58 s wait: the real timeout is replaced by a 50 ms one, which fails the same way.
     const timeout = AbortSignal.timeout.bind(AbortSignal);
     vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => timeout(50));
     await expect(createCheckpoint(checkpointInput)).rejects.toThrow(
-      'ShadowGit did not answer within 55 s; the checkpoint may still be saving. Check with git_command (log -1) before trying again.',
+      'ShadowGit did not answer within 58 s; the checkpoint may still be saving. Check with git_command (log -1) before trying again.',
     );
   });
 });
@@ -132,26 +132,24 @@ describe('createCheckpoint', () => {
 describe('the map', () => {
   const ask = { repoPath: '/projects/webshop', aiTool: 'Claude Code' };
   const context = { ...ask, files: ['src/gone.ts'], symbols: [{ name: 'chargeCard' }] };
-  /** An answer as the app sends it, less the success the request reads as its status. */
-  const answered = (body: object) => Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'success'));
 
   beforeEach(() => {
     app.requests.length = 0;
     app.mapRoutes = true;
     app.mapStatus = 200;
-    app.mapAnswer = { map: MAP_ANSWERS.summary, area: MAP_ANSWERS.area, context: MAP_ANSWERS.context };
+    app.mapAnswer = mapAnswers();
   });
 
   it("reads the project's summary, and one area by its label, naming the assistant", async () => {
-    expect(await readMap(ask)).toEqual(answered(MAP_ANSWERS.summary));
+    expect(await readMap(ask)).toEqual(MAP_ANSWERS.summary);
     expect(app.requests.at(-1)?.path).toBe(`/map?${new URLSearchParams(ask)}`);
-    expect(await readMap({ ...ask, area: 'billing' })).toEqual(answered(MAP_ANSWERS.area));
+    expect(await readMap({ ...ask, area: 'billing' })).toEqual(MAP_ANSWERS.area);
     expect(app.requests.at(-1)?.path).toBe(`/map?${new URLSearchParams({ repoPath: ask.repoPath, area: 'billing', aiTool: ask.aiTool })}`);
   });
 
   it.each(['context', 'landing', 'unresolved', 'file'] as const)('reads every field of the code context the app answered (%s)', async (name) => {
     app.mapAnswer.context = MAP_ANSWERS[name];
-    expect(await readCodeContext(context)).toEqual(answered(MAP_ANSWERS[name]));
+    expect(await readCodeContext(context)).toEqual(MAP_ANSWERS[name]);
     expect(app.requestsTo('/map/context').at(-1)).toEqual(context);
   });
 
@@ -185,10 +183,10 @@ describe('the map', () => {
   it('reads the values a newer app may add to a list it names, as they come', async () => {
     const newer = JSON.parse(JSON.stringify(MAP_ANSWERS.unresolved).replace('"reason":"absent"', '"reason":"generated"')) as object;
     app.mapAnswer.context = newer;
-    expect(await readCodeContext(context)).toEqual(answered(newer));
+    expect(await readCodeContext(context)).toEqual(newer);
     const spread = JSON.parse(JSON.stringify(MAP_ANSWERS.context).replace('"how":["calls"]', '"how":["calls","spreads"]')) as object;
     app.mapAnswer.context = spread;
-    expect(await readCodeContext(context)).toEqual(answered(spread));
+    expect(await readCodeContext(context)).toEqual(spread);
   });
 
   it('asks for a server update when the app answers with a shape this version does not read', async () => {

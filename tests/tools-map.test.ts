@@ -1,13 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { getCodeContext, getMap } from '../src/tools/map.js';
-import { MAP_ANSWERS, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { MAP_ANSWERS, mapAnswers, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { makeProject, removeTempDirs, restoreEnv, textOf, useStorage } from './helpers/fixtures.js';
 
 let project: string;
 let app: FakeApp;
 
-/** An answer as the app sends it, less the success the request reads as its status. */
-const answered = (body: object) => Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'success'));
 /** The app's answer drawn from an older snapshot: three behind, with 25 files changed since. */
 const behind = (body: object) => ({
   ...body,
@@ -31,14 +29,14 @@ beforeEach(() => {
   process.env.CLAUDE_PROJECT_DIR = project;
   app.requests.length = 0;
   app.mapStatus = 200;
-  app.mapAnswer = { map: MAP_ANSWERS.summary, area: MAP_ANSWERS.area, context: MAP_ANSWERS.context };
+  app.mapAnswer = mapAnswers();
 });
 
 describe('get_map', () => {
   it("gives the project's summary: its snapshot, counts, areas, the links between them and its processes", async () => {
     const result = await getMap({}, 'Claude Code');
     expect(app.requests.at(-1)?.path).toBe(`/map?${new URLSearchParams({ repoPath: project, aiTool: 'Claude Code' })}`);
-    expect(result.structuredContent).toEqual({ repo: 'webshop', ...answered(MAP_ANSWERS.summary) });
+    expect(result.structuredContent).toEqual({ repo: 'webshop', ...MAP_ANSWERS.summary });
     const text = textOf(result);
     expect(text).toContain("webshop's map, drawn from snapshot 9db22aff (2026-10-22T08:46:03+02:00), the newest.");
     expect(text).toContain('19 files, 44 symbols, 3 areas, 33 calls, 13 processes.');
@@ -76,7 +74,7 @@ describe('get_code_context', () => {
     const result = await getCodeContext({ symbols: [{ name: 'chargeCard' }] }, 'Claude Code');
     expect(app.requestsTo('/map/context').at(-1)).toEqual({ repoPath: project, symbols: [{ name: 'chargeCard' }], aiTool: 'Claude Code' });
     // The flow that follows, in the answer the model reads before it edits
-    expect(result.structuredContent).toEqual({ repo: 'webshop', ...answered(MAP_ANSWERS.context), next: expect.stringMatching(/^Before editing several files: start_session/) });
+    expect(result.structuredContent).toEqual({ repo: 'webshop', ...MAP_ANSWERS.context, next: expect.stringMatching(/^Before editing several files: start_session/) });
     const text = textOf(result);
     expect(text).toContain("From webshop's map, drawn from snapshot 9db22aff");
     expect(text).toContain('chargeCard (function, src/billing/charge.ts:5): area billing, layer billing.');
@@ -116,10 +114,9 @@ describe('get_code_context', () => {
   });
 
   it.each([[{}, 0], [{ symbols: Array.from({ length: 21 }, () => ({ name: 'chargeCard' })) }, 21]] as const)(
-    'asks about 1 to 20 files and symbols, and asks the app nothing otherwise (%#)',
+    "passes on the app's refusal of fewer than 1 or more than 20 files and symbols (%#)",
     async (args, count) => {
-      await expect(getCodeContext(args, 'Claude Code')).rejects.toThrow(`Ask about 1 to 20 files and symbols, not ${count}`);
-      expect(app.requests).toEqual([]);
+      await expect(getCodeContext(args, 'Claude Code')).rejects.toThrow(`ShadowGit: Ask about 1 to 20 files and symbols, not ${count}`);
     },
   );
 

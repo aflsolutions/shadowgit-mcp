@@ -1,0 +1,52 @@
+{
+  "success": true,
+  "mapAsOf": {
+    "snapshot": "1b5e70566a6166a570890c4b3a7a846eca498387",
+    "time": "2026-10-22T11:59:54+02:00",
+    "behind": 0,
+    "changedFiles": {
+      "items": [],
+      "total": 0
+    }
+  },
+  "summary": {
+    "repo": "project",
+    "commit": "1b5e70566a6166a570890c4b3a7a846eca498387",
+    "counts": {
+      "files": 2,
+      "symbols": 2,
+      "areas": 1,
+      "calls": 0,
+      "processes": 0
+    },
+    "layers": [
+      {
+        "name": "",
+        "kind": "none",
+        "files": 2
+      }
+    ],
+    "areas": {
+      "items": [
+        {
+          "label": "src",
+          "path": "src",
+          "files": 2,
+          "symbols": 2,
+          "layers": [
+            ""
+          ]
+        }
+      ],
+      "total": 1
+    },
+    "links": {
+      "items": [],
+      "total": 0
+    },
+    "processes": {
+      "items": [],
+      "total": 0
+    }
+  }
+}

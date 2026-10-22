@@ -67,14 +67,15 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
       const tool = tools.find((each) => each.name === name);
       return `${tool?.description} ${JSON.stringify(tool?.inputSchema)}`;
     };
+    // Both count dependents: both say what the counts leave out
     for (const name of ['get_map', 'get_code_context']) {
       expect(seen(name), name).toContain('names the snapshot it is drawn from');
       expect(seen(name), name).not.toContain('map of its newest snapshot');
       expect(seen(name), name).not.toMatch(/\b(careful|risky|should|consider)\b/i);
+      expect(seen(name), name).toContain('test files are not counted');
+      expect(seen(name), name).toContain('a floor');
+      expect(seen(name), name).toContain('Edits not yet in a snapshot are not on the map');
     }
-    expect(seen('get_code_context')).toContain('test files are not counted');
-    expect(seen('get_code_context')).toContain('a floor');
-    expect(seen('get_code_context')).toContain('Edits not yet in a snapshot are not on the map');
   });
 
   it('lists output schemas a draft-07 validator reads, as older MCP clients use', async () => {

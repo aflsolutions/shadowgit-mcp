@@ -152,7 +152,7 @@ export function registerMap(server: McpServer): void {
     {
       title: "Read the project's map",
       description:
-        "How a ShadowGit-tracked project is organised, from ShadowGit's map of it, the one the user sees: counts, layers, areas largest first, the calls and imports between areas, processes. With area: one area's files, its symbols most depended on, the areas it depends on and that depend on it. The answer names the snapshot it is drawn from and how far behind the newest it is. Needs the ShadowGit app running.",
+        "How a ShadowGit-tracked project is organised, from ShadowGit's map of it, the one the user sees: counts, layers, areas largest first, the calls and imports between areas, processes. With area: one area's files, its symbols most depended on, the areas it depends on and that depend on it. Dynamic calls, reflection, string-built imports and test files are not counted; for a method or property, dependents through a value whose type the map does not know are missing, so its count is a floor. Edits not yet in a snapshot are not on the map. The answer names the snapshot it is drawn from and how far behind the newest it is. Needs the ShadowGit app running.",
       inputSchema: z.object({
         area: z.string().min(1).optional().describe("An area's label as get_map names it, or a folder path, which covers every file under it. Leave out for the whole project"),
         repo: repoParam,

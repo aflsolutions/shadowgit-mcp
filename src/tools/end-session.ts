@@ -22,8 +22,11 @@ export async function endSession({ repo, session_id }: { repo?: string; session_
     const name = projectName(session.repoPath);
     // A session found by its id may be another project's: its steps name it, by its path where its name is shared
     const listed = readRepos().find((r) => r.path === session.repoPath);
-    const steps = next(listed ? repoArgument(listed) : session.repoPath);
-    return dataResult(Output, `Ended session ${session.id} on ${name}. Automatic snapshots resumed. Next: ${steps}`, { ended: [session.id], repo: name, next: steps });
+    const ended = `Ended session ${session.id} on ${name}. Automatic snapshots resumed.`;
+    // A project ShadowGit no longer tracks: no tool reaches it, so no step follows
+    if (!listed) return dataResult(Output, ended, { ended: [session.id], repo: name });
+    const steps = next(repoArgument(listed));
+    return dataResult(Output, `${ended} Next: ${steps}`, { ended: [session.id], repo: name, next: steps });
   }
   const project = resolveRepo(repo);
   const ended = sessions.filter((s) => s.repoPath === project.path).map((s) => s.id);

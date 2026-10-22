@@ -7,7 +7,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
+import { MAP_ANSWERS, startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
 import type { LensWords } from '../src/session-api.js';
 import { makeProject, removeTempDirs, shadowGit, snapshot } from '../tests/helpers/fixtures.js';
 import { ago, runClaude } from './claude.js';
@@ -70,6 +70,11 @@ for (let i = 1; i <= RUNS; i++) {
     // The Lens of the task's own change, read when it is asked for: the snapshot before the task to the checkpoint
     const base = shadowGit(project, ['rev-parse', 'HEAD']);
     const range = () => ({ base, head: shadowGit(project, ['rev-parse', 'HEAD']) });
+    // The real app's map answers for this project, so a call for the code's context reads this checkout, not another project
+    app.mapAnswer.map = MAP_ANSWERS.checkoutSummary;
+    Object.defineProperty(app.mapAnswer, 'context', {
+      get: () => (JSON.stringify(app.requestsTo('/map/context').at(-1) ?? {}).includes('"files"') ? MAP_ANSWERS.checkoutFiles : MAP_ANSWERS.checkoutSymbol),
+    });
     app.checkpointsIn = project;
     Object.defineProperty(app, 'lensAnswer', { get: () => ({ range: range(), lens: DISCOUNT_LENS }) });
     const stdout = await runTask(app, project);

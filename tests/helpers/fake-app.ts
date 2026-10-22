@@ -95,6 +95,10 @@ export const MAP_ANSWERS = {
   landing: mapFixture('landing'),
   unresolved: mapFixture('unresolved'),
   file: mapFixture('file'),
+  // The Lens eval's project: checkout, its file and a file not written yet, and its summary
+  checkoutSymbol: mapFixture('checkout-symbol'),
+  checkoutFiles: mapFixture('checkout-files'),
+  checkoutSummary: mapFixture('checkout-summary'),
 };
 /** The webshop the map answers are of: path → content. */
 export const MAP_PROJECT = JSON.parse(readFileSync(new URL('../fixtures/map/project.json', import.meta.url), 'utf8')) as Record<string, string>;

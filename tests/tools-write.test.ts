@@ -164,6 +164,13 @@ describe('end_session', () => {
     }
   });
 
+  it('names no next step for a session on a project ShadowGit no longer tracks: no tool can reach it', async () => {
+    app.sessions.push(fakeSession({ id: 'cursor-6', repoPath: '/projects/untracked' }));
+    const result = await endSession({ session_id: 'cursor-6' });
+    expect(result.structuredContent).toEqual({ ended: ['cursor-6'], repo: '/projects/untracked' });
+    expect(textOf(result)).not.toContain('Next:');
+  });
+
   it('ends nothing for an id that is not active', async () => {
     const result = await endSession({ session_id: 'claude-code-404' });
     expect(result.structuredContent).toEqual({ ended: [], repo: null });

@@ -42,7 +42,7 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
 
   it('asks for the code context before an edit, ahead of the session', () => {
     const line =
-      '- Before changing code in a tracked project: get_code_context for the files or symbols you will change (their area and layer, what depends on them, where the change lands); get_map for how the project is organised.';
+      'Before your first edit in a tracked project, call get_code_context (load it with tool search if it is deferred) for the files or symbols you will change: it lists what depends on them across the project by area, callers grep misses included (top-level code, imports through re-exports), and where the change lands. get_map shows how the project is organised.';
     expect(INSTRUCTIONS).toContain(line);
     expect(INSTRUCTIONS.indexOf(line)).toBeLessThan(INSTRUCTIONS.indexOf('start_session'));
   });

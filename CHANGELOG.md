@@ -12,7 +12,9 @@ All notable changes to the ShadowGit MCP Server will be documented in this file.
   dependents counted by area, its reach within 3 hops, its processes, and where several land together. An ambiguous
   name lists its matches and a missing one says why; none is guessed. What isn't counted (dynamic calls, reflection,
   string-built imports, test files) and that a method's callers are a floor are in the tools' schemas.
-- The server instructions ask for `get_code_context` on the code an assistant will change, before it changes it.
+- The server instructions ask for `get_code_context` on the code an assistant will change, before its first edit.
+  Asked to change chargeCard without a word about ShadowGit, Claude Code called it first in 5 of 5 runs, with its
+  default tool search on (`npm run eval:map`).
 
 The map tools need a ShadowGit release after 0.3.9; an older app answers with a message asking for the update.
 

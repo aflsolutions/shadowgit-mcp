@@ -162,7 +162,7 @@ export function registerMap(server: McpServer): void {
     {
       title: 'Read where code sits and what depends on it',
       description:
-        "Where files and symbols sit in a ShadowGit-tracked project and what depends on them, from the map of its newest snapshot: area and layer, what each uses, its dependents counted by area, its reach within 3 hops, its processes; for two or more, where they land together. 1 to 20 files and symbols in all. Read it before changing them. Needs the ShadowGit app running.",
+        "Where files and symbols sit in a ShadowGit-tracked project and what depends on them, from the map of its newest snapshot: area and layer, what each uses, its dependents counted by area, its reach within 3 hops, its processes; for two or more, where they land together. 1 to 20 files and symbols in all. Call it before editing them: it counts callers grep misses (top-level code, imports through re-exports). Needs the ShadowGit app running.",
       inputSchema: z.object({
         files: z.array(z.string().min(1)).optional().describe('Paths relative to the project root, as written'),
         symbols: z

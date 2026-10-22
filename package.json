@@ -23,6 +23,7 @@
     "test": "npm run build && vitest run",
     "eval": "npm run build && tsx scripts/eval-docs-phrases.ts",
     "eval:lens": "npm run build && tsx scripts/eval-lens-unprompted.ts",
+    "eval:map": "npm run build && tsx scripts/eval-map-unprompted.ts",
     "prepublishOnly": "npm run typecheck && npm run lint && npm test"
   },
   "keywords": [

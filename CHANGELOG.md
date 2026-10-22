@@ -2,6 +2,20 @@
 
 All notable changes to the ShadowGit MCP Server will be documented in this file.
 
+## [2.3.0] - 2026-10-22
+
+### Added
+- `get_map` gives how a project is organised, from ShadowGit's map of its newest snapshot: its counts, layers, areas
+  largest first, the calls and imports between areas, and its processes; with `area`, one area's files, its symbols
+  most depended on, and the areas around it.
+- `get_code_context` gives where files and symbols sit and what depends on them: area and layer, what each uses, its
+  dependents counted by area, its reach within 3 hops, its processes, and where several land together. An ambiguous
+  name lists its matches and a missing one says why; none is guessed. What isn't counted (dynamic calls, reflection,
+  string-built imports, test files) and that a method's callers are a floor are in the tools' schemas.
+- The server instructions ask for `get_code_context` on the code an assistant will change, before it changes it.
+
+The map tools need a ShadowGit release after 0.3.9; an older app answers with a message asking for the update.
+
 ## [2.2.0] - 2026-10-16
 
 ### Added

@@ -34,9 +34,17 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(client.getProtocolEra()).toBe(era === '2026-07-28' ? 'modern' : 'legacy');
   });
 
-  it('serves the instructions, within 1,250 characters', () => {
+  // Claude Code cuts a server's instructions at 2,048 characters: 1,500 leaves room
+  it('serves the instructions, within 1,500 characters', () => {
     expect(client.getInstructions()).toBe(INSTRUCTIONS);
-    expect(INSTRUCTIONS.length).toBeLessThanOrEqual(1250);
+    expect(INSTRUCTIONS.length).toBeLessThanOrEqual(1500);
+  });
+
+  it('asks for the code context before an edit, ahead of the session', () => {
+    const line =
+      '- Before changing code in a tracked project: get_code_context for the files or symbols you will change (their area and layer, what depends on them, where the change lands); get_map for how the project is organised.';
+    expect(INSTRUCTIONS).toContain(line);
+    expect(INSTRUCTIONS.indexOf(line)).toBeLessThan(INSTRUCTIONS.indexOf('start_session'));
   });
 
   // Claude Code shows the model a tool's structured output alone, never its text: the rules must be in the schema

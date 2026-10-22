@@ -1,0 +1,56 @@
+{
+  "success": true,
+  "mapAsOf": {
+    "snapshot": "9db22aff6995f96b23115191533b2162656765e0",
+    "time": "2026-10-22T08:46:03+02:00",
+    "behind": 0,
+    "changedFiles": {
+      "items": [],
+      "total": 0
+    }
+  },
+  "context": {
+    "targets": [
+      {
+        "kind": "missing",
+        "target": "src/gone.ts",
+        "reason": "absent",
+        "near": []
+      },
+      {
+        "kind": "missing",
+        "target": "src/billing/charge.test.ts",
+        "reason": "test",
+        "near": []
+      },
+      {
+        "kind": "ambiguous",
+        "target": "formatAmount",
+        "matches": {
+          "items": [
+            {
+              "file": "src/api/format.ts",
+              "name": "formatAmount",
+              "line": 1
+            },
+            {
+              "file": "src/billing/format.ts",
+              "name": "formatAmount",
+              "line": 1
+            }
+          ],
+          "total": 2
+        }
+      },
+      {
+        "kind": "missing",
+        "target": "chargCard",
+        "reason": null,
+        "near": [
+          "chargeCard"
+        ]
+      }
+    ],
+    "landing": null
+  }
+}

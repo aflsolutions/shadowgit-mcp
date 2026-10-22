@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } from 'vitest';
 import {
-  AppNotRunningError, AppTimeoutError, LensRead, activeSessions, createCheckpoint, endSession, startSession,
+  AppNotRunningError, AppTimeoutError, LensRead, activeSessions, createCheckpoint, endSession, readArea, readCodeContext, readMap, startSession,
 } from '../src/session-api.js';
-import { FAKE_CITED_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, closedAppUrl, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { FAKE_CITED_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, MAP_ANSWERS, closedAppUrl, mapAnswers, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { restoreEnv } from './helpers/fixtures.js';
 
 let app: FakeApp;
@@ -120,11 +120,93 @@ describe('createCheckpoint', () => {
 
   it('warns that the checkpoint may still be saving when the app does not answer', async () => {
     app.hang = true;
-    // Stands in for the 55 s wait: the real timeout is replaced by a 50 ms one, which fails the same way.
+    // Stands in for the 58 s wait: the real timeout is replaced by a 50 ms one, which fails the same way.
     const timeout = AbortSignal.timeout.bind(AbortSignal);
     vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => timeout(50));
     await expect(createCheckpoint(checkpointInput)).rejects.toThrow(
-      'ShadowGit did not answer within 55 s; the checkpoint may still be saving. Check with git_command (log -1) before trying again.',
+      'ShadowGit did not answer within 58 s; the checkpoint may still be saving. Check with git_command (log -1) before trying again.',
     );
+  });
+});
+
+describe('the map', () => {
+  const ask = { repoPath: '/projects/webshop', aiTool: 'Claude Code' };
+  const context = { ...ask, files: ['src/gone.ts'], symbols: [{ name: 'chargeCard' }] };
+
+  beforeEach(() => {
+    app.requests.length = 0;
+    app.mapRoutes = true;
+    app.mapStatus = 200;
+    app.mapAnswer = mapAnswers();
+  });
+
+  it("reads the project's summary, and one area by its label, naming the assistant", async () => {
+    expect(await readMap(ask)).toEqual(MAP_ANSWERS.summary);
+    expect(app.requests.at(-1)?.path).toBe(`/map?${new URLSearchParams(ask)}`);
+    expect(await readArea({ ...ask, area: 'billing' })).toEqual(MAP_ANSWERS.area);
+    expect(app.requests.at(-1)?.path).toBe(`/map?${new URLSearchParams({ repoPath: ask.repoPath, area: 'billing', aiTool: ask.aiTool })}`);
+    app.mapAnswer.map = MAP_ANSWERS.checkoutSummary;
+    expect(await readMap(ask)).toEqual(MAP_ANSWERS.checkoutSummary);
+  });
+
+  it.each(['context', 'landing', 'unresolved', 'file', 'checkoutSymbol', 'checkoutFiles'] as const)('reads every field of the code context the app answered (%s)', async (name) => {
+    app.mapAnswer.context = MAP_ANSWERS[name];
+    expect(await readCodeContext(context)).toEqual(MAP_ANSWERS[name]);
+    expect(app.requestsTo('/map/context').at(-1)).toEqual(context);
+  });
+
+  it.each([
+    [202, "ShadowGit: ShadowGit is drawing this project's map; ask again in a minute"],
+    [409, 'ShadowGit: This project has no snapshot yet'],
+    [500, 'ShadowGit: The map stopped before answering (exit code 1)'],
+  ] as const)("passes the app's own words on for a %i", async (status, message) => {
+    app.mapStatus = status;
+    await expect(readMap(ask)).rejects.toThrow(message);
+    await expect(readCodeContext(context)).rejects.toThrow(message);
+  });
+
+  it('asks for an app update when the map routes are missing', async () => {
+    app.mapRoutes = false;
+    const update = 'This version of ShadowGit has no map for AI assistants. Ask the user to update the ShadowGit app.';
+    await expect(readMap(ask)).rejects.toThrow(update);
+    await expect(readCodeContext(context)).rejects.toThrow(update);
+  });
+
+  // The app answers 202 once its own 55 s pass: the server waits past that, so the app's sentence reaches the agent
+  it('waits up to 58 s, past the 55 s the app may draw the map for', async () => {
+    app.hang = true;
+    // Stands in for the 58 s wait: the real timeout is replaced by a 50 ms one, which fails the same way.
+    const timeout = AbortSignal.timeout.bind(AbortSignal);
+    const asked = vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => timeout(50));
+    await expect(readCodeContext(context)).rejects.toThrow('ShadowGit did not answer within 58 s.');
+    expect(asked).toHaveBeenCalledWith(58_000);
+  });
+
+  it('reads the values a newer app may add to a list it names, as they come', async () => {
+    const newer = JSON.parse(JSON.stringify(MAP_ANSWERS.unresolved).replace('"reason":"absent"', '"reason":"generated"')) as object;
+    app.mapAnswer.context = newer;
+    expect(await readCodeContext(context)).toEqual(newer);
+    const spread = JSON.parse(JSON.stringify(MAP_ANSWERS.context).replace('"how":["calls"]', '"how":["calls","spreads"]')) as object;
+    app.mapAnswer.context = spread;
+    expect(await readCodeContext(context)).toEqual(spread);
+  });
+
+  it('asks for a server update when an answer lacks what was asked for: the summary, or the area', async () => {
+    const mapAsOf = { snapshot: 'a'.repeat(40), time: '2026-10-22T10:00:00+02:00', behind: 0, changedFiles: { items: [], total: 0 } };
+    app.mapAnswer = { ...mapAnswers(), map: { mapAsOf }, area: { mapAsOf } };
+    await expect(readMap(ask)).rejects.toThrow('this version of shadowgit-mcp-server does not read');
+    await expect(readArea({ ...ask, area: 'billing' })).rejects.toThrow('this version of shadowgit-mcp-server does not read');
+  });
+
+  it('asks for a server update when the app answers with a shape this version does not read', async () => {
+    app.mapAnswer.context = JSON.parse(JSON.stringify(MAP_ANSWERS.unresolved).replace('"kind":"ambiguous"', '"kind":"generated"')) as object;
+    await expect(readCodeContext(context)).rejects.toThrow(
+      'ShadowGit answered with a map this version of shadowgit-mcp-server does not read. Ask the user to update shadowgit-mcp-server.',
+    );
+  });
+
+  it('says ShadowGit is not running when nothing answers', async () => {
+    vi.stubEnv('SHADOWGIT_SESSION_API', await closedAppUrl());
+    await expect(readMap(ask)).rejects.toBeInstanceOf(AppNotRunningError);
   });
 });

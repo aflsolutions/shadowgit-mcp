@@ -1,0 +1,52 @@
+{
+  "success": true,
+  "mapAsOf": {
+    "snapshot": "1b5e70566a6166a570890c4b3a7a846eca498387",
+    "time": "2026-10-22T11:59:54+02:00",
+    "behind": 0,
+    "changedFiles": {
+      "items": [],
+      "total": 0
+    }
+  },
+  "context": {
+    "targets": [
+      {
+        "kind": "file",
+        "target": "src/checkout.ts",
+        "file": "src/checkout.ts",
+        "area": "src",
+        "layer": "",
+        "symbols": {
+          "items": [
+            {
+              "name": "checkout",
+              "kind": "function",
+              "file": "src/checkout.ts",
+              "line": 1,
+              "area": "src",
+              "layer": ""
+            }
+          ],
+          "total": 1
+        },
+        "imports": {
+          "items": [],
+          "total": 0
+        },
+        "importedBy": {
+          "items": [],
+          "total": 0
+        },
+        "dependentsByArea": []
+      },
+      {
+        "kind": "missing",
+        "target": "src/discount.ts",
+        "reason": "absent",
+        "near": []
+      }
+    ],
+    "landing": null
+  }
+}

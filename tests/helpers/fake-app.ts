@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { shadowGit } from './fixtures.js';
@@ -35,6 +36,12 @@ export interface FakeApp {
   lensAnswer: { range: { base: string | null; head: string }; lens: typeof FAKE_LENS | null };
   /** 200 keeps the words; 400 is an app older than linked words refusing them; 409 is a range that changes no code. */
   wordsStatus: 200 | 400 | 409;
+  /** False is an app without the map routes: they answer the catch-all 404. */
+  mapRoutes: boolean;
+  /** 200 answers `mapAnswer`; 202 is a map still drawing; 409 a project with no snapshot; 500 a build that failed. */
+  mapStatus: 200 | 202 | 409 | 500;
+  /** The bodies the map routes answer: GET /map without an area, with one, and POST /map/context. */
+  mapAnswer: { map: object; area: object; context: object };
   /** Leaves every request unanswered, like an app busy with a large project. */
   hang: boolean;
   /** Sends the headers and part of the body, then never ends it, like an app that stalls mid-answer. */
@@ -71,6 +78,33 @@ export const FAKE_CITED_LENS = {
   })),
 };
 
+// Without the success the app sends beside each answer: the map routes add it, as the Lens route does
+const mapFixture = (name: string): object => {
+  const answer = JSON.parse(readFileSync(new URL(`../fixtures/map/${name}.json`, import.meta.url), 'utf8')) as Record<string, unknown>;
+  delete answer.success;
+  return answer;
+};
+/**
+ * The app's real answers for the webshop of `tests/fixtures/map/project.json`: its summary, its billing area,
+ * chargeCard's context, chargeCard with checkout, targets that don't resolve, and src/billing/charge.ts.
+ */
+export const MAP_ANSWERS = {
+  summary: mapFixture('summary'),
+  area: mapFixture('area'),
+  context: mapFixture('context'),
+  landing: mapFixture('landing'),
+  unresolved: mapFixture('unresolved'),
+  file: mapFixture('file'),
+  // The Lens eval's project: checkout, its file and a file not written yet, and its summary
+  checkoutSymbol: mapFixture('checkout-symbol'),
+  checkoutFiles: mapFixture('checkout-files'),
+  checkoutSummary: mapFixture('checkout-summary'),
+};
+/** The webshop the map answers are of: path → content. */
+export const MAP_PROJECT = JSON.parse(readFileSync(new URL('../fixtures/map/project.json', import.meta.url), 'utf8')) as Record<string, string>;
+/** What the map routes answer by default: the summary, the billing area, and chargeCard's context. */
+export const mapAnswers = () => ({ map: MAP_ANSWERS.summary, area: MAP_ANSWERS.area, context: MAP_ANSWERS.context });
+
 /** A stand-in for the ShadowGit app's Session API on an ephemeral port; points SHADOWGIT_SESSION_API at it. */
 export async function startFakeApp(): Promise<FakeApp> {
   const app = await listen();
@@ -100,6 +134,9 @@ async function listen(): Promise<FakeApp> {
     lensRoutes: true,
     lensAnswer: { range: FAKE_RANGE, lens: FAKE_LENS },
     wordsStatus: 200,
+    mapRoutes: true,
+    mapStatus: 200,
+    mapAnswer: mapAnswers(),
     hang: false,
     hangBody: false,
     close: () => {
@@ -159,6 +196,18 @@ async function listen(): Promise<FakeApp> {
       if (app.wordsStatus === 409) return json(409, { success: false, error: 'Nothing in this range changes code: it has no lens to word' });
       if (app.wordsStatus === 400) return json(400, { success: false, error: "Not the Lens's words: ✖ Invalid input: expected string, received array\n  → at steps[0].body" });
       return json(200, { success: true, applied: { summary: true, steps: 1, components: 1, layers: 0, flows: 0 }, ignored: ['c99'] });
+    }
+    if (app.mapRoutes && (route.startsWith('/map?') || route === '/map/context')) {
+      if (app.mapStatus === 202) return json(202, { success: false, error: "ShadowGit is drawing this project's map; ask again in a minute" });
+      if (app.mapStatus === 409) return json(409, { success: false, error: 'This project has no snapshot yet' });
+      if (app.mapStatus === 500) return json(500, { success: false, error: 'The map stopped before answering (exit code 1)' });
+      if (route === '/map/context') {
+        // The app's own refusal: 1 to 20 files and symbols
+        const asked = [body.files, body.symbols].reduce((sum: number, targets) => sum + (Array.isArray(targets) ? targets.length : 0), 0);
+        if (asked < 1 || asked > 20) return json(400, { success: false, error: `Ask about 1 to 20 files and symbols, not ${asked}` });
+        return json(200, { success: true, ...app.mapAnswer.context });
+      }
+      return json(200, { success: true, ...(new URLSearchParams(route.slice('/map?'.length)).has('area') ? app.mapAnswer.area : app.mapAnswer.map) });
     }
     json(404, { success: false, error: `No route ${route}` });
   });

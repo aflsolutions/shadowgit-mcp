@@ -1,10 +1,14 @@
 import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
-import { readRepos, resolveRepo } from '../repos.js';
+import { readRepos, repoArgument, resolveRepo } from '../repos.js';
 import { activeSessions, endSession as endAppSession } from '../session-api.js';
-import { dataResult, repoParam } from './shared.js';
+import { dataResult, forRepo, repoParam } from './shared.js';
 
-const Output = z.object({ ended: z.array(z.string()), repo: z.string().nullable() });
+// The steps after a session, in the answer the model reads at that moment: the Lens of what it changed. The Lens reads
+// snapshots: edits ended without a checkpoint are not in one yet
+const next = (repo?: string) =>
+  `${forRepo(repo)}If its edits are in a checkpoint: get_lens, then write_lens_words for the range it gives (a summary, a title and a sentence for each step, a role for each changed card), so the user reads your change in ShadowGit's Lens in your words; if not, checkpoint them first.`;
+const Output = z.object({ ended: z.array(z.string()), repo: z.string().nullable(), next: z.string().optional().describe('The step that follows a session') });
 
 const projectName = (repoPath: string) => readRepos().find((r) => r.path === repoPath)?.name ?? repoPath;
 
@@ -16,13 +20,20 @@ export async function endSession({ repo, session_id }: { repo?: string; session_
     if (!session) return dataResult(Output, `No active session ${session_id}; nothing to end.`, { ended: [], repo: null });
     await endAppSession(session.id);
     const name = projectName(session.repoPath);
-    return dataResult(Output, `Ended session ${session.id} on ${name}. Automatic snapshots resumed.`, { ended: [session.id], repo: name });
+    // A session found by its id may be another project's: its steps name it, by its path where its name is shared
+    const listed = readRepos().find((r) => r.path === session.repoPath);
+    const ended = `Ended session ${session.id} on ${name}. Automatic snapshots resumed.`;
+    // A project ShadowGit no longer tracks: no tool reaches it, so no step follows
+    if (!listed) return dataResult(Output, ended, { ended: [session.id], repo: name });
+    const steps = next(repoArgument(listed));
+    return dataResult(Output, `${ended} Next: ${steps}`, { ended: [session.id], repo: name, next: steps });
   }
   const project = resolveRepo(repo);
   const ended = sessions.filter((s) => s.repoPath === project.path).map((s) => s.id);
   for (const id of ended) await endAppSession(id);
   if (ended.length > 0) {
-    return dataResult(Output, `Ended ${ended.join(', ')} on ${project.name}. Automatic snapshots resumed.`, { ended, repo: project.name });
+    const steps = next(repo === undefined ? undefined : repoArgument(project));
+    return dataResult(Output, `Ended ${ended.join(', ')} on ${project.name}. Automatic snapshots resumed. Next: ${steps}`, { ended, repo: project.name, next: steps });
   }
   if (sessions.length === 0) return dataResult(Output, 'No active session; automatic snapshots are already on.', { ended, repo: project.name });
   // Every session is on another project, usually the one the person meant.

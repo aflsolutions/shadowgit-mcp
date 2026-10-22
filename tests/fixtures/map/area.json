@@ -1,0 +1,145 @@
+{
+  "success": true,
+  "mapAsOf": {
+    "snapshot": "9db22aff6995f96b23115191533b2162656765e0",
+    "time": "2026-10-22T08:46:03+02:00",
+    "behind": 0,
+    "changedFiles": {
+      "items": [],
+      "total": 0
+    }
+  },
+  "area": {
+    "kind": "area",
+    "target": "billing",
+    "areas": [
+      "billing"
+    ],
+    "files": {
+      "items": [
+        "src/billing/charge.ts",
+        "src/billing/discount.ts",
+        "src/billing/format.ts",
+        "src/billing/invoice.ts",
+        "src/billing/ledger.ts",
+        "src/billing/money.ts"
+      ],
+      "total": 6
+    },
+    "symbols": 15,
+    "mostDepended": {
+      "items": [
+        {
+          "symbol": {
+            "name": "roundCents",
+            "kind": "function",
+            "file": "src/billing/money.ts",
+            "line": 1,
+            "area": "billing",
+            "layer": "billing"
+          },
+          "dependents": 4
+        },
+        {
+          "symbol": {
+            "name": "chargeCard",
+            "kind": "function",
+            "file": "src/billing/charge.ts",
+            "line": 5,
+            "area": "billing",
+            "layer": "billing"
+          },
+          "dependents": 2
+        },
+        {
+          "symbol": {
+            "name": "recordPayment",
+            "kind": "function",
+            "file": "src/billing/ledger.ts",
+            "line": 3,
+            "area": "billing",
+            "layer": "billing"
+          },
+          "dependents": 2
+        },
+        {
+          "symbol": {
+            "name": "discountRate",
+            "kind": "function",
+            "file": "src/billing/discount.ts",
+            "line": 7,
+            "area": "billing",
+            "layer": "billing"
+          },
+          "dependents": 1
+        },
+        {
+          "symbol": {
+            "name": "formatAmount",
+            "kind": "function",
+            "file": "src/billing/format.ts",
+            "line": 1,
+            "area": "billing",
+            "layer": "billing"
+          },
+          "dependents": 1
+        },
+        {
+          "symbol": {
+            "name": "invoiceTotal",
+            "kind": "function",
+            "file": "src/billing/invoice.ts",
+            "line": 5,
+            "area": "billing",
+            "layer": "billing"
+          },
+          "dependents": 1
+        },
+        {
+          "symbol": {
+            "name": "ledgerBalance",
+            "kind": "function",
+            "file": "src/billing/ledger.ts",
+            "line": 8,
+            "area": "billing",
+            "layer": "billing"
+          },
+          "dependents": 1
+        },
+        {
+          "symbol": {
+            "name": "addTax",
+            "kind": "function",
+            "file": "src/billing/money.ts",
+            "line": 5,
+            "area": "billing",
+            "layer": "billing"
+          },
+          "dependents": 1
+        }
+      ],
+      "total": 8
+    },
+    "dependsOn": [],
+    "dependedOnBy": [
+      {
+        "area": "api",
+        "count": 3
+      },
+      {
+        "area": "jobs",
+        "count": 3
+      }
+    ],
+    "processes": {
+      "items": [
+        "StartServer -> RoundCents",
+        "StartServer -> RecordPayment",
+        "InvoiceLine -> RoundCents",
+        "RetryFailedCharges -> RoundCents",
+        "RetryFailedCharges -> RecordPayment"
+      ],
+      "total": 5
+    }
+  }
+}

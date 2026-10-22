@@ -3,18 +3,14 @@
  * temporary project, and checks what happened. Spends tokens and its results vary, so it runs by hand before a
  * release, not in CI.
  */
-import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import * as z from 'zod/v4';
-import { BINARY } from '../tests/helpers/client.js';
-import { FAKE_LENS, fakeSession, startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
-import { makeProject, removeTempDirs, shadowGit, snapshot, tempDir, useStorage } from '../tests/helpers/fixtures.js';
+import { FAKE_LENS, MAP_PROJECT, fakeSession, startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
+import { makeProject, removeTempDirs, shadowGit, snapshot } from '../tests/helpers/fixtures.js';
 import type { LensWords } from '../src/session-api.js';
+import { ago, runClaude } from './claude.js';
 
-const run = promisify(execFile);
-const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
 interface Context {
   app: FakeApp;
@@ -31,6 +27,18 @@ const CASES: { phrase: string; prepare?: (app: FakeApp, project: string) => void
   },
   { phrase: 'What changed in the last hour?', passed: ({ answer }) => answer.includes('checkout.ts') },
   { phrase: 'Show me the history of Header.tsx', passed: ({ answer }) => answer.includes('Restyle header') },
+  {
+    phrase: 'How is this project organised?',
+    // The webshop the fake app's map answers are of, so the code and the map agree
+    prepare: (_app, project) => snapshot(project, MAP_PROJECT, 'Add the webshop'),
+    passed: ({ app }) => app.requests.some((r) => r.path.startsWith('/map?') && !new URLSearchParams(r.path.slice('/map?'.length)).has('area')),
+  },
+  {
+    phrase: 'What depends on chargeCard?',
+    prepare: (_app, project) => snapshot(project, MAP_PROJECT, 'Add the webshop'),
+    passed: ({ app, answer }) =>
+      app.requestsTo('/map/context').some((b) => JSON.stringify(b.symbols ?? []).includes('chargeCard')) && answer.includes('retryFailedCharges'),
+  },
   { phrase: 'What changed in webshop in the last hour?', passed: ({ answer }) => answer.includes('checkout.ts') },
   { phrase: 'Show me the last 10 commits in webshop', passed: ({ answer }) => answer.includes('Add checkout page') },
   {
@@ -86,25 +94,9 @@ function makeWebshop(): string {
 }
 
 async function askClaude(phrase: string, app: FakeApp, project: string): Promise<z.infer<typeof Output>> {
-  const storage = useStorage([{ name: 'webshop', path: project }]);
-  const config = path.join(tempDir('eval'), 'mcp.json');
-  fs.writeFileSync(config, JSON.stringify({
-    mcpServers: { shadowgit: { command: process.execPath, args: [BINARY], env: { SHADOWGIT_STORAGE_DIR: storage, SHADOWGIT_SESSION_API: app.url } } },
-  }));
-  const claude = run(
-    'claude',
-    [
-      '-p', phrase, '--mcp-config', config, '--strict-mcp-config', '--allowedTools', 'mcp__shadowgit__*',
-      '--output-format', 'json', '--no-session-persistence', '--max-budget-usd', '1',
-    ],
-    { cwd: project, timeout: 240_000, killSignal: 'SIGKILL', maxBuffer: 10 * 1024 * 1024 },
-  );
-  // claude waits 3 s for piped stdin before it starts; there is none.
-  claude.child.stdin?.end();
-  const { stdout } = await claude.catch((error: unknown) => {
-    // claude exits 1 when it reports an error, with the reason in the JSON on stdout.
-    if (error instanceof Error && 'stdout' in error && typeof error.stdout === 'string' && error.stdout) return { stdout: error.stdout };
-    throw error;
+  const stdout = await runClaude({
+    prompt: phrase, project, app, timeoutMs: 240_000,
+    args: ['--allowedTools', 'mcp__shadowgit__*', '--output-format', 'json', '--max-budget-usd', '1'],
   });
   return Output.parse(JSON.parse(stdout));
 }

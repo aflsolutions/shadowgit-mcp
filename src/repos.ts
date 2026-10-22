@@ -64,6 +64,11 @@ export function resolveRepo(repo?: string): Repo {
   throw new Error(`No ShadowGit project contains ${startDir()}. Pass repo as one of: ${listed(repos)}.`);
 }
 
+/** A project as a tool's repo argument names it: by its name, or by its path where another project shares the name. */
+export function repoArgument(project: Repo): string {
+  return readRepos().filter((r) => r.name === project.name).length > 1 ? project.path : project.name;
+}
+
 export function tildify(p: string): string {
   const home = os.homedir();
   return p === home || p.startsWith(home + path.sep) ? `~${p.slice(home.length)}` : p;

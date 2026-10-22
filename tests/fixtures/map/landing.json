@@ -1,0 +1,320 @@
+{
+  "success": true,
+  "mapAsOf": {
+    "snapshot": "9db22aff6995f96b23115191533b2162656765e0",
+    "time": "2026-10-22T08:46:03+02:00",
+    "behind": 0,
+    "changedFiles": {
+      "items": [],
+      "total": 0
+    }
+  },
+  "context": {
+    "targets": [
+      {
+        "kind": "symbol",
+        "target": "chargeCard",
+        "symbol": {
+          "name": "chargeCard",
+          "kind": "function",
+          "file": "src/billing/charge.ts",
+          "line": 5,
+          "area": "billing",
+          "layer": "billing"
+        },
+        "uses": {
+          "items": [
+            {
+              "symbol": {
+                "name": "recordPayment",
+                "kind": "function",
+                "file": "src/billing/ledger.ts",
+                "line": 3,
+                "area": "billing",
+                "layer": "billing"
+              },
+              "how": [
+                "calls"
+              ]
+            },
+            {
+              "symbol": {
+                "name": "roundCents",
+                "kind": "function",
+                "file": "src/billing/money.ts",
+                "line": 1,
+                "area": "billing",
+                "layer": "billing"
+              },
+              "how": [
+                "calls"
+              ]
+            }
+          ],
+          "total": 2
+        },
+        "usesByArea": [
+          {
+            "area": "billing",
+            "count": 2
+          }
+        ],
+        "dependents": {
+          "items": [
+            {
+              "symbol": {
+                "name": "checkout",
+                "kind": "function",
+                "file": "src/api/checkout.ts",
+                "line": 5,
+                "area": "api",
+                "layer": "api"
+              },
+              "how": [
+                "calls"
+              ]
+            },
+            {
+              "symbol": {
+                "name": "retryFailedCharges",
+                "kind": "function",
+                "file": "src/jobs/retry.ts",
+                "line": 5,
+                "area": "jobs",
+                "layer": "jobs"
+              },
+              "how": [
+                "calls"
+              ]
+            }
+          ],
+          "total": 2
+        },
+        "dependentsByArea": [
+          {
+            "area": "api",
+            "count": 1
+          },
+          {
+            "area": "jobs",
+            "count": 1
+          }
+        ],
+        "reach": {
+          "byHop": [
+            2,
+            1,
+            1
+          ],
+          "symbols": 4,
+          "files": 5,
+          "byArea": [
+            {
+              "area": "api",
+              "count": 4
+            },
+            {
+              "area": "jobs",
+              "count": 1
+            }
+          ]
+        },
+        "processes": {
+          "items": [
+            "StartServer -> RoundCents",
+            "StartServer -> RecordPayment",
+            "RetryFailedCharges -> RoundCents",
+            "RetryFailedCharges -> RecordPayment"
+          ],
+          "total": 4
+        }
+      },
+      {
+        "kind": "symbol",
+        "target": "checkout",
+        "symbol": {
+          "name": "checkout",
+          "kind": "function",
+          "file": "src/api/checkout.ts",
+          "line": 5,
+          "area": "api",
+          "layer": "api"
+        },
+        "uses": {
+          "items": [
+            {
+              "symbol": {
+                "name": "validateCart",
+                "kind": "function",
+                "file": "src/api/cart.ts",
+                "line": 1,
+                "area": "api",
+                "layer": "api"
+              },
+              "how": [
+                "calls"
+              ]
+            },
+            {
+              "symbol": {
+                "name": "cartTotal",
+                "kind": "function",
+                "file": "src/api/cart.ts",
+                "line": 6,
+                "area": "api",
+                "layer": "api"
+              },
+              "how": [
+                "calls"
+              ]
+            },
+            {
+              "symbol": {
+                "name": "chargeCard",
+                "kind": "function",
+                "file": "src/billing/charge.ts",
+                "line": 5,
+                "area": "billing",
+                "layer": "billing"
+              },
+              "how": [
+                "calls"
+              ]
+            }
+          ],
+          "total": 3
+        },
+        "usesByArea": [
+          {
+            "area": "api",
+            "count": 2
+          },
+          {
+            "area": "billing",
+            "count": 1
+          }
+        ],
+        "dependents": {
+          "items": [
+            {
+              "symbol": {
+                "name": "route",
+                "kind": "function",
+                "file": "src/api/router.ts",
+                "line": 4,
+                "area": "api",
+                "layer": "api"
+              },
+              "how": [
+                "calls"
+              ]
+            }
+          ],
+          "total": 1
+        },
+        "dependentsByArea": [
+          {
+            "area": "api",
+            "count": 1
+          }
+        ],
+        "reach": {
+          "byHop": [
+            1,
+            1,
+            0
+          ],
+          "symbols": 2,
+          "files": 3,
+          "byArea": [
+            {
+              "area": "api",
+              "count": 3
+            }
+          ]
+        },
+        "processes": {
+          "items": [
+            "StartServer -> RoundCents",
+            "StartServer -> RecordPayment",
+            "StartServer -> Shipping",
+            "StartServer -> ValidateCart"
+          ],
+          "total": 4
+        }
+      }
+    ],
+    "landing": {
+      "areas": [
+        {
+          "area": "api",
+          "count": 1
+        },
+        {
+          "area": "billing",
+          "count": 1
+        }
+      ],
+      "dependents": {
+        "items": [
+          {
+            "symbol": {
+              "name": "route",
+              "kind": "function",
+              "file": "src/api/router.ts",
+              "line": 4,
+              "area": "api",
+              "layer": "api"
+            },
+            "how": [
+              "calls"
+            ]
+          },
+          {
+            "symbol": {
+              "name": "retryFailedCharges",
+              "kind": "function",
+              "file": "src/jobs/retry.ts",
+              "line": 5,
+              "area": "jobs",
+              "layer": "jobs"
+            },
+            "how": [
+              "calls"
+            ]
+          }
+        ],
+        "total": 2
+      },
+      "dependentsByArea": [
+        {
+          "area": "api",
+          "count": 1
+        },
+        {
+          "area": "jobs",
+          "count": 1
+        }
+      ],
+      "reach": {
+        "byHop": [
+          2,
+          1,
+          0
+        ],
+        "symbols": 3,
+        "files": 4,
+        "byArea": [
+          {
+            "area": "api",
+            "count": 3
+          },
+          {
+            "area": "jobs",
+            "count": 1
+          }
+        ]
+      }
+    }
+  }
+}

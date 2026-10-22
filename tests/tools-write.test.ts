@@ -112,7 +112,11 @@ describe('end_session', () => {
   it('ends the active session of the current project without an id', async () => {
     app.sessions.push(fakeSession({ id: 'claude-code-7', repoPath: project }));
     const result = await endSession({});
-    expect(result.structuredContent).toEqual({ ended: ['claude-code-7'], repo: 'webshop' });
+    // The step after a session, in the answer the model reads at that moment: the Lens of what it changed
+    expect(result.structuredContent).toEqual({ ended: ['claude-code-7'], repo: 'webshop', next: expect.stringMatching(/^If its edits are in a checkpoint: get_lens, then write_lens_words/) });
+    expect(textOf(result)).toContain('Next: If its edits are in a checkpoint: get_lens, then write_lens_words');
+    // The Lens reads snapshots: edits ended without a checkpoint are not in one yet
+    expect(textOf(result)).toContain('if not, checkpoint them first');
     expect(app.requests.at(-1)).toEqual({ path: '/session/end', body: { sessionId: 'claude-code-7' } });
   });
 
@@ -144,7 +148,27 @@ describe('end_session', () => {
     app.sessions.push(fakeSession({ id: 'cursor-2', repoPath: other, description: 'Blog post' }));
     process.env.CLAUDE_PROJECT_DIR = tempDir('nowhere');
     const result = await endSession({ session_id: 'cursor-2' });
-    expect(result.structuredContent).toEqual({ ended: ['cursor-2'], repo: 'blog' });
+    // Another project's session: the next steps name it, or they would read the current project's Lens
+    expect(result.structuredContent).toEqual({ ended: ['cursor-2'], repo: 'blog', next: expect.stringMatching(/^For blog, pass repo "blog" to each tool\. If its edits are in a checkpoint: get_lens/) });
+  });
+
+  it('names another project by its path in the steps that follow when its name is shared', async () => {
+    const twin = makeProject('blog');
+    useStorage([{ name: 'webshop', path: project }, { name: 'blog', path: other }, { name: 'blog', path: twin }]);
+    try {
+      app.sessions.push(fakeSession({ id: 'cursor-5', repoPath: twin }));
+      const result = await endSession({ session_id: 'cursor-5' });
+      expect(result.structuredContent).toMatchObject({ next: expect.stringMatching(new RegExp(`^For \\S+, pass repo "${twin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`)) });
+    } finally {
+      useStorage([{ name: 'webshop', path: project }, { name: 'blog', path: other }]);
+    }
+  });
+
+  it('names no next step for a session on a project ShadowGit no longer tracks: no tool can reach it', async () => {
+    app.sessions.push(fakeSession({ id: 'cursor-6', repoPath: '/projects/untracked' }));
+    const result = await endSession({ session_id: 'cursor-6' });
+    expect(result.structuredContent).toEqual({ ended: ['cursor-6'], repo: '/projects/untracked' });
+    expect(textOf(result)).not.toContain('Next:');
   });
 
   it('ends nothing for an id that is not active', async () => {

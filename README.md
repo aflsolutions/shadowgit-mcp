@@ -8,8 +8,8 @@ changed and when, and can save its own edits as one named checkpoint instead of 
 
 - Node.js 20 or later
 - The ShadowGit app (0.3.4 or later for checkpoints, a release after 0.3.5 for the Lens, after 0.3.7 for its linked
-  words), tracking at least one project. Reading history works while the app is closed; sessions, checkpoints and the
-  Lens need it running.
+  words, after 0.3.9 for the map), tracking at least one project. Reading history works while the app is closed;
+  sessions, checkpoints, the Lens and the map need it running.
 - Git on your PATH
 
 ## Setup
@@ -37,6 +37,8 @@ webshop") when ShadowGit tracks more than one.
 - "What changed in the last hour?"
 - "When did the login page break?"
 - "Show me the history of Header.tsx"
+- "How is this project organised?"
+- "What depends on chargeCard?"
 - "Start a ShadowGit session for this refactor", then "Create a checkpoint: Fixed login redirect", then "End the
   ShadowGit session"
 - "Write the Lens words for this session"
@@ -47,6 +49,8 @@ webshop") when ShadowGit tracks more than one.
 |---|---|
 | `list_repos` | Lists tracked projects, the current one, their last snapshot and any active session |
 | `git_command` | Runs a read-only git command (`log`, `diff`, `show`, `blame`, …) on the snapshot history |
+| `get_map` | Gives how the project is organised: its areas, layers and the links between them, or one area |
+| `get_code_context` | Gives where files and symbols sit, what depends on them, and where a change to them lands |
 | `start_session` | Pauses automatic snapshots while the assistant edits |
 | `checkpoint` | Saves the current changes as one named checkpoint, following `.shadowgit-ignore` |
 | `end_session` | Resumes automatic snapshots |

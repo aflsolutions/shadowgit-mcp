@@ -5,17 +5,13 @@
  * reached, and fails unless every run went through the session, then wrote the Lens's words. Spends tokens and its results vary, so it runs by hand before a
  * release, beside `npm run eval`.
  */
-import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { promisify } from 'node:util';
-import { BINARY } from '../tests/helpers/client.js';
-import { startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
+import { MAP_ANSWERS, startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
 import type { LensWords } from '../src/session-api.js';
-import { makeProject, removeTempDirs, shadowGit, snapshot, tempDir, useStorage } from '../tests/helpers/fixtures.js';
+import { makeProject, removeTempDirs, shadowGit, snapshot } from '../tests/helpers/fixtures.js';
+import { ago, runClaude } from './claude.js';
 
-const run = promisify(execFile);
-const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 const RUNS = Number(process.env.RUNS ?? 5);
 const TASK =
   'Add a discount code to checkout: create src/discount.ts exporting applyDiscount(total: number, code: string), ' +
@@ -28,26 +24,11 @@ function makeWebshop(): string {
   return project;
 }
 
-async function runTask(app: FakeApp, project: string): Promise<string> {
-  const storage = useStorage([{ name: 'webshop', path: project }]);
-  const config = path.join(tempDir('eval'), 'mcp.json');
-  fs.writeFileSync(config, JSON.stringify({
-    mcpServers: { shadowgit: { command: process.execPath, args: [BINARY], env: { SHADOWGIT_STORAGE_DIR: storage, SHADOWGIT_SESSION_API: app.url } } },
-  }));
-  const claude = run(
-    'claude',
-    [
-      '-p', TASK, '--mcp-config', config, '--strict-mcp-config', '--allowedTools', 'mcp__shadowgit__*', 'Read', 'Edit', 'Write', 'Glob', 'Grep',
-      '--output-format', 'json', '--no-session-persistence', '--max-budget-usd', '2',
-    ],
-    { cwd: project, timeout: 420_000, killSignal: 'SIGKILL', maxBuffer: 10 * 1024 * 1024 },
-  );
-  claude.child.stdin?.end();
-  const { stdout } = await claude.catch((error: unknown) => {
-    if (error instanceof Error && 'stdout' in error && typeof error.stdout === 'string' && error.stdout) return { stdout: error.stdout };
-    throw error;
+function runTask(app: FakeApp, project: string): Promise<string> {
+  return runClaude({
+    prompt: TASK, project, app, timeoutMs: 420_000,
+    args: ['--allowedTools', 'mcp__shadowgit__*', 'Read', 'Edit', 'Write', 'Glob', 'Grep', '--output-format', 'json', '--max-budget-usd', '2'],
   });
-  return stdout;
 }
 
 /** The Lens the app would draw of the task's change: what a real draw of applyDiscount and checkout shows. */
@@ -89,6 +70,11 @@ for (let i = 1; i <= RUNS; i++) {
     // The Lens of the task's own change, read when it is asked for: the snapshot before the task to the checkpoint
     const base = shadowGit(project, ['rev-parse', 'HEAD']);
     const range = () => ({ base, head: shadowGit(project, ['rev-parse', 'HEAD']) });
+    // The real app's map answers for this project, so a call for the code's context reads this checkout, not another project
+    app.mapAnswer.map = MAP_ANSWERS.checkoutSummary;
+    Object.defineProperty(app.mapAnswer, 'context', {
+      get: () => (JSON.stringify(app.requestsTo('/map/context').at(-1) ?? {}).includes('"files"') ? MAP_ANSWERS.checkoutFiles : MAP_ANSWERS.checkoutSymbol),
+    });
     app.checkpointsIn = project;
     Object.defineProperty(app, 'lensAnswer', { get: () => ({ range: range(), lens: DISCOUNT_LENS }) });
     const stdout = await runTask(app, project);

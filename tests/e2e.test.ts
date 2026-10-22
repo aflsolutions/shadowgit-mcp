@@ -34,9 +34,17 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(client.getProtocolEra()).toBe(era === '2026-07-28' ? 'modern' : 'legacy');
   });
 
-  it('serves the instructions, within 1,250 characters', () => {
+  // Claude Code cuts a server's instructions at 2,048 characters: 1,500 leaves room
+  it('serves the instructions, within 1,500 characters', () => {
     expect(client.getInstructions()).toBe(INSTRUCTIONS);
-    expect(INSTRUCTIONS.length).toBeLessThanOrEqual(1250);
+    expect(INSTRUCTIONS.length).toBeLessThanOrEqual(1500);
+  });
+
+  it('asks for the code context before an edit, ahead of the session', () => {
+    const line =
+      'Before your first edit in a tracked project, call get_code_context (load it with tool search if it is deferred) for the files or symbols you will change: it lists what depends on them across the project by area, callers grep misses included (top-level code, imports through re-exports), and where the change lands. get_map shows how the project is organised.';
+    expect(INSTRUCTIONS).toContain(line);
+    expect(INSTRUCTIONS.indexOf(line)).toBeLessThan(INSTRUCTIONS.indexOf('start_session'));
   });
 
   // Claude Code shows the model a tool's structured output alone, never its text: the rules must be in the schema
@@ -52,9 +60,34 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(write).toContain('replaces everything written for that step before');
   });
 
-  it('lists the seven tools exactly as pinned', async () => {
+  // The model reads a tool's description and its inputs, never its output schema: the map tools' rules go there
+  it("tells the model the map tools' rules where it reads them, as facts", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name)).toEqual(['list_repos', 'git_command', 'start_session', 'checkpoint', 'end_session', 'get_lens', 'write_lens_words']);
+    const seen = (name: string) => {
+      const tool = tools.find((each) => each.name === name);
+      return `${tool?.description} ${JSON.stringify(tool?.inputSchema)}`;
+    };
+    // Both count dependents: both say what the counts leave out
+    for (const name of ['get_map', 'get_code_context']) {
+      expect(seen(name), name).toContain('names the snapshot it is drawn from');
+      expect(seen(name), name).not.toContain('map of its newest snapshot');
+      expect(seen(name), name).not.toMatch(/\b(careful|risky|should|consider)\b/i);
+      expect(seen(name), name).toContain('test files are not counted');
+      expect(seen(name), name).toContain('a floor');
+      expect(seen(name), name).toContain('Edits not yet in a snapshot are not on the map');
+    }
+  });
+
+  it('lists output schemas a draft-07 validator reads, as older MCP clients use', async () => {
+    const { tools } = await client.listTools();
+    expect(JSON.stringify(tools.map((tool) => tool.outputSchema))).not.toContain('prefixItems');
+  });
+
+  it('lists the nine tools exactly as pinned', async () => {
+    const { tools } = await client.listTools();
+    expect(tools.map((t) => t.name)).toEqual([
+      'list_repos', 'git_command', 'get_map', 'get_code_context', 'start_session', 'checkpoint', 'end_session', 'get_lens', 'write_lens_words',
+    ]);
     await expect(JSON.stringify(tools, sortKeys, 2)).toMatchFileSnapshot('__snapshots__/tool-list.json');
   });
 
@@ -64,6 +97,11 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
 
     const log = await client.callTool({ name: 'git_command', arguments: { command: 'log --format=%s' } });
     expect(log.content).toEqual([{ type: 'text', text: 'Initial ShadowGit Snapshot\n' }]);
+
+    const map = await client.callTool({ name: 'get_map', arguments: {} });
+    expect(map.structuredContent).toMatchObject({ repo: 'demo', summary: { counts: { areas: 3 } } });
+    const context = await client.callTool({ name: 'get_code_context', arguments: { symbols: [{ name: 'chargeCard' }] } });
+    expect(context.structuredContent).toMatchObject({ repo: 'demo', context: { targets: [{ kind: 'symbol' }] } });
 
     const start = await client.callTool({ name: 'start_session', arguments: { description: 'e2e' } });
     expect(start.structuredContent).toMatchObject({ repo: 'demo', already_active: false });
@@ -80,6 +118,7 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(words.structuredContent).toMatchObject({ repo: 'demo', applied: { steps: 1 } });
 
     expect(app.requestsTo('/session/start')[0]).toMatchObject({ aiTool: 'shadowgit-e2e', repoPath: project });
+    expect(app.requestsTo('/map/context')[0]).toMatchObject({ aiTool: 'shadowgit-e2e', repoPath: project, symbols: [{ name: 'chargeCard' }] });
     expect(app.requestsTo('/checkpoint')[0]).toMatchObject({ author: 'shadowgit-e2e' });
     expect(app.requestsTo('/lens/words')[0]).toMatchObject({ author: 'shadowgit-e2e', repoPath: project, words: { steps: [{ id: 'c1', title: 'Queue failed charges' }] } });
   });

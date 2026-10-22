@@ -109,6 +109,11 @@ describe('get_code_context', () => {
     expect(text).toContain('"chargCard" is not on the map. Near: chargeCard.');
   });
 
+  it("passes on a reason a newer app gives as it is", async () => {
+    app.mapAnswer.context = JSON.parse(JSON.stringify(MAP_ANSWERS.unresolved).replace('"reason":"absent"', '"reason":"generated"')) as object;
+    expect(textOf(await getCodeContext({ files: ['src/gone.ts'] }, 'Claude Code'))).toContain('"src/gone.ts" is not on the map: generated.');
+  });
+
   it.each([[{}, 0], [{ symbols: Array.from({ length: 21 }, () => ({ name: 'chargeCard' })) }, 21]] as const)(
     'asks about 1 to 20 files and symbols, and asks the app nothing otherwise (%#)',
     async (args, count) => {

@@ -137,7 +137,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "How a ShadowGit-tracked project is organised, from the map of its newest snapshot, the one the user sees in ShadowGit: counts, layers, areas largest first, the calls and imports between areas, processes. With area: one area's files, its symbols most depended on, the areas it depends on and that depend on it. Needs the ShadowGit app running.",
+    "description": "How a ShadowGit-tracked project is organised, from ShadowGit's map of it, the one the user sees: counts, layers, areas largest first, the calls and imports between areas, processes. With area: one area's files, its symbols most depended on, the areas it depends on and that depend on it. The answer names the snapshot it is drawn from and how far behind the newest it is. Needs the ShadowGit app running.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -669,7 +669,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Where files and symbols sit in a ShadowGit-tracked project and what depends on them, from the map of its newest snapshot: area and layer, what each uses, its dependents counted by area, its reach within 3 hops, its processes; for two or more, where they land together. 1 to 20 files and symbols in all. Call it before editing them: it counts callers grep misses (top-level code, imports through re-exports). Needs the ShadowGit app running.",
+    "description": "Where files and symbols sit in a ShadowGit-tracked project and what depends on them, from ShadowGit's map of it: area and layer, what each uses, its dependents counted by area, its reach within 3 hops, its processes; for two or more, where they land together. 1 to 20 files and symbols in all. Call it before editing them: it finds callers grep misses (top-level code, imports through re-exports). Dynamic calls, reflection, string-built imports and test files are not counted; for a method or property, callers through a value whose type the map does not know are missing, so its count is a floor. Edits not yet in a snapshot are not on the map. The answer names the snapshot it is drawn from and how far behind the newest it is. Needs the ShadowGit app running.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -757,13 +757,7 @@
                                 "properties": {
                                   "how": {
                                     "items": {
-                                      "enum": [
-                                        "calls",
-                                        "imports",
-                                        "extends",
-                                        "implements",
-                                        "overrides"
-                                      ],
+                                      "description": "calls, imports, extends, implements or overrides",
                                       "type": "string"
                                     },
                                     "type": "array"
@@ -823,13 +817,7 @@
                                   },
                                   "how": {
                                     "items": {
-                                      "enum": [
-                                        "calls",
-                                        "imports",
-                                        "extends",
-                                        "implements",
-                                        "overrides"
-                                      ],
+                                      "description": "calls, imports, extends, implements or overrides",
                                       "type": "string"
                                     },
                                     "type": "array"
@@ -906,26 +894,14 @@
                           "type": "array"
                         },
                         "byHop": {
-                          "items": false,
+                          "description": "At 1, 2 and 3 hops",
+                          "items": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
                           "maxItems": 3,
                           "minItems": 3,
-                          "prefixItems": [
-                            {
-                              "maximum": 9007199254740991,
-                              "minimum": -9007199254740991,
-                              "type": "integer"
-                            },
-                            {
-                              "maximum": 9007199254740991,
-                              "minimum": -9007199254740991,
-                              "type": "integer"
-                            },
-                            {
-                              "maximum": 9007199254740991,
-                              "minimum": -9007199254740991,
-                              "type": "integer"
-                            }
-                          ],
                           "type": "array"
                         },
                         "files": {
@@ -980,13 +956,7 @@
                                   "properties": {
                                     "how": {
                                       "items": {
-                                        "enum": [
-                                          "calls",
-                                          "imports",
-                                          "extends",
-                                          "implements",
-                                          "overrides"
-                                        ],
+                                        "description": "calls, imports, extends, implements or overrides",
                                         "type": "string"
                                       },
                                       "type": "array"
@@ -1046,13 +1016,7 @@
                                     },
                                     "how": {
                                       "items": {
-                                        "enum": [
-                                          "calls",
-                                          "imports",
-                                          "extends",
-                                          "implements",
-                                          "overrides"
-                                        ],
+                                        "description": "calls, imports, extends, implements or overrides",
                                         "type": "string"
                                       },
                                       "type": "array"
@@ -1156,26 +1120,14 @@
                             "type": "array"
                           },
                           "byHop": {
-                            "items": false,
+                            "description": "At 1, 2 and 3 hops",
+                            "items": {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
                             "maxItems": 3,
                             "minItems": 3,
-                            "prefixItems": [
-                              {
-                                "maximum": 9007199254740991,
-                                "minimum": -9007199254740991,
-                                "type": "integer"
-                              },
-                              {
-                                "maximum": 9007199254740991,
-                                "minimum": -9007199254740991,
-                                "type": "integer"
-                              },
-                              {
-                                "maximum": 9007199254740991,
-                                "minimum": -9007199254740991,
-                                "type": "integer"
-                              }
-                            ],
                             "type": "array"
                           },
                           "files": {
@@ -1246,13 +1198,7 @@
                               "properties": {
                                 "how": {
                                   "items": {
-                                    "enum": [
-                                      "calls",
-                                      "imports",
-                                      "extends",
-                                      "implements",
-                                      "overrides"
-                                    ],
+                                    "description": "calls, imports, extends, implements or overrides",
                                     "type": "string"
                                   },
                                   "type": "array"
@@ -1593,21 +1539,11 @@
                         "type": "array"
                       },
                       "reason": {
-                        "anyOf": [
-                          {
-                            "enum": [
-                              "test",
-                              "folder",
-                              "absent",
-                              "language"
-                            ],
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "description": "test: tests are not on the map; folder: a folder, which get_map's area answers; absent: not in the map's snapshot; language: a language the map does not read"
+                        "description": "test: tests are not on the map; folder: a folder, which get_map's area answers; absent: not in the map's snapshot; language: a language the map does not read",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "target": {
                         "type": "string"

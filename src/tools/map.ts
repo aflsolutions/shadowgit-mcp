@@ -63,12 +63,12 @@ function describeArea(repo: string, mapAsOf: z.infer<typeof MapAsOf>, area: z.in
   ].join('\n');
 }
 
-const REASONS = {
+const REASONS: Record<string, string> = {
   test: 'tests are not on the map',
   folder: 'it is a folder, which get_map with area reads',
   absent: "it is not in the map's snapshot",
   language: 'it is in a language the map does not read',
-} as const;
+};
 
 function reachLine(reach: Extract<Target, { kind: 'symbol' }>['reach']): string {
   if (reach.symbols === 0) return 'Reach within 3 hops: none.';
@@ -101,7 +101,8 @@ function describeTarget(target: Target): string {
       return `"${target.target}" names ${target.matches.total} ${noun}: ${list(target.matches, (match) => (match.line === null ? match.file : `${match.file}:${match.line}`))}. Ask again with the file of the one meant.`;
     }
     case 'missing':
-      return `"${target.target}" is not on the map${target.reason === null ? '.' : `: ${REASONS[target.reason]}.`}${target.near.length > 0 ? ` Near: ${target.near.join(', ')}.` : ''}`;
+      // A reason a newer app gives goes on as it is
+      return `"${target.target}" is not on the map${target.reason === null ? '.' : `: ${REASONS[target.reason] ?? target.reason}.`}${target.near.length > 0 ? ` Near: ${target.near.join(', ')}.` : ''}`;
   }
 }
 
@@ -147,7 +148,7 @@ export function registerMap(server: McpServer): void {
     {
       title: "Read the project's map",
       description:
-        "How a ShadowGit-tracked project is organised, from the map of its newest snapshot, the one the user sees in ShadowGit: counts, layers, areas largest first, the calls and imports between areas, processes. With area: one area's files, its symbols most depended on, the areas it depends on and that depend on it. Needs the ShadowGit app running.",
+        "How a ShadowGit-tracked project is organised, from ShadowGit's map of it, the one the user sees: counts, layers, areas largest first, the calls and imports between areas, processes. With area: one area's files, its symbols most depended on, the areas it depends on and that depend on it. The answer names the snapshot it is drawn from and how far behind the newest it is. Needs the ShadowGit app running.",
       inputSchema: z.object({
         area: z.string().min(1).optional().describe("An area's label as get_map names it, or a folder path, which covers every file under it. Leave out for the whole project"),
         repo: repoParam,
@@ -162,7 +163,7 @@ export function registerMap(server: McpServer): void {
     {
       title: 'Read where code sits and what depends on it',
       description:
-        "Where files and symbols sit in a ShadowGit-tracked project and what depends on them, from the map of its newest snapshot: area and layer, what each uses, its dependents counted by area, its reach within 3 hops, its processes; for two or more, where they land together. 1 to 20 files and symbols in all. Call it before editing them: it counts callers grep misses (top-level code, imports through re-exports). Needs the ShadowGit app running.",
+        "Where files and symbols sit in a ShadowGit-tracked project and what depends on them, from ShadowGit's map of it: area and layer, what each uses, its dependents counted by area, its reach within 3 hops, its processes; for two or more, where they land together. 1 to 20 files and symbols in all. Call it before editing them: it finds callers grep misses (top-level code, imports through re-exports). Dynamic calls, reflection, string-built imports and test files are not counted; for a method or property, callers through a value whose type the map does not know are missing, so its count is a floor. Edits not yet in a snapshot are not on the map. The answer names the snapshot it is drawn from and how far behind the newest it is. Needs the ShadowGit app running.",
       inputSchema: z.object({
         files: z.array(z.string().min(1)).optional().describe('Paths relative to the project root, as written'),
         symbols: z

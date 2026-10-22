@@ -24,7 +24,11 @@ const SLOW_REQUEST_TIMEOUT_MS = 55_000;
 
 const APP_TOO_OLD = "This version of ShadowGit can't create checkpoints for AI assistants. Ask the user to update the ShadowGit app.";
 const APP_WITHOUT_LENS = 'This version of ShadowGit has no Lens for AI assistants. Ask the user to update the ShadowGit app.';
+// The app answers 202 once its own 55 s have passed: past that, so its sentence reaches the agent, and under the
+// MCP SDK client's 60 s
+const MAP_REQUEST_TIMEOUT_MS = 58_000;
 const APP_WITHOUT_MAP = 'This version of ShadowGit has no map for AI assistants. Ask the user to update the ShadowGit app.';
+const SERVER_TOO_OLD = 'ShadowGit answered with a map this version of shadowgit-mcp-server does not read. Ask the user to update shadowgit-mcp-server.';
 const APP_WITHOUT_PIECES = "This version of ShadowGit reads a step's body as plain text only: ask the user to update the ShadowGit app, or send each body as plain text.";
 
 const Session = z.object({
@@ -188,12 +192,19 @@ export async function sendLensWords(input: { repoPath: string; base: string | nu
   return WordsWritten.parse(json);
 }
 
+/** A map answer in the shapes this version reads; one a newer app shapes otherwise asks for an update, not a parse error. */
+function readMapAnswer<S extends z.ZodType>(shape: S, json: unknown): z.infer<S> {
+  const read = shape.safeParse(json);
+  if (!read.success) throw new Error(SERVER_TOO_OLD, { cause: read.error });
+  return read.data;
+}
+
 /** The project's map, or one area of it; the app may draw the map in the request. */
 export async function readMap({ repoPath, area, aiTool }: { repoPath: string; area?: string; aiTool: string }): Promise<z.infer<typeof MapRead>> {
   const query = new URLSearchParams({ repoPath, ...(area !== undefined && { area }), aiTool });
-  const { status, json } = await request(`/map?${query}`, undefined, { timeoutMs: SLOW_REQUEST_TIMEOUT_MS, accept: [404] });
+  const { status, json } = await request(`/map?${query}`, undefined, { timeoutMs: MAP_REQUEST_TIMEOUT_MS, accept: [404] });
   if (status === 404) throw new Error(APP_WITHOUT_MAP);
-  return MapRead.parse(json);
+  return readMapAnswer(MapRead, json);
 }
 
 /** Where files and symbols sit and what depends on them; the app may draw the map in the request. */
@@ -203,7 +214,7 @@ export async function readCodeContext(input: {
   symbols?: { name: string; file?: string }[];
   aiTool: string;
 }): Promise<z.infer<typeof ContextRead>> {
-  const { status, json } = await request('/map/context', input, { timeoutMs: SLOW_REQUEST_TIMEOUT_MS, accept: [404] });
+  const { status, json } = await request('/map/context', input, { timeoutMs: MAP_REQUEST_TIMEOUT_MS, accept: [404] });
   if (status === 404) throw new Error(APP_WITHOUT_MAP);
-  return ContextRead.parse(json);
+  return readMapAnswer(ContextRead, json);
 }

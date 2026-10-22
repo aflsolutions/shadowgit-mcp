@@ -8,7 +8,8 @@ const listed = <T extends z.ZodType>(item: T) =>
   z.object({ items: z.array(item), total: z.number().int().describe('How many there are in all; items holds the first of them') });
 
 const AreaCount = z.object({ area: z.string(), count: z.number().int() });
-const How = z.enum(['calls', 'imports', 'extends', 'implements', 'overrides']);
+// Strings, not enums: a newer app may add a kind, which an installed server passes on rather than refuse
+const How = z.string().describe('calls, imports, extends, implements or overrides');
 const SymbolRef = z.object({
   name: z.string(),
   kind: z.string(),
@@ -27,7 +28,8 @@ const DEPENDENTS =
   'Dynamic calls, reflection, string-built imports and test files are not counted. For a method or property, callers ' +
   'through a value whose type the map does not know are missing: its count is a floor.';
 const Reach = z
-  .object({ byHop: z.tuple([z.number().int(), z.number().int(), z.number().int()]), symbols: z.number().int(), files: z.number().int(), byArea: z.array(AreaCount) })
+  // An array of 3, not a tuple: a tuple lists as prefixItems, which draft-07 validators refuse
+  .object({ byHop: z.array(z.number().int()).length(3).describe('At 1, 2 and 3 hops'), symbols: z.number().int(), files: z.number().int(), byArea: z.array(AreaCount) })
   .describe('The symbols and files within 3 hops of its callers, counted by hop and by area');
 
 const SymbolContext = z.object({
@@ -59,7 +61,7 @@ const MissingTarget = z.object({
   kind: z.literal('missing'),
   target: z.string(),
   reason: z
-    .enum(['test', 'folder', 'absent', 'language'])
+    .string()
     .nullable()
     .describe("test: tests are not on the map; folder: a folder, which get_map's area answers; absent: not in the map's snapshot; language: a language the map does not read"),
   near: z.array(z.string()).describe('Names on the map spelled close to it'),

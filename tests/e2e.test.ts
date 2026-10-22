@@ -60,12 +60,26 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(write).toContain('replaces everything written for that step before');
   });
 
-  it("puts the map tools' rules in their schemas, as facts", async () => {
+  // The model reads a tool's description and its inputs, never its output schema: the map tools' rules go there
+  it("tells the model the map tools' rules where it reads them, as facts", async () => {
     const { tools } = await client.listTools();
-    const map = JSON.stringify(tools.filter((tool) => tool.name === 'get_map' || tool.name === 'get_code_context'));
-    expect(map).toContain('test files are not counted');
-    expect(map).toContain('its count is a floor');
-    expect(map).not.toMatch(/\b(careful|risky|should|consider)\b/i);
+    const seen = (name: string) => {
+      const tool = tools.find((each) => each.name === name);
+      return `${tool?.description} ${JSON.stringify(tool?.inputSchema)}`;
+    };
+    for (const name of ['get_map', 'get_code_context']) {
+      expect(seen(name), name).toContain('names the snapshot it is drawn from');
+      expect(seen(name), name).not.toContain('map of its newest snapshot');
+      expect(seen(name), name).not.toMatch(/\b(careful|risky|should|consider)\b/i);
+    }
+    expect(seen('get_code_context')).toContain('test files are not counted');
+    expect(seen('get_code_context')).toContain('a floor');
+    expect(seen('get_code_context')).toContain('Edits not yet in a snapshot are not on the map');
+  });
+
+  it('lists output schemas a draft-07 validator reads, as older MCP clients use', async () => {
+    const { tools } = await client.listTools();
+    expect(JSON.stringify(tools.map((tool) => tool.outputSchema))).not.toContain('prefixItems');
   });
 
   it('lists the nine tools exactly as pinned', async () => {

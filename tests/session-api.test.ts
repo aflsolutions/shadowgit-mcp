@@ -172,13 +172,30 @@ describe('the map', () => {
     await expect(readCodeContext(context)).rejects.toThrow(update);
   });
 
-  it('waits up to 55 s, as the app may draw the map in the request', async () => {
+  // The app answers 202 once its own 55 s pass: the server waits past that, so the app's sentence reaches the agent
+  it('waits up to 58 s, past the 55 s the app may draw the map for', async () => {
     app.hang = true;
-    // Stands in for the 55 s wait: the real timeout is replaced by a 50 ms one, which fails the same way.
+    // Stands in for the 58 s wait: the real timeout is replaced by a 50 ms one, which fails the same way.
     const timeout = AbortSignal.timeout.bind(AbortSignal);
     const asked = vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => timeout(50));
-    await expect(readCodeContext(context)).rejects.toThrow('ShadowGit did not answer within 55 s.');
-    expect(asked).toHaveBeenCalledWith(55_000);
+    await expect(readCodeContext(context)).rejects.toThrow('ShadowGit did not answer within 58 s.');
+    expect(asked).toHaveBeenCalledWith(58_000);
+  });
+
+  it('reads the values a newer app may add to a list it names, as they come', async () => {
+    const newer = JSON.parse(JSON.stringify(MAP_ANSWERS.unresolved).replace('"reason":"absent"', '"reason":"generated"')) as object;
+    app.mapAnswer.context = newer;
+    expect(await readCodeContext(context)).toEqual(answered(newer));
+    const spread = JSON.parse(JSON.stringify(MAP_ANSWERS.context).replace('"how":["calls"]', '"how":["calls","spreads"]')) as object;
+    app.mapAnswer.context = spread;
+    expect(await readCodeContext(context)).toEqual(answered(spread));
+  });
+
+  it('asks for a server update when the app answers with a shape this version does not read', async () => {
+    app.mapAnswer.context = JSON.parse(JSON.stringify(MAP_ANSWERS.unresolved).replace('"kind":"ambiguous"', '"kind":"generated"')) as object;
+    await expect(readCodeContext(context)).rejects.toThrow(
+      'ShadowGit answered with a map this version of shadowgit-mcp-server does not read. Ask the user to update shadowgit-mcp-server.',
+    );
   });
 
   it('says ShadowGit is not running when nothing answers', async () => {

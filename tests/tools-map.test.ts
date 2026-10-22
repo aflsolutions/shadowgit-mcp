@@ -56,9 +56,12 @@ describe('get_map', () => {
     expect(text).toContain('Depends on no other area. Depended on by api (3) and jobs (3).');
   });
 
-  it('names an area it does not find, and the ones spelled close to it', async () => {
-    app.mapAnswer.area = { ...MAP_ANSWERS.area, area: { kind: 'missing', target: 'bill', near: ['billing'] } };
-    expect(textOf(await getMap({ area: 'bill' }, 'Claude Code'))).toContain('No area or folder "bill" on webshop\'s map. Near: billing.');
+  it('names an area it does not find, the ones spelled close to it, and how old the map is', async () => {
+    app.mapAnswer.area = behind({ ...MAP_ANSWERS.area, area: { kind: 'missing', target: 'bill', near: ['billing'] } });
+    const text = textOf(await getMap({ area: 'bill' }, 'Claude Code'));
+    expect(text).toContain('No area or folder "bill" on webshop\'s map. Near: billing.');
+    // A newer snapshot may hold the area: the answer says the map is behind it
+    expect(text).toContain('3 snapshots behind the newest');
   });
 
   it('says how far behind the newest snapshot its map is, and which files changed since', async () => {
@@ -82,6 +85,11 @@ describe('get_code_context', () => {
     expect(text).toContain('2 depend on chargeCard, from api (1) and jobs (1): checkout (src/api/checkout.ts:5, calls), retryFailedCharges (src/jobs/retry.ts:5, calls).');
     expect(text).toContain('Reach within 3 hops: 4 symbols in 5 files (2, 1 and 1 by hop), from api (4) and jobs (1).');
     expect(text).toContain('Processes: StartServer -> RoundCents, StartServer -> RecordPayment');
+  });
+
+  it("names the project in the steps that follow when it is not the current one", async () => {
+    const result = await getCodeContext({ symbols: [{ name: 'chargeCard' }], repo: 'webshop' }, 'Claude Code');
+    expect(result.structuredContent).toMatchObject({ next: expect.stringMatching(/^For webshop, pass repo "webshop" to each tool\. Before editing several files: start_session/) });
   });
 
   it('says what a file holds, what it imports and what imports it', async () => {

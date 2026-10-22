@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } from 'vitest';
 import {
-  AppNotRunningError, AppTimeoutError, LensRead, activeSessions, createCheckpoint, endSession, readCodeContext, readMap, startSession,
+  AppNotRunningError, AppTimeoutError, LensRead, activeSessions, createCheckpoint, endSession, readArea, readCodeContext, readMap, startSession,
 } from '../src/session-api.js';
 import { FAKE_CITED_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, MAP_ANSWERS, closedAppUrl, mapAnswers, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { restoreEnv } from './helpers/fixtures.js';
@@ -143,7 +143,7 @@ describe('the map', () => {
   it("reads the project's summary, and one area by its label, naming the assistant", async () => {
     expect(await readMap(ask)).toEqual(MAP_ANSWERS.summary);
     expect(app.requests.at(-1)?.path).toBe(`/map?${new URLSearchParams(ask)}`);
-    expect(await readMap({ ...ask, area: 'billing' })).toEqual(MAP_ANSWERS.area);
+    expect(await readArea({ ...ask, area: 'billing' })).toEqual(MAP_ANSWERS.area);
     expect(app.requests.at(-1)?.path).toBe(`/map?${new URLSearchParams({ repoPath: ask.repoPath, area: 'billing', aiTool: ask.aiTool })}`);
   });
 
@@ -187,6 +187,13 @@ describe('the map', () => {
     const spread = JSON.parse(JSON.stringify(MAP_ANSWERS.context).replace('"how":["calls"]', '"how":["calls","spreads"]')) as object;
     app.mapAnswer.context = spread;
     expect(await readCodeContext(context)).toEqual(spread);
+  });
+
+  it('asks for a server update when an answer lacks what was asked for: the summary, or the area', async () => {
+    const mapAsOf = { snapshot: 'a'.repeat(40), time: '2026-10-22T10:00:00+02:00', behind: 0, changedFiles: { items: [], total: 0 } };
+    app.mapAnswer = { ...mapAnswers(), map: { mapAsOf }, area: { mapAsOf } };
+    await expect(readMap(ask)).rejects.toThrow('this version of shadowgit-mcp-server does not read');
+    await expect(readArea({ ...ask, area: 'billing' })).rejects.toThrow('this version of shadowgit-mcp-server does not read');
   });
 
   it('asks for a server update when the app answers with a shape this version does not read', async () => {

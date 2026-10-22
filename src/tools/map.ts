@@ -3,8 +3,8 @@ import * as z from 'zod/v4';
 import { clientName } from '../client-name.js';
 import { ContextRead, MapRead } from '../map-shapes.js';
 import { resolveRepo } from '../repos.js';
-import { readCodeContext, readMap } from '../session-api.js';
-import { dataResult, repoParam } from './shared.js';
+import { readArea, readCodeContext, readMap } from '../session-api.js';
+import { dataResult, forRepo, repoParam } from './shared.js';
 
 const MapOutput = z.object({ repo: z.string(), ...MapRead.shape });
 // The session flow that follows, in the answer the model reads before it edits
@@ -56,7 +56,8 @@ function describeSummary(repo: string, mapAsOf: AsOf, summary: NonNullable<Read[
 }
 
 function describeArea(repo: string, mapAsOf: AsOf, area: NonNullable<Read['area']>): string {
-  if (area.kind === 'missing') return `No area or folder "${area.target}" on ${repo}'s map.${area.near.length > 0 ? ` Near: ${area.near.join(', ')}.` : ''}`;
+  // A newer snapshot may hold it: the answer says how old the map is
+  if (area.kind === 'missing') return `No area or folder "${area.target}" on ${repo}'s map.${area.near.length > 0 ? ` Near: ${area.near.join(', ')}.` : ''} The map is ${drawnFrom(mapAsOf)}`;
   const name = area.areas.length === 1 && area.areas[0] === area.target ? `The ${area.target} area of ${repo}'s map` : `${area.target} (areas ${andList(area.areas)}) on ${repo}'s map`;
   return [
     `${name}, ${drawnFrom(mapAsOf)}`,
@@ -126,11 +127,12 @@ function describeContext(repo: string, mapAsOf: AsOf, { targets, landing }: Cont
 
 export async function getMap({ area, repo }: { area?: string; repo?: string }, aiTool: string): Promise<CallToolResult> {
   const project = resolveRepo(repo);
-  const read = await readMap({ repoPath: project.path, area, aiTool });
-  let text = '';
-  if (read.area) text = describeArea(project.name, read.mapAsOf, read.area);
-  else if (read.summary) text = describeSummary(project.name, read.mapAsOf, read.summary);
-  return dataResult(MapOutput, text, { repo: project.name, ...read });
+  if (area === undefined) {
+    const read = await readMap({ repoPath: project.path, aiTool });
+    return dataResult(MapOutput, describeSummary(project.name, read.mapAsOf, read.summary), { repo: project.name, ...read });
+  }
+  const read = await readArea({ repoPath: project.path, area, aiTool });
+  return dataResult(MapOutput, describeArea(project.name, read.mapAsOf, read.area), { repo: project.name, ...read });
 }
 
 export async function getCodeContext(
@@ -140,7 +142,8 @@ export async function getCodeContext(
   // The app refuses fewer than 1 or more than its 20 targets, in its own words: a newer one may take more
   const project = resolveRepo(repo);
   const read = await readCodeContext({ repoPath: project.path, files, symbols, aiTool });
-  return dataResult(ContextOutput, `${describeContext(project.name, read.mapAsOf, read.context)}\n\nNext: ${NEXT}`, { repo: project.name, ...read, next: NEXT });
+  const next = `${forRepo(repo === undefined ? undefined : project.name)}${NEXT}`;
+  return dataResult(ContextOutput, `${describeContext(project.name, read.mapAsOf, read.context)}\n\nNext: ${next}`, { repo: project.name, ...read, next });
 }
 
 export function registerMap(server: McpServer): void {

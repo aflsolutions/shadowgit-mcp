@@ -113,8 +113,10 @@ describe('end_session', () => {
     app.sessions.push(fakeSession({ id: 'claude-code-7', repoPath: project }));
     const result = await endSession({});
     // The step after a session, in the answer the model reads at that moment: the Lens of what it changed
-    expect(result.structuredContent).toEqual({ ended: ['claude-code-7'], repo: 'webshop', next: expect.stringMatching(/^get_lens, then write_lens_words/) });
-    expect(textOf(result)).toContain('Next: get_lens, then write_lens_words');
+    expect(result.structuredContent).toEqual({ ended: ['claude-code-7'], repo: 'webshop', next: expect.stringMatching(/^If its edits are in a checkpoint: get_lens, then write_lens_words/) });
+    expect(textOf(result)).toContain('Next: If its edits are in a checkpoint: get_lens, then write_lens_words');
+    // The Lens reads snapshots: edits ended without a checkpoint are not in one yet
+    expect(textOf(result)).toContain('if not, checkpoint them first');
     expect(app.requests.at(-1)).toEqual({ path: '/session/end', body: { sessionId: 'claude-code-7' } });
   });
 
@@ -146,7 +148,8 @@ describe('end_session', () => {
     app.sessions.push(fakeSession({ id: 'cursor-2', repoPath: other, description: 'Blog post' }));
     process.env.CLAUDE_PROJECT_DIR = tempDir('nowhere');
     const result = await endSession({ session_id: 'cursor-2' });
-    expect(result.structuredContent).toEqual({ ended: ['cursor-2'], repo: 'blog', next: expect.stringMatching(/^get_lens, then write_lens_words/) });
+    // Another project's session: the next steps name it, or they would read the current project's Lens
+    expect(result.structuredContent).toEqual({ ended: ['cursor-2'], repo: 'blog', next: expect.stringMatching(/^For blog, pass repo "blog" to each tool\. If its edits are in a checkpoint: get_lens/) });
   });
 
   it('ends nothing for an id that is not active', async () => {

@@ -111,5 +111,10 @@ const MapAsOf = z
   })
   .describe('The snapshot the answer is drawn from');
 
-export const MapRead = z.object({ mapAsOf: MapAsOf, summary: MapSummary.optional(), area: z.union([AreaView, MissingArea]).optional() });
+/** A map without an area asked for: the project's summary. */
+export const SummaryRead = z.object({ mapAsOf: MapAsOf, summary: MapSummary });
+/** One area asked for: the area, or why there is none. */
+export const AreaRead = z.object({ mapAsOf: MapAsOf, area: z.union([AreaView, MissingArea]) });
+/** get_map's answer, one of the two. */
+export const MapRead = z.object({ mapAsOf: MapAsOf, summary: MapSummary.optional(), area: AreaRead.shape.area.optional() });
 export const ContextRead = z.object({ mapAsOf: MapAsOf, context: CodeContext });

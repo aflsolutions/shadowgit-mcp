@@ -1,5 +1,5 @@
 import * as z from 'zod/v4';
-import { ContextRead, MapRead } from './map-shapes.js';
+import { AreaRead, ContextRead, SummaryRead } from './map-shapes.js';
 import { toLocalIso } from './time.js';
 
 export class AppNotRunningError extends Error {
@@ -196,9 +196,14 @@ async function mapAnswer<S extends z.ZodType>(shape: S, route: string, body?: ob
   return read.data;
 }
 
-/** The project's map, or one area of it; the app may draw the map in the request. */
-export function readMap({ repoPath, area, aiTool }: { repoPath: string; area?: string; aiTool: string }) {
-  return mapAnswer(MapRead, `/map?${new URLSearchParams({ repoPath, ...(area !== undefined && { area }), aiTool })}`);
+/** The project's map, summed up; the app may draw the map in the request. */
+export function readMap({ repoPath, aiTool }: { repoPath: string; aiTool: string }) {
+  return mapAnswer(SummaryRead, `/map?${new URLSearchParams({ repoPath, aiTool })}`);
+}
+
+/** One area of the project's map, by its label or a folder path; the app may draw the map in the request. */
+export function readArea({ repoPath, area, aiTool }: { repoPath: string; area: string; aiTool: string }) {
+  return mapAnswer(AreaRead, `/map?${new URLSearchParams({ repoPath, area, aiTool })}`);
 }
 
 /** Where files and symbols sit and what depends on them; the app may draw the map in the request. */

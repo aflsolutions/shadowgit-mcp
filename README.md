@@ -54,7 +54,7 @@ webshop") when ShadowGit tracks more than one.
 | `start_session` | Pauses automatic snapshots while the assistant edits |
 | `checkpoint` | Saves the current changes as one named checkpoint, following `.shadowgit-ignore` |
 | `end_session` | Resumes automatic snapshots |
-| `get_lens` | Reads ShadowGit's Lens of a range, by default the latest AI session |
+| `get_lens` | Reads ShadowGit's Lens of a range, by default the latest AI session, with what it makes depend on what |
 | `write_lens_words` | Writes the Lens's words for that range, kept in the history, with links, a why and an excerpt |
 
 The other tools work on the current project unless given `repo`.

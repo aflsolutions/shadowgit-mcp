@@ -11,6 +11,7 @@ const Snapshot = z.string().regex(/^[0-9a-f]{7,40}$/, 'a snapshot hash');
 
 type Read = z.infer<typeof LensRead>;
 type LensSymbol = NonNullable<NonNullable<Read['lens']>['steps'][number]['symbols']>[number];
+type LensDependency = NonNullable<NonNullable<Read['lens']>['dependencies']>['facts'][number];
 
 // code-graph's EXCERPT_MAX_LINES: the app leaves out a longer excerpt
 const EXCERPT_MAX_LINES = 12;
@@ -24,6 +25,13 @@ function symbolLine({ name, path, basePath, base, head }: LensSymbol): string {
   return `\`${name}\` (${path}, ${sides.join('; ')})`;
 }
 
+/** A fact as the Lens lists it under the summary: its sentence, its folders and steps beside it, then its links. */
+function factLines({ sentence, kind, from, to, evidence, steps }: LensDependency): string[] {
+  const folders = from.path !== null && to.path !== null ? `${from.path} ${kind === 'both' ? '↔' : '→'} ${to.path}` : null;
+  const beside = [folders, steps.length > 0 ? `steps ${steps.join(', ')}` : null].filter(Boolean).join('; ');
+  return [`- ${sentence}${beside ? ` (${beside})` : ''}`, ...evidence.map((link) => `  ${link}`)];
+}
+
 /** The lens as the model reads it: what to send back, then every step with its code, every card, layer and flow by id. */
 function describeLens(repo: string, range: Read['range'], lens: NonNullable<Read['lens']>, limits: Read['limits']): string {
   // stepTitle reads "step title"
@@ -33,6 +41,9 @@ function describeLens(repo: string, range: Read['range'], lens: NonNullable<Read
     ...(lens.summary ? [`Summary: ${lens.summary}`] : []),
     `Word it with write_lens_words, passing base ${JSON.stringify(range.base)} and head ${JSON.stringify(range.head)}: a summary of two sentences, for each step a title and one or two sentences, for each changed card the role it plays. Name only the ids below; text past its limit is cut (characters: ${caps}).`,
     ...(lens.quotes?.length ? ['Checkpoint messages a why may quote:', ...lens.quotes.map((quote) => `- ${JSON.stringify(quote)}`)] : []),
+    ...(lens.dependencies?.facts.length
+      ? ['Dependencies:', ...lens.dependencies.facts.flatMap(factLines), ...(lens.dependencies.more > 0 ? [`- and ${lens.dependencies.more} more`] : [])]
+      : []),
     '',
     ...lens.steps.flatMap((step) => {
       // Longer than any backtick run in the diff: a Markdown file's own fence would close a shorter one
@@ -40,6 +51,7 @@ function describeLens(repo: string, range: Read['range'], lens: NonNullable<Read
       return [
         `Step ${step.id} "${step.title}": cards ${step.components.join(', ')}; files ${step.files.join(', ') || 'none'}`,
         ...(step.symbols?.length ? [`  Symbols: ${step.symbols.map(symbolLine).join(', ')}`] : []),
+        ...(step.dependencies?.length ? [`  Dependencies: ${step.dependencies.join('; ')}`] : []),
         ...(step.body ? [`  ${step.body}`] : []),
         `${fence}diff`,
         step.diff,
@@ -84,7 +96,7 @@ export function registerLens(server: McpServer): void {
     {
       title: "Read a range's Lens",
       description:
-        "Read ShadowGit's Lens of a range of snapshots, by default the latest AI session's: its steps with their code, the cards (components) and flows on its canvas, each with an id and its words so far. Read it at the end of a session, after the checkpoint, to word it with write_lens_words. Needs the ShadowGit app running.",
+        "Read ShadowGit's Lens of a range of snapshots, by default the latest AI session's: its steps with their code, the cards (components) and flows on its canvas, each with an id and its words so far, and what the range makes depend on what: each new, gone or two-way dependency between the project's areas and layers, with the links that make it and the steps that hold it. Read it at the end of a session, after the checkpoint, to word it with write_lens_words; your words may say why a dependency appeared. Needs the ShadowGit app running.",
       inputSchema: z.object({
         base: Snapshot.nullable().optional().describe('The snapshot the range starts from, with head (null: the start of the history). Leave both out for the latest AI session'),
         head: Snapshot.optional().describe("The range's newest snapshot; leave out for the latest AI session"),

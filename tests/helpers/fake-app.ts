@@ -90,6 +90,24 @@ const mapFixture = (name: string): object => {
  * The app's real answers for the webshop of `tests/fixtures/map/project.json`: its summary, its billing area,
  * chargeCard's context, chargeCard with checkout, targets that don't resolve, and src/billing/charge.ts.
  */
+/** FAKE_LENS with the dependency facts the real app drew for jobs calling api (tests/fixtures/lens/dependencies.json). */
+export const FAKE_FACTS_LENS = {
+  ...FAKE_LENS,
+  dependencies: {
+    facts: [{
+      sentence: 'jobs depends on api for the first time',
+      level: 'area',
+      kind: 'new',
+      from: { label: 'jobs', path: 'src/jobs' },
+      to: { label: 'api', path: 'src/api' },
+      evidence: ['src/jobs/report.ts imports src/api/users.ts', 'dailyReport (src/jobs/report.ts:4) calls countUsers (src/api/users.ts:15)'],
+      steps: ['c1'],
+    }],
+    more: 0,
+  },
+  steps: FAKE_LENS.steps.map((step) => ({ ...step, dependencies: ['jobs depends on api for the first time'] })),
+};
+
 export const MAP_ANSWERS = {
   summary: mapFixture('summary'),
   area: mapFixture('area'),

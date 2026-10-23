@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { LensRead } from '../../src/session-api.js';
 import { shadowGit } from './fixtures.js';
 
 export interface FakeSession {
@@ -90,24 +91,6 @@ const mapFixture = (name: string): object => {
  * The app's real answers for the webshop of `tests/fixtures/map/project.json`: its summary, its billing area,
  * chargeCard's context, chargeCard with checkout, targets that don't resolve, and src/billing/charge.ts.
  */
-/** FAKE_LENS with the dependency facts the real app drew for jobs calling api (tests/fixtures/lens/dependencies.json). */
-export const FAKE_FACTS_LENS = {
-  ...FAKE_LENS,
-  dependencies: {
-    facts: [{
-      sentence: 'jobs depends on api for the first time',
-      level: 'area',
-      kind: 'new',
-      from: { label: 'jobs', path: 'src/jobs' },
-      to: { label: 'api', path: 'src/api' },
-      evidence: ['src/jobs/report.ts imports src/api/users.ts', 'dailyReport (src/jobs/report.ts:4) calls countUsers (src/api/users.ts:15)'],
-      steps: ['c1'],
-    }],
-    more: 0,
-  },
-  steps: FAKE_LENS.steps.map((step) => ({ ...step, dependencies: ['jobs depends on api for the first time'] })),
-};
-
 export const MAP_ANSWERS = {
   summary: mapFixture('summary'),
   area: mapFixture('area'),
@@ -124,6 +107,14 @@ export const MAP_ANSWERS = {
 export const MAP_PROJECT = JSON.parse(readFileSync(new URL('../fixtures/map/project.json', import.meta.url), 'utf8')) as Record<string, string>;
 /** The real app's GET /api/lens body for a session that makes the webshop's jobs depend on api. */
 export const LENS_ANSWER_WITH_FACTS = JSON.parse(readFileSync(new URL('../fixtures/lens/dependencies.json', import.meta.url), 'utf8')) as object;
+const captured = LensRead.parse(LENS_ANSWER_WITH_FACTS).lens;
+if (captured?.dependencies === undefined) throw new Error('tests/fixtures/lens/dependencies.json holds no dependency facts');
+/** FAKE_LENS with the facts the real app drew in that answer, its step holding them as the app's step did. */
+export const FAKE_FACTS_LENS = {
+  ...FAKE_LENS,
+  dependencies: captured.dependencies,
+  steps: FAKE_LENS.steps.map((step) => ({ ...step, dependencies: captured.steps[0]?.dependencies ?? [] })),
+};
 /** What the map routes answer by default: the summary, the billing area, and chargeCard's context. */
 export const mapAnswers = () => ({ map: MAP_ANSWERS.summary, area: MAP_ANSWERS.area, context: MAP_ANSWERS.context });
 

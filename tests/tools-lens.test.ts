@@ -70,7 +70,7 @@ describe('get_lens', () => {
     expect(text).not.toContain('only where the text names it');
   });
 
-  it('lists what the range makes depend on what, with each fact\'s links and steps', async () => {
+  it("lists what the range makes depend on what, with each fact's links and steps", async () => {
     app.lensAnswer = { range: FAKE_RANGE, lens: FAKE_FACTS_LENS };
     const result = await getLens({});
     expect(result.structuredContent).toMatchObject({ lens: { dependencies: FAKE_FACTS_LENS.dependencies } });
@@ -86,7 +86,7 @@ describe('get_lens', () => {
     expect(text).toMatch(/Step c1 "Add RetryQueue"[^\n]*\n {2}Dependencies: jobs depends on api for the first time\n/);
   });
 
-  it('counts the facts past the cap, and lists a fact no step holds, or a layer\'s, without what it lacks', async () => {
+  it("counts the facts past the cap, and lists a fact no step holds, or a layer's, without what it lacks", async () => {
     const [fact] = FAKE_FACTS_LENS.dependencies.facts;
     if (fact === undefined) throw new Error('no fact');
     const layer = { ...fact, sentence: 'renderer depends on main for the first time', level: 'layer', from: { label: 'renderer', path: null }, to: { label: 'main', path: null }, evidence: [] };

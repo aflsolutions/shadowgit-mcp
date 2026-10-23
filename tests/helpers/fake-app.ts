@@ -42,6 +42,8 @@ export interface FakeApp {
   mapStatus: 200 | 202 | 409 | 500;
   /** The bodies the map routes answer: GET /map without an area, with one, and POST /map/context. */
   mapAnswer: { map: object; area: object; context: object };
+  /** A body that answers a route (its path, without the query) with 200 in place of its usual one: a newer app's shape. */
+  answers: Partial<Record<string, object>>;
   /** Leaves every request unanswered, like an app busy with a large project. */
   hang: boolean;
   /** Sends the headers and part of the body, then never ends it, like an app that stalls mid-answer. */
@@ -102,6 +104,8 @@ export const MAP_ANSWERS = {
 };
 /** The webshop the map answers are of: path → content. */
 export const MAP_PROJECT = JSON.parse(readFileSync(new URL('../fixtures/map/project.json', import.meta.url), 'utf8')) as Record<string, string>;
+/** The real app's GET /api/lens body for a session that makes the webshop's jobs depend on api. */
+export const LENS_ANSWER_WITH_FACTS = JSON.parse(readFileSync(new URL('../fixtures/lens/dependencies.json', import.meta.url), 'utf8')) as object;
 /** What the map routes answer by default: the summary, the billing area, and chargeCard's context. */
 export const mapAnswers = () => ({ map: MAP_ANSWERS.summary, area: MAP_ANSWERS.area, context: MAP_ANSWERS.context });
 
@@ -133,6 +137,7 @@ async function listen(): Promise<FakeApp> {
     checkpointsIn: null,
     lensRoutes: true,
     lensAnswer: { range: FAKE_RANGE, lens: FAKE_LENS },
+    answers: {},
     wordsStatus: 200,
     mapRoutes: true,
     mapStatus: 200,
@@ -168,6 +173,8 @@ async function listen(): Promise<FakeApp> {
       res.end(html);
     };
 
+    const answer = app.answers[route.split('?')[0] ?? route];
+    if (answer !== undefined) return json(200, answer);
     if (route === '/session/active') {
       return json(200, { success: true, sessions: app.sessions.map((s) => ({ ...s, aiTool: 'test', duration: 0 })) });
     }

@@ -1900,6 +1900,103 @@
                   },
                   "type": "array"
                 },
+                "dependencies": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "facts": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "evidence": {
+                            "description": "The links the range added or removed that make it, at most 3",
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "from": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "label": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "label",
+                              "path"
+                            ],
+                            "type": "object"
+                          },
+                          "kind": {
+                            "description": "new, gone, both (each now depends on the other) or count (a dependency that grew or shrank)",
+                            "type": "string"
+                          },
+                          "level": {
+                            "description": "area or layer",
+                            "type": "string"
+                          },
+                          "sentence": {
+                            "type": "string"
+                          },
+                          "steps": {
+                            "description": "The ids of the steps that hold it",
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "to": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "label": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "label",
+                              "path"
+                            ],
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "sentence",
+                          "level",
+                          "kind",
+                          "from",
+                          "to",
+                          "evidence",
+                          "steps"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "more": {
+                      "description": "How many more facts past these",
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "facts",
+                    "more"
+                  ],
+                  "type": "object"
+                },
                 "flows": {
                   "items": {
                     "additionalProperties": false,
@@ -1963,6 +2060,13 @@
                         ]
                       },
                       "components": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "dependencies": {
+                        "description": "The sentences of the step's own facts",
                         "items": {
                           "type": "string"
                         },

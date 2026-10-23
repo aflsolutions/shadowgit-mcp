@@ -21,4 +21,12 @@ describe('release metadata', () => {
     expect(server.packages).toEqual([expect.objectContaining({ identifier: pkg.name, version: pkg.version })]);
     expect(server.description.length).toBeLessThanOrEqual(100);
   });
+
+  // Saved as LF, each file's few changed lines read as a whole-file rewrite (8151f33, and again in 2.4.0's release)
+  it('keeps README.md and CHANGELOG.md in their CRLF line endings', () => {
+    for (const file of ['README.md', 'CHANGELOG.md']) {
+      const text = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+      expect(text.split('\n').length - 1, file).toBe(text.split('\r\n').length - 1);
+    }
+  });
 });

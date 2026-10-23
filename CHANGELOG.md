@@ -2,6 +2,22 @@
 
 All notable changes to the ShadowGit MCP Server will be documented in this file.
 
+## [2.4.0] - 2026-10-23
+
+### Added
+- `get_lens` says what the range makes depend on what: each new, gone or two-way dependency between the project's
+  areas and layers ("jobs depends on api for the first time"), the links that make it ("dailyReport
+  (src/jobs/report.ts:4) calls countUsers (src/api/users.ts:15)") and the steps that hold it, and each step's own.
+  Its description says so, and that the assistant's words may say why a dependency appeared. They are facts, as
+  ShadowGit words them: whether a dependency is wanted is not said. With the new description the unprompted Lens
+  flow still ran in 5 of 5 runs (`npm run eval:lens`).
+
+### Changed
+- Every reader of ShadowGit's answers (sessions, checkpoints, the Lens and its words, as the map already did) asks
+  for a server update when the app answers in a shape this version doesn't read, in place of a parse error.
+
+The facts need a ShadowGit release after 0.3.10; an older app sends none, and `get_lens` reads as before.
+
 ## [2.3.0] - 2026-10-22
 
 ### Added

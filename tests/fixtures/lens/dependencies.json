@@ -1,0 +1,197 @@
+{
+  "success": true,
+  "range": {
+    "base": "17c6625f5ce97cfaaebd6d321d12b74d1586b8bb",
+    "head": "303d9be8b02c8c268fac9f2751672531b87f8048"
+  },
+  "lens": {
+    "title": "This AI session",
+    "words": {
+      "source": "facts",
+      "author": null
+    },
+    "summary": null,
+    "quotes": [
+      "Count users in the nightly report"
+    ],
+    "dependencies": {
+      "facts": [
+        {
+          "sentence": "jobs depends on api for the first time",
+          "level": "area",
+          "kind": "new",
+          "from": {
+            "label": "jobs",
+            "path": "src/jobs"
+          },
+          "to": {
+            "label": "api",
+            "path": "src/api"
+          },
+          "evidence": [
+            "src/jobs/report.ts imports src/api/users.ts",
+            "dailyReport (src/jobs/report.ts:4) calls countUsers (src/api/users.ts:15)"
+          ],
+          "steps": [
+            "c1"
+          ]
+        }
+      ],
+      "more": 0
+    },
+    "steps": [
+      {
+        "id": "c1",
+        "title": "Add countUsers, change dailyReport",
+        "body": "jobs depends on api for the first time. dailyReport now calls countUsers. countUsers is new.",
+        "components": [
+          "k1",
+          "k2",
+          "k3",
+          "k4",
+          "k5"
+        ],
+        "files": [
+          "src/jobs/report.ts",
+          "src/api/users.ts"
+        ],
+        "diff": "diff --git a/src/api/users.ts b/src/api/users.ts\nindex cc28924..287fa70 100644\n--- a/src/api/users.ts\n+++ b/src/api/users.ts\n@@ -11,3 +11,7 @@ export function userName(id: string): string {\n export function userCredit(id: string): string {\n   return formatAmount(id.length * 100);\n }\n+\n+export function countUsers(ids: string[]): number {\n+  return new Set(ids).size;\n+}\ndiff --git a/src/jobs/report.ts b/src/jobs/report.ts\nindex 6d09b28..b68499c 100644\n--- a/src/jobs/report.ts\n+++ b/src/jobs/report.ts\n@@ -1,7 +1,8 @@\n import { purgeLogs } from './cleanup';\n+import { countUsers } from '../api/users';\n \n-export function dailyReport(day: number): number {\n-  return purgeLogs(day) + weeklyTotals(day);\n+export function dailyReport(day: number, userIds: string[]): number {\n+  return purgeLogs(day) + weeklyTotals(day) + countUsers(userIds);\n }\n \n export function weeklyTotals(day: number): number {\n",
+        "symbols": [
+          {
+            "name": "countUsers",
+            "path": "src/api/users.ts",
+            "basePath": null,
+            "base": null,
+            "head": {
+              "start": 15,
+              "end": 17
+            }
+          },
+          {
+            "name": "dailyReport",
+            "path": "src/jobs/report.ts",
+            "basePath": "src/jobs/report.ts",
+            "base": {
+              "start": 3,
+              "end": 5
+            },
+            "head": {
+              "start": 4,
+              "end": 6
+            }
+          }
+        ],
+        "dependencies": [
+          "jobs depends on api for the first time"
+        ]
+      }
+    ],
+    "components": [
+      {
+        "id": "k1",
+        "name": "countUsers",
+        "kind": "function",
+        "delta": "added",
+        "context": false,
+        "role": null,
+        "path": "src/api/users.ts",
+        "symbols": [
+          "countUsers"
+        ]
+      },
+      {
+        "id": "k2",
+        "name": "dailyReport",
+        "kind": "function",
+        "delta": "modified",
+        "context": false,
+        "role": null,
+        "path": "src/jobs/report.ts",
+        "symbols": [
+          "dailyReport"
+        ]
+      },
+      {
+        "id": "k3",
+        "name": "purgeLogs",
+        "kind": "function",
+        "delta": "unchanged",
+        "context": true,
+        "role": null,
+        "path": "src/jobs/cleanup.ts",
+        "symbols": [
+          "purgeLogs"
+        ]
+      },
+      {
+        "id": "k4",
+        "name": "notifyOwner",
+        "kind": "function",
+        "delta": "unchanged",
+        "context": true,
+        "role": null,
+        "path": "src/jobs/notify.ts",
+        "symbols": [
+          "notifyOwner"
+        ]
+      },
+      {
+        "id": "k5",
+        "name": "weeklyTotals",
+        "kind": "function",
+        "delta": "unchanged",
+        "context": true,
+        "role": null,
+        "path": "src/jobs/report.ts",
+        "symbols": [
+          "weeklyTotals"
+        ]
+      }
+    ],
+    "layers": [
+      {
+        "id": "folder:jobs",
+        "name": "jobs"
+      },
+      {
+        "id": "folder:api",
+        "name": "api"
+      }
+    ],
+    "flows": [
+      {
+        "id": "f1",
+        "from": "k2",
+        "to": "k1",
+        "label": "calls"
+      },
+      {
+        "id": "f2",
+        "from": "k2",
+        "to": "k3",
+        "label": "calls"
+      },
+      {
+        "id": "f3",
+        "from": "k2",
+        "to": "k5",
+        "label": "calls"
+      },
+      {
+        "id": "f4",
+        "from": "k4",
+        "to": "k2",
+        "label": "calls"
+      }
+    ]
+  },
+  "limits": {
+    "summary": 400,
+    "stepTitle": 60,
+    "stepBody": 600,
+    "why": 300,
+    "role": 120,
+    "layerName": 24,
+    "flowLabel": 32
+  }
+}

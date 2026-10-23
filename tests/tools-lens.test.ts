@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { getLens, writeLensWords } from '../src/tools/lens.js';
-import { FAKE_CITED_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { FAKE_CITED_LENS, FAKE_FACTS_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { makeProject, removeTempDirs, restoreEnv, textOf, useStorage } from './helpers/fixtures.js';
 
 let project: string;
@@ -68,6 +68,38 @@ describe('get_lens', () => {
     const text = textOf(await getLens({}));
     expect(text).toContain('Checkpoint messages a why may quote:\n- "Retry failed charges"');
     expect(text).not.toContain('only where the text names it');
+  });
+
+  it("lists what the range makes depend on what, with each fact's links and steps", async () => {
+    app.lensAnswer = { range: FAKE_RANGE, lens: FAKE_FACTS_LENS };
+    const result = await getLens({});
+    expect(result.structuredContent).toMatchObject({ lens: { dependencies: FAKE_FACTS_LENS.dependencies } });
+    const text = textOf(result);
+    expect(text).toContain(
+      [
+        'Dependencies:',
+        '- jobs depends on api for the first time (src/jobs → src/api; steps c1)',
+        '  src/jobs/report.ts imports src/api/users.ts',
+        '  dailyReport (src/jobs/report.ts:4) calls countUsers (src/api/users.ts:15)',
+      ].join('\n'),
+    );
+    expect(text).toMatch(/Step c1 "Add RetryQueue"[^\n]*\n {2}Dependencies: jobs depends on api for the first time\n/);
+  });
+
+  it("counts the facts past the cap, and lists a fact no step holds, or a layer's, without what it lacks", async () => {
+    const [fact] = FAKE_FACTS_LENS.dependencies.facts;
+    if (fact === undefined) throw new Error('no fact');
+    const layer = { ...fact, sentence: 'renderer depends on main for the first time', level: 'layer', from: { label: 'renderer', path: null }, to: { label: 'main', path: null }, evidence: [] };
+    const lens = { ...FAKE_FACTS_LENS, dependencies: { facts: [{ ...fact, steps: [] }, layer], more: 2 } };
+    app.lensAnswer = { range: FAKE_RANGE, lens };
+    const text = textOf(await getLens({}));
+    expect(text).toContain('- jobs depends on api for the first time (src/jobs → src/api)\n');
+    expect(text).toContain('- renderer depends on main for the first time (steps c1)\n');
+    expect(text).toContain('- and 2 more\n');
+  });
+
+  it('says nothing of dependencies for an app that sends none', async () => {
+    expect(textOf(await getLens({}))).not.toContain('Dependencies');
   });
 
   it('shows the summary written so far, so a model can keep or improve it', async () => {

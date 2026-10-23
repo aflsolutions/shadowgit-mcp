@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { LensRead } from '../../src/session-api.js';
 import { shadowGit } from './fixtures.js';
 
 export interface FakeSession {
@@ -42,6 +43,8 @@ export interface FakeApp {
   mapStatus: 200 | 202 | 409 | 500;
   /** The bodies the map routes answer: GET /map without an area, with one, and POST /map/context. */
   mapAnswer: { map: object; area: object; context: object };
+  /** A body that answers a route (its path, without the query) with 200 in place of its usual one: a newer app's shape. */
+  answers: Partial<Record<string, object>>;
   /** Leaves every request unanswered, like an app busy with a large project. */
   hang: boolean;
   /** Sends the headers and part of the body, then never ends it, like an app that stalls mid-answer. */
@@ -102,6 +105,16 @@ export const MAP_ANSWERS = {
 };
 /** The webshop the map answers are of: path → content. */
 export const MAP_PROJECT = JSON.parse(readFileSync(new URL('../fixtures/map/project.json', import.meta.url), 'utf8')) as Record<string, string>;
+/** The real app's GET /api/lens body for a session that makes the webshop's jobs depend on api. */
+export const LENS_ANSWER_WITH_FACTS = JSON.parse(readFileSync(new URL('../fixtures/lens/dependencies.json', import.meta.url), 'utf8')) as object;
+const captured = LensRead.parse(LENS_ANSWER_WITH_FACTS).lens;
+if (captured?.dependencies === undefined) throw new Error('tests/fixtures/lens/dependencies.json holds no dependency facts');
+/** FAKE_LENS with the facts the real app drew in that answer, its step holding them as the app's step did. */
+export const FAKE_FACTS_LENS = {
+  ...FAKE_LENS,
+  dependencies: captured.dependencies,
+  steps: FAKE_LENS.steps.map((step) => ({ ...step, dependencies: captured.steps[0]?.dependencies ?? [] })),
+};
 /** What the map routes answer by default: the summary, the billing area, and chargeCard's context. */
 export const mapAnswers = () => ({ map: MAP_ANSWERS.summary, area: MAP_ANSWERS.area, context: MAP_ANSWERS.context });
 
@@ -133,6 +146,7 @@ async function listen(): Promise<FakeApp> {
     checkpointsIn: null,
     lensRoutes: true,
     lensAnswer: { range: FAKE_RANGE, lens: FAKE_LENS },
+    answers: {},
     wordsStatus: 200,
     mapRoutes: true,
     mapStatus: 200,
@@ -168,6 +182,8 @@ async function listen(): Promise<FakeApp> {
       res.end(html);
     };
 
+    const answer = app.answers[route.split('?')[0] ?? route];
+    if (answer !== undefined) return json(200, answer);
     if (route === '/session/active') {
       return json(200, { success: true, sessions: app.sessions.map((s) => ({ ...s, aiTool: 'test', duration: 0 })) });
     }

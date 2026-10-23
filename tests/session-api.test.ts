@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } from 'vitest';
 import {
-  AppNotRunningError, AppTimeoutError, LensRead, activeSessions, createCheckpoint, endSession, readArea, readCodeContext, readMap, startSession,
+  AppNotRunningError, AppTimeoutError, LensRead, activeSessions, createCheckpoint, endSession, readArea, readCodeContext, readLens, readMap, sendLensWords, startSession,
 } from '../src/session-api.js';
-import { FAKE_CITED_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, MAP_ANSWERS, closedAppUrl, mapAnswers, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { FAKE_CITED_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, LENS_ANSWER_WITH_FACTS, MAP_ANSWERS, closedAppUrl, mapAnswers, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { restoreEnv } from './helpers/fixtures.js';
 
 let app: FakeApp;
@@ -22,6 +22,7 @@ beforeEach(() => {
   app.checkpointStatus = 200;
   app.hang = false;
   app.hangBody = false;
+  app.answers = {};
 });
 
 afterEach(() => {
@@ -84,6 +85,33 @@ describe('the lens an app answers', () => {
     const cited = LensRead.parse({ range: FAKE_RANGE, lens: FAKE_CITED_LENS, limits: FAKE_LIMITS }).lens;
     expect(cited?.quotes).toEqual(['Retry failed charges']);
     expect(cited?.steps[0]?.symbols?.[0]).toEqual({ name: 'ProjectIndex.familyOf', path: 'src/project.ts', basePath: null, base: null, head: { start: 12, end: 40 } });
+  });
+
+  it('reads a real lens answer with its dependency facts', () => {
+    const lens = LensRead.parse(LENS_ANSWER_WITH_FACTS).lens;
+    const [fact] = lens?.dependencies?.facts ?? [];
+    expect(fact).toMatchObject({ sentence: 'jobs depends on api for the first time', level: 'area', kind: 'new', from: { label: 'jobs', path: 'src/jobs' }, to: { label: 'api', path: 'src/api' }, steps: ['c1'] });
+    expect(fact?.evidence).toContain('src/jobs/report.ts imports src/api/users.ts');
+    expect(lens?.steps[0]?.dependencies).toEqual(['jobs depends on api for the first time']);
+  });
+});
+
+describe('an answer of a shape this version does not read', () => {
+  const update = (what: string) => `ShadowGit answered with a ${what} this version of shadowgit-mcp-server does not read. Ask the user to update shadowgit-mcp-server.`;
+
+  it('asks for a server update from every reader, not a parse error', async () => {
+    app.answers = {
+      '/session/active': { success: true, sessions: 'none' },
+      '/session/start': { success: true },
+      '/checkpoint': { success: true, commit: 5 },
+      '/lens': { success: true, range: FAKE_RANGE, lens: { ...FAKE_LENS, steps: 'none' }, limits: FAKE_LIMITS },
+      '/lens/words': { success: true, applied: null },
+    };
+    await expect(activeSessions()).rejects.toThrow(update('session'));
+    await expect(startSession('/projects/webshop', 'Fix login', 'Claude Code')).rejects.toThrow(update('session'));
+    await expect(createCheckpoint(checkpointInput)).rejects.toThrow(update('checkpoint'));
+    await expect(readLens({ repoPath: '/projects/webshop' })).rejects.toThrow(update('lens'));
+    await expect(sendLensWords({ repoPath: '/projects/webshop', base: null, head: FAKE_RANGE.head, author: 'Claude Code', words: {} })).rejects.toThrow(update('lens'));
   });
 });
 

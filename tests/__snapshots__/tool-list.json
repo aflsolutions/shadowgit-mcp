@@ -1812,7 +1812,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Read ShadowGit's Lens of a range of snapshots, by default the latest AI session's: its steps with their code, the cards (components) and flows on its canvas, each with an id and its words so far. Read it at the end of a session, after the checkpoint, to word it with write_lens_words. Needs the ShadowGit app running.",
+    "description": "Read ShadowGit's Lens of a range of snapshots, by default the latest AI session's: its steps with their code, the cards (components) and flows on its canvas, each with an id and its words so far, and what the range makes depend on what: each new, gone or two-way dependency between the project's areas and layers, with the links that make it and the steps that hold it. Read it at the end of a session, after the checkpoint, to word it with write_lens_words; your words may say why a dependency appeared. Needs the ShadowGit app running.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1900,6 +1900,103 @@
                   },
                   "type": "array"
                 },
+                "dependencies": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "facts": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "evidence": {
+                            "description": "The links the range added or removed that make it, at most 3",
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "from": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "label": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "label",
+                              "path"
+                            ],
+                            "type": "object"
+                          },
+                          "kind": {
+                            "description": "new, gone, both (each now depends on the other) or count (a dependency that grew or shrank)",
+                            "type": "string"
+                          },
+                          "level": {
+                            "description": "area or layer",
+                            "type": "string"
+                          },
+                          "sentence": {
+                            "type": "string"
+                          },
+                          "steps": {
+                            "description": "The ids of the steps that hold it",
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "to": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "label": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "label",
+                              "path"
+                            ],
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "sentence",
+                          "level",
+                          "kind",
+                          "from",
+                          "to",
+                          "evidence",
+                          "steps"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "more": {
+                      "description": "How many more facts past these",
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "facts",
+                    "more"
+                  ],
+                  "type": "object"
+                },
                 "flows": {
                   "items": {
                     "additionalProperties": false,
@@ -1963,6 +2060,13 @@
                         ]
                       },
                       "components": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "dependencies": {
+                        "description": "The sentences of the step's own facts",
                         "items": {
                           "type": "string"
                         },

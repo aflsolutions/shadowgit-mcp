@@ -21,4 +21,9 @@ describe('release metadata', () => {
     expect(server.packages).toEqual([expect.objectContaining({ identifier: pkg.name, version: pkg.version })]);
     expect(server.description.length).toBeLessThanOrEqual(100);
   });
+
+  // Saved as LF by an editor, twice: each file's few changed lines then read as a whole-file rewrite
+  it('keeps README.md and CHANGELOG.md in their CRLF line endings', () => {
+    for (const file of ['README.md', 'CHANGELOG.md']) expect(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), file).not.toMatch(/(?<!\r)\n/);
+  });
 });

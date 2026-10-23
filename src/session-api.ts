@@ -26,7 +26,6 @@ const SLOW_REQUEST_TIMEOUT_MS = 58_000;
 const APP_TOO_OLD = "This version of ShadowGit can't create checkpoints for AI assistants. Ask the user to update the ShadowGit app.";
 const APP_WITHOUT_LENS = 'This version of ShadowGit has no Lens for AI assistants. Ask the user to update the ShadowGit app.';
 const APP_WITHOUT_MAP = 'This version of ShadowGit has no map for AI assistants. Ask the user to update the ShadowGit app.';
-const SERVER_TOO_OLD = 'ShadowGit answered with a map this version of shadowgit-mcp-server does not read. Ask the user to update shadowgit-mcp-server.';
 const APP_WITHOUT_PIECES = "This version of ShadowGit reads a step's body as plain text only: ask the user to update the ShadowGit app, or send each body as plain text.";
 
 const Session = z.object({
@@ -45,14 +44,28 @@ const LensRange = z.object({ base: z.string().nullable(), head: z.string() });
 export const LensLines = z.object({ start: z.number().int(), end: z.number().int() });
 /** A symbol of a step, with its lines on each side it has; `basePath` is its file in the base, null when the change added it. */
 const LensSymbol = z.object({ name: z.string(), path: z.string(), basePath: z.string().nullable(), base: LensLines.nullable(), head: LensLines.nullable() });
-// An app older than linked words sends no quotes and no symbols
+/** An end of a dependency: an area by its label and folder, as get_map names it, or a layer (no path). */
+const LensEnd = z.object({ label: z.string(), path: z.string().nullable() });
+/** What the range makes depend on what, as the app words it. Open values are strings: a newer app may add to them. */
+const LensDependency = z.object({
+  sentence: z.string(),
+  level: z.string().describe('area or layer'),
+  kind: z.string().describe('new, gone, both (each now depends on the other) or count (a dependency that grew or shrank)'),
+  from: LensEnd,
+  to: LensEnd,
+  evidence: z.array(z.string()).describe('The links the range added or removed that make it, at most 3'),
+  steps: z.array(z.string()).describe('The ids of the steps that hold it'),
+});
+// An app older than linked words sends no quotes and no symbols; one older than the dependency facts sends none
 const LensSkeleton = z.object({
   title: z.string(),
   words: z.object({ source: z.string(), author: z.string().nullable() }),
   summary: z.string().nullable(),
   quotes: z.array(z.string()).optional(),
+  dependencies: z.object({ facts: z.array(LensDependency), more: z.number().int().describe('How many more facts past these') }).optional(),
   steps: z.array(z.object({
     id: z.string(), title: z.string(), body: z.string().nullable(), components: z.array(z.string()), files: z.array(z.string()), diff: z.string(), symbols: z.array(LensSymbol).optional(),
+    dependencies: z.array(z.string()).optional().describe("The sentences of the step's own facts"),
   })),
   components: z.array(z.object({
     id: z.string(), name: z.string(), kind: z.string(), delta: z.string(), context: z.boolean(), role: z.string().nullable(), path: z.string(), symbols: z.array(z.string()),
@@ -123,6 +136,13 @@ async function request(
   return { status: response.status, json };
 }
 
+/** An answer in the shape this version reads: one of another shape asks for a server update, not a parse error. */
+function read<S extends z.ZodType>(shape: S, json: unknown, what: 'map' | 'lens' | 'session' | 'checkpoint'): z.infer<S> {
+  const parsed = shape.safeParse(json);
+  if (!parsed.success) throw new Error(`ShadowGit answered with a ${what} this version of shadowgit-mcp-server does not read. Ask the user to update shadowgit-mcp-server.`, { cause: parsed.error });
+  return parsed.data;
+}
+
 function failure(status: number, json: unknown): Error {
   const reply = ErrorReply.safeParse(json);
   return new Error(reply.success ? `ShadowGit: ${reply.data.error}` : `ShadowGit answered HTTP ${status}.`);
@@ -130,12 +150,12 @@ function failure(status: number, json: unknown): Error {
 
 export async function activeSessions(): Promise<ActiveSession[]> {
   const { json } = await request('/session/active');
-  return Sessions.parse(json).sessions;
+  return read(Sessions, json, 'session').sessions;
 }
 
 export async function startSession(repoPath: string, description: string, aiTool: string): Promise<string> {
   const { json } = await request('/session/start', { repoPath, description, aiTool });
-  return StartedSession.parse(json).sessionId;
+  return read(StartedSession, json, 'session').sessionId;
 }
 
 export async function endSession(sessionId: string): Promise<void> {
@@ -158,7 +178,7 @@ export async function createCheckpoint(input: {
   });
   if (status === 404) throw new Error(APP_TOO_OLD);
   if (status === 409) return { commit: null, filesChanged: 0 };
-  return Checkpoint.parse(json);
+  return read(Checkpoint, json, 'checkpoint');
 }
 
 /** The lens of a range for the agent to word: the latest AI session's without a head. The app may draw it inside the request. */
@@ -171,7 +191,7 @@ export async function readLens(input: { repoPath: string; base?: string | null; 
   }
   const { status, json } = await request(`/lens?${query}`, undefined, { timeoutMs: SLOW_REQUEST_TIMEOUT_MS, accept: [404] });
   if (status === 404) throw new Error(APP_WITHOUT_LENS);
-  return LensRead.parse(json);
+  return read(LensRead, json, 'lens');
 }
 
 /** The agent's words for a range; the app keeps them in its history, next to the range's newest snapshot. */
@@ -184,16 +204,14 @@ export async function sendLensWords(input: { repoPath: string; base: string | nu
     const pieces = input.words.steps?.some((step) => Array.isArray(step.body)) ?? false;
     throw pieces && refused.message.includes("Not the Lens's words") ? new Error(`${refused.message} ${APP_WITHOUT_PIECES}`) : refused;
   }
-  return WordsWritten.parse(json);
+  return read(WordsWritten, json, 'lens');
 }
 
-/** A map answer, in the shapes this version reads: an answer of another shape asks for a server update, not a parse error. */
+/** A map answer, in the shapes this version reads. */
 async function mapAnswer<S extends z.ZodType>(shape: S, route: string, body?: object): Promise<z.infer<S>> {
   const { status, json } = await request(route, body, { timeoutMs: SLOW_REQUEST_TIMEOUT_MS, accept: [404] });
   if (status === 404) throw new Error(APP_WITHOUT_MAP);
-  const read = shape.safeParse(json);
-  if (!read.success) throw new Error(SERVER_TOO_OLD, { cause: read.error });
-  return read.data;
+  return read(shape, json, 'map');
 }
 
 /** The project's map, summed up; the app may draw the map in the request. */

@@ -10,14 +10,14 @@
  * such an import, or Claude's reply names the rule and the link; the eval passes at 9 runs of 10. Spends tokens and
  * its results vary, so it runs by hand before a release, beside `npm run eval:lens` and `npm run eval:map`.
  */
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
-import * as z from 'zod/v4';
 import { ContextRead } from '../src/map-shapes.js';
 import { RULES_ANSWERS, RULES_PROJECT, startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
 import { makeProject, removeTempDirs, shadowGit } from '../tests/helpers/fixtures.js';
-import { ago, runClaude } from './claude.js';
+import { EDITS, STREAM_ARGS, ago, readStream, runClaude } from './claude.js';
 
 const RUNS = Number(process.env.RUNS ?? 10);
 const PASS_AT = Math.ceil(0.9 * RUNS);
@@ -25,9 +25,8 @@ const CONTROL_RUNS = Number(process.env.CONTROL_RUNS ?? 5);
 const CONTROL_FLOOR = Math.ceil(0.6 * CONTROL_RUNS);
 const TASK =
   'Add the active user count to the nightly report: dailyReport in src/jobs/report.ts adds the number of active users, counted as the dashboard counts them, to the total it returns.';
-const EDITS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
-const RULE = ContextRead.parse(RULES_ANSWERS.context).rules?.[0]?.rule ?? ((): never => { throw new Error('tests/fixtures/rules/context.json holds no rule'); })();
+const RULE = ContextRead.parse(RULES_ANSWERS.context).rules?.[0]?.rule ?? assert.fail('tests/fixtures/rules/context.json holds no rule');
 
 /** Each import from a file under src/jobs into src/api, as the app words a link: "src/jobs/report.ts imports src/api/users.ts". */
 function jobsApiLinks(project: string): string[] {
@@ -41,8 +40,8 @@ function jobsApiLinks(project: string): string[] {
       const target = fileName.startsWith('.') ? path.posix.normalize(path.posix.join(path.posix.dirname(from), fileName)) : fileName;
       if (target !== 'src/api' && !target.startsWith('src/api/')) return [];
       // As the app names it: the file the import reaches
-      const file = ['', '.ts', '.tsx', '.js', '/index.ts'].map((end) => `${target}${end}`).find((name) => fs.statSync(path.join(project, name), { throwIfNoEntry: false })?.isFile());
-      return [`${from} imports ${file ?? target}`];
+      const reached = ['', '.ts', '.tsx', '.js', '/index.ts'].map((end) => `${target}${end}`).find((name) => fs.statSync(path.join(project, name), { throwIfNoEntry: false })?.isFile());
+      return [`${from} imports ${reached ?? target}`];
     });
   });
 }
@@ -95,32 +94,8 @@ function answerFor(app: FakeApp, project: string, withRules: boolean, heard: num
   });
 }
 
-// One line of `--output-format stream-json`: the assistant's turns carry its tool calls, the last line its reply
-const Line = z.object({
-  type: z.string(),
-  message: z.object({ content: z.array(z.object({ type: z.string(), name: z.string().optional(), input: z.unknown().optional() })).optional() }).optional(),
-  result: z.string().optional(),
-  total_cost_usd: z.number().optional(),
-});
-
-async function runTask(app: FakeApp, project: string): Promise<{ calls: string[]; reply: string; cost: number }> {
-  const stdout = await runClaude({
-    prompt: TASK, project, app, timeoutMs: 420_000,
-    args: ['--allowedTools', 'mcp__shadowgit__*', 'Read', 'Edit', 'Write', 'Glob', 'Grep', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '2'],
-  });
-  const calls: string[] = [];
-  let reply = '';
-  let cost = 0;
-  for (const text of stdout.split('\n')) {
-    if (text.trim() === '') continue;
-    const line = Line.safeParse(JSON.parse(text));
-    if (!line.success) continue;
-    if (line.data.total_cost_usd !== undefined) cost = line.data.total_cost_usd;
-    if (line.data.result !== undefined) reply = line.data.result;
-    if (line.data.type !== 'assistant') continue;
-    for (const part of line.data.message?.content ?? []) if (part.type === 'tool_use' && part.name) calls.push(part.name);
-  }
-  return { calls, reply, cost };
+async function runTask(app: FakeApp, project: string) {
+  return readStream(await runClaude({ prompt: TASK, project, app, timeoutMs: 420_000, args: STREAM_ARGS }));
 }
 
 /**
@@ -129,7 +104,7 @@ async function runTask(app: FakeApp, project: string): Promise<{ calls: string[]
  */
 const names = (reply: string, linked: boolean) => /never depends on src\/api|\.shadowgit-rules/.test(reply) && (!linked || reply.includes('api/users'));
 
-type Run = { linked: boolean; named: boolean; heard: boolean; session: boolean };
+type Run = { linked: boolean; named: boolean; passed: boolean; heard: boolean; session: boolean };
 
 /** One run: the project with its rule or, for control, without the file; null when it errored. */
 async function run(label: string, withRules: boolean): Promise<Run | null> {
@@ -145,13 +120,14 @@ async function run(label: string, withRules: boolean): Promise<Run | null> {
     // Whether a session held the first checkpoint: outside one, the automatic snapshot leaves it nothing to check
     const order = app.requests.map((request) => request.path.split('?')[0]);
     const session = order.includes('/session/start') && order.indexOf('/session/start') < order.indexOf('/checkpoint');
-    const asked = calls.indexOf('mcp__shadowgit__get_code_context');
-    const edited = calls.findIndex((name) => EDITS.has(name));
-    const verdict = withRules ? `${!linked || named ? 'PASS' : 'FAIL'} ` : '';
+    const passed = !linked || named;
+    const asked = calls.findIndex((call) => call.name === 'mcp__shadowgit__get_code_context');
+    const edited = calls.findIndex((call) => EDITS.has(call.name));
+    const verdict = withRules ? `${passed ? 'PASS' : 'FAIL'} ` : '';
     console.log(`${label}: ${verdict}linked=${linked} named=${named} context_first=${asked !== -1 && (edited === -1 || asked < edited)} session=${session} checkpoints=${app.requestsTo('/checkpoint').length} heard=[${heard.join(',')}] cost=$${cost.toFixed(2)}`);
-    console.log(`  tools: ${calls.map((name) => name.replace('mcp__shadowgit__', 'shadowgit:')).join(' → ') || 'none'}`);
+    console.log(`  tools: ${calls.map((call) => call.name.replace('mcp__shadowgit__', 'shadowgit:')).join(' → ') || 'none'}`);
     console.log(`  says: ${reply.replace(/\s+/g, ' ').slice(0, 400)}`);
-    return { linked, named, heard: heard.some((count) => count > 0), session };
+    return { linked, named, passed, heard: heard.some((count) => count > 0), session };
   } catch (error) {
     console.log(`${label}: error ${error instanceof Error ? error.message.slice(0, 300) : String(error)}`);
     return null;
@@ -169,7 +145,7 @@ const controls: (Run | null)[] = [];
 for (let i = 1; i <= CONTROL_RUNS; i++) controls.push(await run(`control ${i}`, false));
 
 const done = runs.filter((result) => result !== null);
-const passed = done.filter((result) => !result.linked || result.named).length;
+const passed = done.filter((result) => result.passed).length;
 const heard = done.filter((result) => result.heard);
 const linkedUnasked = controls.filter((result) => result?.linked).length;
 const errors = runs.length - done.length + controls.filter((result) => result === null).length;

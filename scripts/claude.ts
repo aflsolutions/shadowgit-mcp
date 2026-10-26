@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import * as z from 'zod/v4';
 import { BINARY } from '../tests/helpers/client.js';
 import type { FakeApp } from '../tests/helpers/fake-app.js';
 import { tempDir, useStorage } from '../tests/helpers/fixtures.js';
@@ -35,4 +36,35 @@ export async function runClaude({ prompt, project, app, args, timeoutMs }: { pro
     throw error;
   });
   return stdout;
+}
+
+/** Claude Code's edit tools, for "before the first edit". */
+export const EDITS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+
+/** The tools an eval allows, its stream-json output and its budget: `runClaude`'s args for an eval that reads the stream. */
+export const STREAM_ARGS = ['--allowedTools', 'mcp__shadowgit__*', 'Read', 'Edit', 'Write', 'Glob', 'Grep', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '2'];
+
+// One line of `--output-format stream-json`: the assistant's turns carry its tool calls, the last line its reply and cost
+const Line = z.object({
+  type: z.string(),
+  message: z.object({ content: z.array(z.object({ type: z.string(), name: z.string().optional(), input: z.unknown().optional() })).optional() }).optional(),
+  result: z.string().optional(),
+  total_cost_usd: z.number().optional(),
+});
+
+/** A stream-json run's tool calls in order, with their input, its reply and its cost. */
+export function readStream(stdout: string): { calls: { name: string; input: unknown }[]; reply: string; cost: number } {
+  const calls: { name: string; input: unknown }[] = [];
+  let reply = '';
+  let cost = 0;
+  for (const text of stdout.split('\n')) {
+    if (text.trim() === '') continue;
+    const line = Line.safeParse(JSON.parse(text));
+    if (!line.success) continue;
+    if (line.data.total_cost_usd !== undefined) cost = line.data.total_cost_usd;
+    if (line.data.result !== undefined) reply = line.data.result;
+    if (line.data.type !== 'assistant') continue;
+    for (const part of line.data.message?.content ?? []) if (part.type === 'tool_use' && part.name) calls.push({ name: part.name, input: part.input });
+  }
+  return { calls, reply, cost };
 }

@@ -1,5 +1,5 @@
 import * as z from 'zod/v4';
-import { RulesFor, RulesRead } from './rule-shapes.js';
+import { RulesFailure, RulesFor, RulesRead } from './rule-shapes.js';
 
 // The app's map answers, as code-graph 0.6.0's map/query writes them: the package is private, so its shapes are
 // mirrored here. Open values (how, a missing target's reason) are strings, which a newer app may add to; the structure
@@ -112,8 +112,7 @@ const MapAsOf = z
   })
   .describe('The snapshot the answer is drawn from');
 
-// An app older than the rules sends neither; rulesFailure only when the rules file can't be read
-const RulesFailure = z.string().optional().describe("Why the project's rules couldn't be read");
+// An app older than the rules sends no rules
 const ProjectRules = RulesRead.nullable().optional().describe("The project's .shadowgit-rules as read; null without one");
 
 /** A map without an area asked for: the project's summary, and its rules. */

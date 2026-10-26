@@ -3,7 +3,7 @@ import * as z from 'zod/v4';
 import { clientName } from '../client-name.js';
 import { resolveRepo } from '../repos.js';
 import { LensLines, LensRead, readLens, sendLensWords, WordsWritten, type LensWords } from '../session-api.js';
-import { checkLines, failureLine, quote, snapshots } from './rules.js';
+import { passing, quote, rangeLines, snapshots } from './rules.js';
 import { dataResult, repoParam } from './shared.js';
 
 const LensOutput = z.object({ repo: z.string(), ...LensRead.shape });
@@ -39,22 +39,16 @@ function dependencyLines(dependencies: LensDependencies): string[] {
   return ['Dependencies:', ...dependencies.facts.flatMap(factLines), ...(dependencies.more > 0 ? [`- and ${dependencies.more} more`] : [])];
 }
 
-/** The range's check against the project's rules, or why they couldn't be read; nothing for a project without them. */
-function rulesLines({ rules, rulesFailure }: Pick<Read, 'rules' | 'rulesFailure'>): string[] {
-  if (rulesFailure !== undefined) return [failureLine(rulesFailure)];
-  return rules ? checkLines(rules) : [];
-}
-
 /** The lens as the model reads it: what to send back, then every step with its code, every card, layer and flow by id. */
-function describeLens(repo: string, { range, lens, limits, ...rules }: Read & { lens: NonNullable<Read['lens']> }): string {
+function describeLens(repo: string, lens: NonNullable<Read['lens']>, { range, limits, rules, rulesFailure }: Read): string {
   // stepTitle reads "step title"
   const caps = Object.entries(limits).map(([key, max]) => `${key.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`)} ${max}`).join(', ');
   return [
     `The Lens of ${repo}, snapshots ${snapshots(range)}; its words now: ${lens.words.source}${lens.words.author ? ` (${lens.words.author})` : ''}.`,
     ...(lens.summary ? [`Summary: ${lens.summary}`] : []),
-    `Word it with write_lens_words, passing base ${JSON.stringify(range.base)} and head ${JSON.stringify(range.head)}: a summary of two sentences, for each step a title and one or two sentences, for each changed card the role it plays. Name only the ids below; text past its limit is cut (characters: ${caps}).`,
-    ...(lens.quotes?.length ? ['Checkpoint messages a why may quote:', ...lens.quotes.map((quote) => `- ${JSON.stringify(quote)}`)] : []),
-    ...rulesLines(rules),
+    `Word it with write_lens_words, ${passing(range)}: a summary of two sentences, for each step a title and one or two sentences, for each changed card the role it plays. Name only the ids below; text past its limit is cut (characters: ${caps}).`,
+    ...(lens.quotes?.length ? ['Checkpoint messages a why may quote:', ...lens.quotes.map((message) => `- ${JSON.stringify(message)}`)] : []),
+    ...rangeLines(rules, rulesFailure),
     ...dependencyLines(lens.dependencies),
     '',
     ...lens.steps.flatMap((step) => {
@@ -85,12 +79,11 @@ export async function getLens({ base, head, repo }: { base?: string | null; head
   const project = resolveRepo(repo);
   const read = await readLens({ repoPath: project.path, base, head });
   const data = { repo: project.name, ...read };
-  const { lens } = read;
-  if (lens === null) {
+  if (read.lens === null) {
     const nothing = `Nothing in ${project.name}'s range ${read.range.head.slice(0, 8)} changes code: it has no lens to word.`;
-    return dataResult(LensOutput, [nothing, ...rulesLines(read)].join('\n'), data);
+    return dataResult(LensOutput, [nothing, ...rangeLines(read.rules, read.rulesFailure)].join('\n'), data);
   }
-  return dataResult(LensOutput, describeLens(project.name, { ...read, lens }), data);
+  return dataResult(LensOutput, describeLens(project.name, read.lens, read), data);
 }
 
 export async function writeLensWords(

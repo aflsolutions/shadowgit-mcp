@@ -86,6 +86,12 @@ export function useStorage(repos: { name: string; path: string }[]): string {
   return dir;
 }
 
+/**
+ * A verdict in ShadowGit's own words, which its answers and descriptions never give: it states facts, and a rule
+ * "names" a link (the spec's anti-goals, and the map's hedges).
+ */
+export const JUDGING = /\b(violat\w*|break\w*|forbid\w*|not allowed|warning|error|bad|should|circular|coupling|risky|careful|consider)\b/i;
+
 export function textOf(result: CallToolResult): string {
   return result.content.map((block) => (block.type === 'text' ? block.text : '')).join('');
 }

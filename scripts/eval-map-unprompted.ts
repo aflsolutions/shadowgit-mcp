@@ -7,40 +7,16 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import * as z from 'zod/v4';
 import { MAP_ANSWERS, MAP_PROJECT, startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
 import { makeProject, removeTempDirs } from '../tests/helpers/fixtures.js';
-import { ago, runClaude } from './claude.js';
+import { EDITS, STREAM_ARGS, ago, readStream, runClaude } from './claude.js';
 
 const RUNS = Number(process.env.RUNS ?? 5);
 const PASS_AT = 4;
 const TASK = 'Make chargeCard reject an amount below zero with a RangeError, and keep every caller working.';
 const TARGETS = ['chargeCard', 'src/billing/charge.ts'];
-const EDITS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
-
-// One line of `--output-format stream-json`: the assistant's turns carry its tool calls, in order
-const Line = z.object({
-  type: z.string(),
-  message: z.object({ content: z.array(z.object({ type: z.string(), name: z.string().optional(), input: z.unknown().optional() })).optional() }).optional(),
-  total_cost_usd: z.number().optional(),
-});
-
-async function runTask(app: FakeApp, project: string): Promise<{ calls: { name: string; input: unknown }[]; cost: number }> {
-  const stdout = await runClaude({
-    prompt: TASK, project, app, timeoutMs: 420_000,
-    args: ['--allowedTools', 'mcp__shadowgit__*', 'Read', 'Edit', 'Write', 'Glob', 'Grep', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '2'],
-  });
-  const calls: { name: string; input: unknown }[] = [];
-  let cost = 0;
-  for (const text of stdout.split('\n')) {
-    if (text.trim() === '') continue;
-    const line = Line.safeParse(JSON.parse(text));
-    if (!line.success) continue;
-    if (line.data.total_cost_usd !== undefined) cost = line.data.total_cost_usd;
-    if (line.data.type !== 'assistant') continue;
-    for (const part of line.data.message?.content ?? []) if (part.type === 'tool_use' && part.name) calls.push({ name: part.name, input: part.input });
-  }
-  return { calls, cost };
+async function runTask(app: FakeApp, project: string) {
+  return readStream(await runClaude({ prompt: TASK, project, app, timeoutMs: 420_000, args: STREAM_ARGS }));
 }
 
 let passed = 0;

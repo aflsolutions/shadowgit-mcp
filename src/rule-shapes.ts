@@ -41,6 +41,9 @@ export const RuleCheck = z.object({
 /** The rules that hold for files asked about, each with those files. */
 export const RulesFor = z.array(z.object({ rule: Rule, files: z.array(z.string()) }));
 
+/** Why the project's rules couldn't be read: sent only then, and never by an app older than the rules. */
+export const RulesFailure = z.string().optional().describe("Why the project's rules couldn't be read");
+
 /** A checkpoint's check: of the session so far, or else of the checkpoint's own change. */
 export const CheckpointRules = z.discriminatedUnion('status', [
   z.object({ status: z.literal('checked'), range: Range, check: RuleCheck }),

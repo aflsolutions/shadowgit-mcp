@@ -1,6 +1,6 @@
 import * as z from 'zod/v4';
 import { AreaRead, ContextRead, SummaryRead } from './map-shapes.js';
-import { CheckpointRules, Range, RuleCheck } from './rule-shapes.js';
+import { CheckpointRules, Range, RuleCheck, RulesFailure } from './rule-shapes.js';
 import { toLocalIso } from './time.js';
 
 export class AppNotRunningError extends Error {
@@ -39,8 +39,12 @@ const Session = z.object({
 });
 const Sessions = z.object({ sessions: z.array(Session) });
 const StartedSession = z.object({ sessionId: z.string() });
-// The check is read on its own: the checkpoint is saved whatever shape it comes in
-const Checkpoint = z.object({ commit: z.string(), filesChanged: z.number(), rules: z.unknown().optional() });
+// The checkpoint is saved whatever shape its check comes in: one this version can't read reads as failed
+const Checkpoint = z.object({
+  commit: z.string(),
+  filesChanged: z.number(),
+  rules: CheckpointRules.optional().catch({ range: null, status: 'failed' as const, error: CHECK_UNREAD }),
+});
 const ErrorReply = z.object({ error: z.string() });
 
 export const LensLines = z.object({ start: z.number().int(), end: z.number().int() });
@@ -76,12 +80,12 @@ const LensSkeleton = z.object({
   layers: z.array(z.object({ id: z.string(), name: z.string() })),
   flows: z.array(z.object({ id: z.string(), from: z.string(), to: z.string(), label: z.string() })),
 });
-// An app older than the rules sends neither; rulesFailure only when the rules file can't be read
+// An app older than the rules sends no rules
 export const LensRead = z.object({
   range: Range,
   lens: LensSkeleton.nullable(),
   rules: RuleCheck.nullable().optional().describe("The range checked against the project's rules, also for a range with no lens; null without rules"),
-  rulesFailure: z.string().optional().describe("Why the project's rules couldn't be read"),
+  rulesFailure: RulesFailure,
   limits: z.record(z.string(), z.number()),
 });
 const LensApplied = z.object({ summary: z.boolean(), steps: z.number(), components: z.number(), layers: z.number(), flows: z.number() });
@@ -188,10 +192,7 @@ export async function createCheckpoint(input: {
   });
   if (status === 404) throw new Error(APP_TOO_OLD);
   if (status === 409) return { commit: null, filesChanged: 0 };
-  const { commit, filesChanged, rules } = read(Checkpoint, json, 'checkpoint');
-  if (rules === undefined) return { commit, filesChanged };
-  const check = CheckpointRules.safeParse(rules);
-  return { commit, filesChanged, rules: check.success ? check.data : { range: null, status: 'failed', error: CHECK_UNREAD } };
+  return read(Checkpoint, json, 'checkpoint');
 }
 
 /** The lens of a range for the agent to word: the latest AI session's without a head. The app may draw it inside the request. */

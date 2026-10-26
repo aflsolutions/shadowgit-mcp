@@ -14,10 +14,14 @@ type Check = z.infer<typeof RuleCheck>;
 /** "1a2b3c4d..5e6f7a8b", from the start of the history for a null base. */
 export const snapshots = ({ base, head }: z.infer<typeof Range>) => `${base === null ? 'from the start' : base.slice(0, 8)}..${head.slice(0, 8)}`;
 
-/** The rule as written, quoted, then its reason. */
-export const ruleLine = ({ text, because }: z.infer<typeof Rule>) => `${quote(text)}${because === null ? '' : ` because ${quote(because)}`}`;
+/** How a tool asks for a range: "passing base … and head …". */
+export const passing = ({ base, head }: z.infer<typeof Range>) => `passing base ${JSON.stringify(base)} and head ${JSON.stringify(head)}`;
 
-const links = (count: number) => (count === 1 ? '1 link' : `${count} links`);
+/** The rule as written, quoted, then its reason. */
+const ruleLine = ({ text, because }: z.infer<typeof Rule>) => `${quote(text)}${because === null ? '' : ` because ${quote(because)}`}`;
+
+/** Why the project's rules couldn't be read. */
+const failureLine = (failure: string) => `The project's rules (.shadowgit-rules) could not be read: ${quote(failure)}`;
 
 /** What the range does to the rules file; nothing when it leaves the file alone. */
 function fileLines(file: Check['file']): string[] {
@@ -36,35 +40,40 @@ function quietLines(check: Check): string[] {
 }
 
 /** A range's check: how many rules, each that names links the range adds with those links, the rest, the file's changes. */
-export function checkLines(check: Check, range?: z.infer<typeof Range>): string[] {
+function checkLines(check: Check, range?: z.infer<typeof Range>): string[] {
   return [
     `The project's rules (.shadowgit-rules): ${check.rules} checked${range === undefined ? '' : `, over snapshots ${snapshots(range)}`}.`,
-    ...check.matches.flatMap(({ rule, count, links: shown, steps }) => [
-      `- ${ruleLine(rule)}: names ${links(count)} this range adds${steps.length > 0 ? ` (steps ${steps.join(', ')})` : ''}`,
-      ...shown.map((link) => `  ${quote(link)}`),
-      ...(count > shown.length ? [`  and ${count - shown.length} more`] : []),
+    ...check.matches.flatMap(({ rule, count, links, steps }) => [
+      `- ${ruleLine(rule)}: names ${count} link${count === 1 ? '' : 's'} this range adds${steps.length > 0 ? ` (steps ${steps.join(', ')})` : ''}`,
+      ...links.map((link) => `  ${quote(link)}`),
+      ...(count > links.length ? [`  and ${count - links.length} more`] : []),
     ]),
     ...quietLines(check),
     ...fileLines(check.file),
   ];
 }
 
-/** A checkpoint's check: its lines, that it still runs and where get_lens reads it, or why it didn't run. */
-export function checkpointLines(rules: z.infer<typeof CheckpointRules>): string[] {
-  switch (rules.status) {
+/** A range's check against the project's rules, or why they couldn't be read; nothing for a project without them. */
+export function rangeLines(check: Check | null | undefined, failure?: string): string[] {
+  if (failure !== undefined) return [failureLine(failure)];
+  return check ? checkLines(check) : [];
+}
+
+/** A checkpoint's check: its lines, that it still runs and where get_lens reads it, or why it didn't run; nothing without one. */
+export function checkpointLines(rules: z.infer<typeof CheckpointRules> | undefined): string[] {
+  switch (rules?.status) {
+    case undefined:
+      return [];
     case 'checked':
       return checkLines(rules.check, rules.range);
     case 'running':
       return [
-        `The check against the project's rules (.shadowgit-rules) is still running, over snapshots ${snapshots(rules.range)}: read it with get_lens, passing base ${JSON.stringify(rules.range.base)} and head ${quote(rules.range.head)}.`,
+        `The check against the project's rules (.shadowgit-rules) is still running, over snapshots ${snapshots(rules.range)}: read it with get_lens, ${passing(rules.range)}.`,
       ];
     case 'failed':
       return [`The project's rules (.shadowgit-rules) weren't checked: ${quote(rules.error)}`];
   }
 }
-
-/** Why the project's rules couldn't be read. */
-export const failureLine = (failure: string) => `The project's rules (.shadowgit-rules) could not be read: ${quote(failure)}`;
 
 /** The project's rules as read, with the lines read as none and where reading stopped; nothing without a file. */
 export function readLines(read: z.infer<typeof RulesRead> | null | undefined, failure?: string): string[] {

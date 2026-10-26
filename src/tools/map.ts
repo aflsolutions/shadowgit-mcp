@@ -45,7 +45,7 @@ function drawnFrom({ snapshot, time, behind, changedFiles }: AsOf): string {
   return `${drawn}, ${behind} snapshot${behind === 1 ? '' : 's'} behind the newest. ${changed}`;
 }
 
-function describeSummary(repo: string, { mapAsOf, summary, rules, rulesFailure }: Read & { summary: NonNullable<Read['summary']> }): string {
+function describeSummary(repo: string, mapAsOf: AsOf, summary: NonNullable<Read['summary']>): string {
   const { files, symbols, areas, calls, processes } = summary.counts;
   return [
     `${repo}'s map, ${drawnFrom(mapAsOf)}`,
@@ -57,7 +57,6 @@ function describeSummary(repo: string, { mapAsOf, summary, rules, rulesFailure }
     bullets(summary.links, 'links', (link) => `${link.from} → ${link.to}: ${link.count} calls and imports`),
     'Processes:',
     bullets(summary.processes, 'processes', (process) => `${process.label}: ${process.areas.join(' → ')}`),
-    ...readLines(rules, rulesFailure),
   ].join('\n');
 }
 
@@ -135,7 +134,8 @@ export async function getMap({ area, repo }: { area?: string; repo?: string }, a
   const project = resolveRepo(repo);
   if (area === undefined) {
     const read = await readMap({ repoPath: project.path, aiTool });
-    return dataResult(MapOutput, describeSummary(project.name, read), { repo: project.name, ...read });
+    const text = [describeSummary(project.name, read.mapAsOf, read.summary), ...readLines(read.rules, read.rulesFailure)].join('\n');
+    return dataResult(MapOutput, text, { repo: project.name, ...read });
   }
   const read = await readArea({ repoPath: project.path, area, aiTool });
   return dataResult(MapOutput, describeArea(project.name, read.mapAsOf, read.area), { repo: project.name, ...read });
@@ -150,7 +150,7 @@ export async function getCodeContext(
   const read = await readCodeContext({ repoPath: project.path, files, symbols, aiTool });
   const hold = holdLines(read.rules, read.rulesFailure);
   const next = `${forRepo(repo === undefined ? undefined : repoArgument(project))}${read.rules?.length ? NEXT_WITH_RULES : NEXT}`;
-  const text = [describeContext(project.name, read.mapAsOf, read.context), ...(hold.length > 0 ? [hold.join('\n')] : []), `Next: ${next}`].join('\n\n');
+  const text = [describeContext(project.name, read.mapAsOf, read.context), hold.join('\n'), `Next: ${next}`].filter(Boolean).join('\n\n');
   return dataResult(ContextOutput, text, { repo: project.name, ...read, next });
 }
 

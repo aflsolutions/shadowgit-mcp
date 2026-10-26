@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import type * as z from 'zod/v4';
 import { LensRead } from '../../src/session-api.js';
 import { shadowGit } from './fixtures.js';
 
@@ -41,7 +42,7 @@ export interface FakeApp {
   /** False is an app without the Lens routes: they answer the catch-all 404. */
   lensRoutes: boolean;
   /** What GET /lens answers: a range, its lens or null for a range that changes no code, and its rules' check as an app that has them sends it. */
-  lensAnswer: { range: { base: string | null; head: string }; lens: object | null; rules?: object | null; rulesFailure?: string };
+  lensAnswer: Omit<z.input<typeof LensRead>, 'limits'>;
   /** 200 keeps the words; 400 is an app older than linked words refusing them; 409 is a range that changes no code. */
   wordsStatus: 200 | 400 | 409;
   /** False is an app without the map routes: they answer the catch-all 404. */
@@ -112,9 +113,9 @@ export const MAP_ANSWERS = {
   checkoutSummary: mapFixture('checkout-summary'),
 };
 /** The webshop the map answers are of: path → content. */
-export const MAP_PROJECT = JSON.parse(readFileSync(new URL('../fixtures/map/project.json', import.meta.url), 'utf8')) as Record<string, string>;
+export const MAP_PROJECT = fixture('map/project') as Record<string, string>;
 /** The real app's GET /api/lens body for a session that makes the webshop's jobs depend on api. */
-export const LENS_ANSWER_WITH_FACTS = JSON.parse(readFileSync(new URL('../fixtures/lens/dependencies.json', import.meta.url), 'utf8')) as object;
+export const LENS_ANSWER_WITH_FACTS: object = fixture('lens/dependencies');
 const captured = LensRead.parse(LENS_ANSWER_WITH_FACTS).lens;
 if (captured?.dependencies === undefined) throw new Error('tests/fixtures/lens/dependencies.json holds no dependency facts');
 /** FAKE_LENS with the facts the real app drew in that answer, its step holding them as the app's step did. */

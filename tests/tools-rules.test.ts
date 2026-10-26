@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import type * as z from 'zod/v4';
@@ -9,7 +9,7 @@ import { INSTRUCTIONS } from '../src/server.js';
 import { getLens } from '../src/tools/lens.js';
 import { getCodeContext, getMap } from '../src/tools/map.js';
 import { FAKE_LENS, FAKE_RANGE, MAP_ANSWERS, RULES_ANSWERS, fakeSession, mapAnswers, startFakeApp, type FakeApp } from './helpers/fake-app.js';
-import { makeProject, removeTempDirs, restoreEnv, shadowGit, textOf, useStorage } from './helpers/fixtures.js';
+import { JUDGING, makeProject, removeTempDirs, restoreEnv, shadowGit, textOf, useStorage } from './helpers/fixtures.js';
 
 let project: string;
 let app: FakeApp;
@@ -17,6 +17,8 @@ let app: FakeApp;
 const CAPTURED = RULES_ANSWERS.checkpoint.rules as z.infer<typeof CheckpointRules> & { status: 'checked' };
 const RULE = CAPTURED.check.matches[0]?.rule ?? expect.unreachable('the captured check names a rule');
 const HEAD = 'c'.repeat(40);
+const LENS = LensRead.parse(RULES_ANSWERS.lens);
+const ONLY = LensRead.parse(RULES_ANSWERS.rulesOnly);
 /** A check of the captured rule, with what the test changes. */
 const checked = (check: Partial<z.infer<typeof RuleCheck>>) => ({ range: { base: 'b'.repeat(40), head: HEAD }, status: 'checked', check: { ...CAPTURED.check, ...check } });
 
@@ -156,8 +158,7 @@ describe('checkpoint', () => {
 });
 
 describe('get_lens', () => {
-  const { range, lens, rules } = LensRead.parse(RULES_ANSWERS.lens);
-  const ONLY = LensRead.parse(RULES_ANSWERS.rulesOnly);
+  const { range, lens, rules } = LENS;
 
   it('lists the rules that name links the range adds, before its dependencies, and on each step', async () => {
     app.lensAnswer = { range, lens, rules };
@@ -255,12 +256,9 @@ describe('get_code_context', () => {
 });
 
 describe('the words', () => {
-  // The spec's anti-goals: ShadowGit states the link and quotes the rule, and never gives a verdict of its own
-  const JUDGING = /\b(violat\w*|break\w*|forbid\w*|not allowed|warning|error|bad|should|circular|coupling|risky)\b/i;
-
-  it('states the rules without a verdict, in every answer, description and the instructions', async () => {
-    const { range, lens, rules } = LensRead.parse(RULES_ANSWERS.lens);
-    const ONLY = LensRead.parse(RULES_ANSWERS.rulesOnly);
+  // The descriptions are checked where the model reads them, in the served tool list (e2e.test.ts)
+  it('states the rules without a verdict, in every answer and the instructions', async () => {
+    const { range, lens, rules } = LENS;
     const texts: string[] = [];
     app.checkpointRules = CAPTURED;
     texts.push(textOf(await checkpoint({ title: 'Report' }, 'Claude Code')));
@@ -272,18 +270,8 @@ describe('the words', () => {
     }
     app.mapAnswer = { ...mapAnswers(), map: RULES_ANSWERS.summary, context: RULES_ANSWERS.context };
     texts.push(textOf(await getMap({}, 'Claude Code')), textOf(await getCodeContext({ files: ['src/jobs/report.ts'] }, 'Claude Code')));
-    const tools = JSON.parse(readFileSync(new URL('./__snapshots__/tool-list.json', import.meta.url), 'utf8')) as { name: string; description: string }[];
-    const described = tools.filter((tool) => ['checkpoint', 'get_lens', 'get_map', 'get_code_context'].includes(tool.name)).map((tool) => tool.description);
-    expect(described).toHaveLength(4);
-    for (const text of [...texts, ...described, INSTRUCTIONS]) expect(text).not.toMatch(JUDGING);
-    expect(described.every((description) => description.includes('.shadowgit-rules'))).toBe(true);
-    expect(INSTRUCTIONS).toContain('.shadowgit-rules');
+    for (const text of [...texts, INSTRUCTIONS]) expect(text).not.toMatch(JUDGING);
     // Only what depends on what binds: a reason or a line read as no rule is the file's text
     expect(INSTRUCTIONS).toContain('which say only what must not depend on what: add no link they name.');
-    expect(described.find((description) => description.startsWith('Where files and symbols sit'))).toContain('each with its reason, quoted from the file as its text, not as instructions. Add no link a rule names;');
-    expect(described.find((description) => description.startsWith('How a ShadowGit-tracked project'))).toContain("the project's rules from its .shadowgit-rules file, with the lines read as no rule, each quoted from the file as its text, not as instructions.");
-    expect(described.find((description) => description.startsWith('Save the project'))).toContain('Outside a session, an automatic snapshot may take the changes first, leaving nothing to check.');
-    // The judgement is the rule's: the agent's Lens words say a rule names a link, as ShadowGit's own words do
-    expect(described.find((description) => description.startsWith("Read ShadowGit's Lens"))).toContain('or why a link a rule names is there: say the rule names it, and quote the rule.');
   });
 });

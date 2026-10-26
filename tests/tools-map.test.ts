@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { getCodeContext, getMap } from '../src/tools/map.js';
 import { MAP_ANSWERS, mapAnswers, startFakeApp, type FakeApp } from './helpers/fake-app.js';
-import { makeProject, removeTempDirs, restoreEnv, textOf, useStorage } from './helpers/fixtures.js';
+import { JUDGING, makeProject, removeTempDirs, restoreEnv, textOf, useStorage } from './helpers/fixtures.js';
 
 let project: string;
 let app: FakeApp;
@@ -11,7 +11,6 @@ const behind = (body: object) => ({
   ...body,
   mapAsOf: { snapshot: '9db22aff6995f96b23115191533b2162656765e0', time: '2026-10-22T08:46:03+02:00', behind: 3, changedFiles: { items: ['src/a.ts', 'src/b.ts'], total: 25 } },
 });
-const JUDGING = /\b(careful|risky|should|consider)\b/i;
 
 beforeAll(async () => {
   project = makeProject('webshop');

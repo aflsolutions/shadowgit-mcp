@@ -1,0 +1,220 @@
+{
+  "success": true,
+  "mapAsOf": {
+    "snapshot": "e86a58502f729666b64998fe9f8cb5f7f30d61a5",
+    "time": "2026-10-26T09:18:48+01:00",
+    "behind": 0,
+    "changedFiles": {
+      "items": [],
+      "total": 0
+    }
+  },
+  "context": {
+    "targets": [
+      {
+        "kind": "file",
+        "target": "src/jobs/report.ts",
+        "file": "src/jobs/report.ts",
+        "area": "jobs",
+        "layer": "jobs",
+        "symbols": {
+          "items": [
+            {
+              "name": "dailyReport",
+              "kind": "function",
+              "file": "src/jobs/report.ts",
+              "line": 3,
+              "area": "jobs",
+              "layer": "jobs"
+            },
+            {
+              "name": "weeklyTotals",
+              "kind": "function",
+              "file": "src/jobs/report.ts",
+              "line": 7,
+              "area": "jobs",
+              "layer": "jobs"
+            }
+          ],
+          "total": 2
+        },
+        "imports": {
+          "items": [
+            "src/jobs/cleanup.ts"
+          ],
+          "total": 1
+        },
+        "importedBy": {
+          "items": [
+            "src/jobs/notify.ts"
+          ],
+          "total": 1
+        },
+        "dependentsByArea": [
+          {
+            "area": "jobs",
+            "count": 1
+          }
+        ]
+      },
+      {
+        "kind": "file",
+        "target": "src/api/users.ts",
+        "file": "src/api/users.ts",
+        "area": "api",
+        "layer": "api",
+        "symbols": {
+          "items": [
+            {
+              "name": "getUser",
+              "kind": "function",
+              "file": "src/api/users.ts",
+              "line": 4,
+              "area": "api",
+              "layer": "api"
+            },
+            {
+              "name": "userName",
+              "kind": "function",
+              "file": "src/api/users.ts",
+              "line": 8,
+              "area": "api",
+              "layer": "api"
+            },
+            {
+              "name": "userCredit",
+              "kind": "function",
+              "file": "src/api/users.ts",
+              "line": 12,
+              "area": "api",
+              "layer": "api"
+            },
+            {
+              "name": "countActiveUsers",
+              "kind": "function",
+              "file": "src/api/users.ts",
+              "line": 19,
+              "area": "api",
+              "layer": "api"
+            }
+          ],
+          "total": 4
+        },
+        "imports": {
+          "items": [
+            "src/api/format.ts",
+            "src/db/users.ts"
+          ],
+          "total": 2
+        },
+        "importedBy": {
+          "items": [
+            "src/api/router.ts"
+          ],
+          "total": 1
+        },
+        "dependentsByArea": [
+          {
+            "area": "api",
+            "count": 1
+          }
+        ]
+      }
+    ],
+    "landing": {
+      "areas": [
+        {
+          "area": "api",
+          "count": 1
+        },
+        {
+          "area": "jobs",
+          "count": 1
+        }
+      ],
+      "dependents": {
+        "items": [
+          {
+            "symbol": {
+              "name": "route",
+              "kind": "function",
+              "file": "src/api/router.ts",
+              "line": 4,
+              "area": "api",
+              "layer": "api"
+            },
+            "how": [
+              "calls"
+            ]
+          },
+          {
+            "symbol": {
+              "name": "notifyOwner",
+              "kind": "function",
+              "file": "src/jobs/notify.ts",
+              "line": 3,
+              "area": "jobs",
+              "layer": "jobs"
+            },
+            "how": [
+              "calls"
+            ]
+          }
+        ],
+        "total": 2
+      },
+      "dependentsByArea": [
+        {
+          "area": "api",
+          "count": 1
+        },
+        {
+          "area": "jobs",
+          "count": 1
+        }
+      ],
+      "reach": {
+        "byHop": [
+          2,
+          1,
+          0
+        ],
+        "symbols": 3,
+        "files": 4,
+        "byArea": [
+          {
+            "area": "api",
+            "count": 2
+          },
+          {
+            "area": "jobs",
+            "count": 1
+          },
+          {
+            "area": "src ·",
+            "count": 1
+          }
+        ]
+      }
+    }
+  },
+  "rules": [
+    {
+      "rule": {
+        "line": 2,
+        "text": "src/jobs never depends on src/api",
+        "form": "never",
+        "from": [
+          "src/jobs"
+        ],
+        "to": [
+          "src/api"
+        ],
+        "because": "jobs read the database through src/db"
+      },
+      "files": [
+        "src/jobs/report.ts"
+      ]
+    }
+  ]
+}

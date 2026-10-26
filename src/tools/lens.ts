@@ -3,6 +3,7 @@ import * as z from 'zod/v4';
 import { clientName } from '../client-name.js';
 import { resolveRepo } from '../repos.js';
 import { LensLines, LensRead, readLens, sendLensWords, WordsWritten, type LensWords } from '../session-api.js';
+import { passing, quote, rangeLines, snapshots } from './rules.js';
 import { dataResult, repoParam } from './shared.js';
 
 const LensOutput = z.object({ repo: z.string(), ...LensRead.shape });
@@ -39,14 +40,15 @@ function dependencyLines(dependencies: LensDependencies): string[] {
 }
 
 /** The lens as the model reads it: what to send back, then every step with its code, every card, layer and flow by id. */
-function describeLens(repo: string, range: Read['range'], lens: NonNullable<Read['lens']>, limits: Read['limits']): string {
+function describeLens(repo: string, lens: NonNullable<Read['lens']>, { range, limits, rules, rulesFailure }: Read): string {
   // stepTitle reads "step title"
   const caps = Object.entries(limits).map(([key, max]) => `${key.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`)} ${max}`).join(', ');
   return [
-    `The Lens of ${repo}, snapshots ${range.base === null ? 'from the start' : range.base.slice(0, 8)}..${range.head.slice(0, 8)}; its words now: ${lens.words.source}${lens.words.author ? ` (${lens.words.author})` : ''}.`,
+    `The Lens of ${repo}, snapshots ${snapshots(range)}; its words now: ${lens.words.source}${lens.words.author ? ` (${lens.words.author})` : ''}.`,
     ...(lens.summary ? [`Summary: ${lens.summary}`] : []),
-    `Word it with write_lens_words, passing base ${JSON.stringify(range.base)} and head ${JSON.stringify(range.head)}: a summary of two sentences, for each step a title and one or two sentences, for each changed card the role it plays. Name only the ids below; text past its limit is cut (characters: ${caps}).`,
-    ...(lens.quotes?.length ? ['Checkpoint messages a why may quote:', ...lens.quotes.map((quote) => `- ${JSON.stringify(quote)}`)] : []),
+    `Word it with write_lens_words, ${passing(range)}: a summary of two sentences, for each step a title and one or two sentences, for each changed card the role it plays. Name only the ids below; text past its limit is cut (characters: ${caps}).`,
+    ...(lens.quotes?.length ? ['Checkpoint messages a why may quote:', ...lens.quotes.map((message) => `- ${JSON.stringify(message)}`)] : []),
+    ...rangeLines(rules, rulesFailure),
     ...dependencyLines(lens.dependencies),
     '',
     ...lens.steps.flatMap((step) => {
@@ -56,6 +58,7 @@ function describeLens(repo: string, range: Read['range'], lens: NonNullable<Read
         `Step ${step.id} "${step.title}": cards ${step.components.join(', ')}; files ${step.files.join(', ') || 'none'}`,
         ...(step.symbols?.length ? [`  Symbols: ${step.symbols.map(symbolLine).join(', ')}`] : []),
         ...(step.dependencies?.length ? [`  Dependencies: ${step.dependencies.join('; ')}`] : []),
+        ...(step.rules?.length ? [`  Rules that name its links: ${step.rules.map(quote).join(', ')}`] : []),
         ...(step.body ? [`  ${step.body}`] : []),
         `${fence}diff`,
         step.diff,
@@ -76,8 +79,11 @@ export async function getLens({ base, head, repo }: { base?: string | null; head
   const project = resolveRepo(repo);
   const read = await readLens({ repoPath: project.path, base, head });
   const data = { repo: project.name, ...read };
-  if (read.lens === null) return dataResult(LensOutput, `Nothing in ${project.name}'s range ${read.range.head.slice(0, 8)} changes code: it has no lens to word.`, data);
-  return dataResult(LensOutput, describeLens(project.name, read.range, read.lens, read.limits), data);
+  if (read.lens === null) {
+    const nothing = `Nothing in ${project.name}'s range ${read.range.head.slice(0, 8)} changes code: it has no lens to word.`;
+    return dataResult(LensOutput, [nothing, ...rangeLines(read.rules, read.rulesFailure)].join('\n'), data);
+  }
+  return dataResult(LensOutput, describeLens(project.name, read.lens, read), data);
 }
 
 export async function writeLensWords(
@@ -100,7 +106,7 @@ export function registerLens(server: McpServer): void {
     {
       title: "Read a range's Lens",
       description:
-        "Read ShadowGit's Lens of a range of snapshots, by default the latest AI session's: its steps with their code, the cards (components) and flows on its canvas, each with an id and its words so far, and what the range makes depend on what: each new, gone or two-way dependency between the project's areas and layers, with the links that make it and the steps that hold it. Read it at the end of a session, after the checkpoint, to word it with write_lens_words; your words may say why a dependency appeared. Needs the ShadowGit app running.",
+        "Read ShadowGit's Lens of a range of snapshots, by default the latest AI session's: its steps with their code, the cards (components) and flows on its canvas, each with an id and its words so far; what the range makes depend on what: each new, gone or two-way dependency between the project's areas and layers, with the links that make it and the steps that hold it; and each of the project's rules (.shadowgit-rules) that names a link the range adds, with its reason, links and steps, also for a range with no Lens. Read it at the end of a session, after the checkpoint, to word it with write_lens_words; your words may say why a dependency appeared, or why a link a rule names is there: say the rule names it, and quote the rule. Needs the ShadowGit app running.",
       inputSchema: z.object({
         base: Snapshot.nullable().optional().describe('The snapshot the range starts from, with head (null: the start of the history). Leave both out for the latest AI session'),
         head: Snapshot.optional().describe("The range's newest snapshot; leave out for the latest AI session"),

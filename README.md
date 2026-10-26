@@ -8,7 +8,8 @@ changed and when, and can save its own edits as one named checkpoint instead of 
 
 - Node.js 20 or later
 - The ShadowGit app (0.3.4 or later for checkpoints, a release after 0.3.5 for the Lens, after 0.3.7 for its linked
-  words, after 0.3.9 for the map, after 0.3.10 for the Lens's dependency facts), tracking at least one project.
+  words, after 0.3.9 for the map, after 0.3.10 for the Lens's dependency facts, 0.3.11 or later for the project's
+  rules), tracking at least one project.
   Reading history works while the app is closed;
   sessions, checkpoints, the Lens and the map need it running.
 - Git on your PATH
@@ -50,12 +51,12 @@ webshop") when ShadowGit tracks more than one.
 |---|---|
 | `list_repos` | Lists tracked projects, the current one, their last snapshot and any active session |
 | `git_command` | Runs a read-only git command (`log`, `diff`, `show`, `blame`, …) on the snapshot history |
-| `get_map` | Gives how the project is organised: its areas, layers and the links between them, or one area |
-| `get_code_context` | Gives where files and symbols sit, what depends on them, and where a change to them lands |
+| `get_map` | Gives how the project is organised: its areas, layers and the links between them, or one area, and the project's rules |
+| `get_code_context` | Gives where files and symbols sit, what depends on them, where a change to them lands, and the project's rules for them |
 | `start_session` | Pauses automatic snapshots while the assistant edits |
-| `checkpoint` | Saves the current changes as one named checkpoint, following `.shadowgit-ignore` |
+| `checkpoint` | Saves the current changes as one named checkpoint, following `.shadowgit-ignore`, then checks it against the project's `.shadowgit-rules` |
 | `end_session` | Resumes automatic snapshots |
-| `get_lens` | Reads ShadowGit's Lens of a range, by default the latest AI session, with what it makes depend on what |
+| `get_lens` | Reads ShadowGit's Lens of a range, by default the latest AI session, with what it makes depend on what and the links a rule names |
 | `write_lens_words` | Writes the Lens's words for that range, kept in the history, with links, a why and an excerpt |
 
 The other tools work on the current project unless given `repo`.

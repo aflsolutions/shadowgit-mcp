@@ -1,0 +1,27 @@
+{
+  "success": true,
+  "range": {
+    "base": "c108bcf019a641838b613de7b2bad835bc1666d1",
+    "head": "a9ad5a1f0796e077337af7e393e30cf3ab898dd2"
+  },
+  "lens": null,
+  "rules": {
+    "rules": 2,
+    "matches": [],
+    "file": {
+      "added": [
+        "nothing depends on lodash"
+      ],
+      "removed": []
+    }
+  },
+  "limits": {
+    "summary": 400,
+    "stepTitle": 60,
+    "stepBody": 600,
+    "why": 300,
+    "role": 120,
+    "layerName": 24,
+    "flowLabel": 32
+  }
+}

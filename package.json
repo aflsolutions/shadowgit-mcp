@@ -1,6 +1,6 @@
 {
   "name": "shadowgit-mcp-server",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "MCP server that lets AI assistants read ShadowGit's snapshot history and save their edits as sessions and checkpoints",
   "mcpName": "io.github.aflsolutions/shadowgit",
   "type": "module",
@@ -24,6 +24,7 @@
     "eval": "npm run build && tsx scripts/eval-docs-phrases.ts",
     "eval:lens": "npm run build && tsx scripts/eval-lens-unprompted.ts",
     "eval:map": "npm run build && tsx scripts/eval-map-unprompted.ts",
+    "eval:rules": "npm run build && tsx scripts/eval-rules.ts",
     "prepublishOnly": "npm run typecheck && npm run lint && npm test"
   },
   "keywords": [

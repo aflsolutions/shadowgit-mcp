@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import type * as z from 'zod/v4';
 import { LensRead } from '../../src/session-api.js';
 import { shadowGit } from './fixtures.js';
 
@@ -31,10 +32,17 @@ export interface FakeApp {
    * answers that commit, or 409 when nothing changed. Null answers a canned commit.
    */
   checkpointsIn: string | null;
+  /**
+   * Like the app's poller, which takes any change into an automatic snapshot within seconds unless a session pauses
+   * it: a checkpoint outside a session finds the change in such a snapshot, and nothing left to commit.
+   */
+  snapshotsWithoutSession: boolean;
+  /** The check a 200 checkpoint answers beside its commit, as an app that checks rules sends it; null sends none. */
+  checkpointRules: object | null;
   /** False is an app without the Lens routes: they answer the catch-all 404. */
   lensRoutes: boolean;
-  /** What GET /lens answers: a range, and its lens or null for a range that changes no code. */
-  lensAnswer: { range: { base: string | null; head: string }; lens: typeof FAKE_LENS | null };
+  /** What GET /lens answers: a range, its lens or null for a range that changes no code, and its rules' check as an app that has them sends it. */
+  lensAnswer: Omit<z.input<typeof LensRead>, 'limits'>;
   /** 200 keeps the words; 400 is an app older than linked words refusing them; 409 is a range that changes no code. */
   wordsStatus: 200 | 400 | 409;
   /** False is an app without the map routes: they answer the catch-all 404. */
@@ -81,12 +89,13 @@ export const FAKE_CITED_LENS = {
   })),
 };
 
+const fixture = (name: string): Record<string, unknown> => JSON.parse(readFileSync(new URL(`../fixtures/${name}.json`, import.meta.url), 'utf8')) as Record<string, unknown>;
 // Without the success the app sends beside each answer: the map routes add it, as the Lens route does
-const mapFixture = (name: string): object => {
-  const answer = JSON.parse(readFileSync(new URL(`../fixtures/map/${name}.json`, import.meta.url), 'utf8')) as Record<string, unknown>;
+const withoutSuccess = (answer: Record<string, unknown>): object => {
   delete answer.success;
   return answer;
 };
+const mapFixture = (name: string) => withoutSuccess(fixture(`map/${name}`));
 /**
  * The app's real answers for the webshop of `tests/fixtures/map/project.json`: its summary, its billing area,
  * chargeCard's context, chargeCard with checkout, targets that don't resolve, and src/billing/charge.ts.
@@ -104,9 +113,9 @@ export const MAP_ANSWERS = {
   checkoutSummary: mapFixture('checkout-summary'),
 };
 /** The webshop the map answers are of: path → content. */
-export const MAP_PROJECT = JSON.parse(readFileSync(new URL('../fixtures/map/project.json', import.meta.url), 'utf8')) as Record<string, string>;
+export const MAP_PROJECT = fixture('map/project') as Record<string, string>;
 /** The real app's GET /api/lens body for a session that makes the webshop's jobs depend on api. */
-export const LENS_ANSWER_WITH_FACTS = JSON.parse(readFileSync(new URL('../fixtures/lens/dependencies.json', import.meta.url), 'utf8')) as object;
+export const LENS_ANSWER_WITH_FACTS: object = fixture('lens/dependencies');
 const captured = LensRead.parse(LENS_ANSWER_WITH_FACTS).lens;
 if (captured?.dependencies === undefined) throw new Error('tests/fixtures/lens/dependencies.json holds no dependency facts');
 /** FAKE_LENS with the facts the real app drew in that answer, its step holding them as the app's step did. */
@@ -115,6 +124,21 @@ export const FAKE_FACTS_LENS = {
   dependencies: captured.dependencies,
   steps: FAKE_LENS.steps.map((step) => ({ ...step, dependencies: captured.steps[0]?.dependencies ?? [] })),
 };
+/**
+ * The real app's answers for the webshop of `tests/fixtures/rules/project.json`, whose .shadowgit-rules reads
+ * "src/jobs never depends on src/api because jobs read the database through src/db": its summary, the context of
+ * src/jobs/report.ts and src/api/users.ts, a session's checkpoint and Lens that make report.ts import api's countUsers
+ * (as sent, with success), and the Lens of a session that adds a rule alone.
+ */
+export const RULES_ANSWERS = {
+  summary: withoutSuccess(fixture('rules/summary')),
+  context: withoutSuccess(fixture('rules/context')),
+  checkpoint: fixture('rules/checkpoint'),
+  lens: fixture('rules/lens'),
+  rulesOnly: fixture('rules/rules-only'),
+};
+/** The webshop the rules answers are of, its .shadowgit-rules included: path → content. */
+export const RULES_PROJECT = fixture('rules/project') as Record<string, string>;
 /** What the map routes answer by default: the summary, the billing area, and chargeCard's context. */
 export const mapAnswers = () => ({ map: MAP_ANSWERS.summary, area: MAP_ANSWERS.area, context: MAP_ANSWERS.context });
 
@@ -144,6 +168,8 @@ async function listen(): Promise<FakeApp> {
     sessions: [],
     checkpointStatus: 200,
     checkpointsIn: null,
+    snapshotsWithoutSession: false,
+    checkpointRules: null,
     lensRoutes: true,
     lensAnswer: { range: FAKE_RANGE, lens: FAKE_LENS },
     answers: {},
@@ -200,12 +226,21 @@ async function listen(): Promise<FakeApp> {
       if (app.checkpointStatus === 404) return page(404, '<pre>Cannot POST /api/checkpoint</pre>');
       if (app.checkpointStatus === 409) return json(409, { success: false, error: 'No changes to commit' });
       if (app.checkpointStatus === 500) return page(500, '<h1>Internal Server Error</h1>');
-      if (app.checkpointsIn === null) return json(200, { success: true, commit: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678', filesChanged: 2 });
+      // Read once the commit is made: a check of the project reads its new HEAD
+      const rules = () => {
+        const check = app.checkpointRules;
+        return check === null ? {} : { rules: check };
+      };
+      if (app.checkpointsIn === null) return json(200, { success: true, commit: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678', filesChanged: 2, ...rules() });
       shadowGit(app.checkpointsIn, ['add', '-A']);
       const changed = shadowGit(app.checkpointsIn, ['diff', '--cached', '--name-only']).split('\n').filter(Boolean);
       if (changed.length === 0) return json(409, { success: false, error: 'No changes to commit' });
+      if (app.snapshotsWithoutSession && !app.sessions.some((session) => session.repoPath === body.repoPath)) {
+        shadowGit(app.checkpointsIn, ['commit', '--quiet', '-m', 'Auto snapshot']);
+        return json(409, { success: false, error: 'No changes to commit' });
+      }
       shadowGit(app.checkpointsIn, ['commit', '--quiet', '-m', String(body.title)]);
-      return json(200, { success: true, commit: shadowGit(app.checkpointsIn, ['rev-parse', 'HEAD']), filesChanged: changed.length });
+      return json(200, { success: true, commit: shadowGit(app.checkpointsIn, ['rev-parse', 'HEAD']), filesChanged: changed.length, ...rules() });
     }
     if (app.lensRoutes && route.startsWith('/lens?')) return json(200, { success: true, ...app.lensAnswer, limits: FAKE_LIMITS });
     if (app.lensRoutes && route === '/lens/words') {

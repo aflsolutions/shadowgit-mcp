@@ -1,0 +1,198 @@
+{
+  "success": true,
+  "mapAsOf": {
+    "snapshot": "e86a58502f729666b64998fe9f8cb5f7f30d61a5",
+    "time": "2026-10-26T09:18:48+01:00",
+    "behind": 0,
+    "changedFiles": {
+      "items": [],
+      "total": 0
+    }
+  },
+  "summary": {
+    "repo": "project",
+    "commit": "e86a58502f729666b64998fe9f8cb5f7f30d61a5",
+    "counts": {
+      "files": 20,
+      "symbols": 47,
+      "areas": 4,
+      "calls": 34,
+      "processes": 13
+    },
+    "layers": [
+      {
+        "name": "api",
+        "kind": "folder",
+        "files": 7
+      },
+      {
+        "name": "billing",
+        "kind": "folder",
+        "files": 6
+      },
+      {
+        "name": "db",
+        "kind": "folder",
+        "files": 1
+      },
+      {
+        "name": "jobs",
+        "kind": "folder",
+        "files": 5
+      }
+    ],
+    "areas": {
+      "items": [
+        {
+          "label": "api",
+          "path": "src/api",
+          "files": 7,
+          "symbols": 18,
+          "layers": [
+            "api"
+          ]
+        },
+        {
+          "label": "billing",
+          "path": "src/billing",
+          "files": 6,
+          "symbols": 15,
+          "layers": [
+            "billing"
+          ]
+        },
+        {
+          "label": "jobs",
+          "path": "src/jobs",
+          "files": 5,
+          "symbols": 12,
+          "layers": [
+            "jobs"
+          ]
+        },
+        {
+          "label": "src ·",
+          "path": "src",
+          "files": 2,
+          "symbols": 2,
+          "layers": [
+            "db"
+          ]
+        }
+      ],
+      "total": 4
+    },
+    "links": {
+      "items": [
+        {
+          "from": "api",
+          "to": "billing",
+          "count": 3
+        },
+        {
+          "from": "api",
+          "to": "src ·",
+          "count": 3
+        },
+        {
+          "from": "jobs",
+          "to": "billing",
+          "count": 3
+        },
+        {
+          "from": "src ·",
+          "to": "api",
+          "count": 3
+        }
+      ],
+      "total": 4
+    },
+    "processes": {
+      "items": [
+        {
+          "label": "StartServer -> RoundCents",
+          "areas": [
+            "api",
+            "billing"
+          ]
+        },
+        {
+          "label": "StartServer -> RecordPayment",
+          "areas": [
+            "api",
+            "billing"
+          ]
+        },
+        {
+          "label": "StartServer -> Shipping",
+          "areas": [
+            "api"
+          ]
+        },
+        {
+          "label": "InvoiceLine -> RoundCents",
+          "areas": [
+            "billing"
+          ]
+        },
+        {
+          "label": "CleanupCarts -> MaxDelay",
+          "areas": [
+            "jobs"
+          ]
+        },
+        {
+          "label": "StartServer -> ValidateCart",
+          "areas": [
+            "api"
+          ]
+        },
+        {
+          "label": "StartServer -> UserName",
+          "areas": [
+            "api"
+          ]
+        },
+        {
+          "label": "RetryFailedCharges -> RoundCents",
+          "areas": [
+            "jobs",
+            "billing"
+          ]
+        },
+        {
+          "label": "RetryFailedCharges -> RecordPayment",
+          "areas": [
+            "jobs",
+            "billing"
+          ]
+        },
+        {
+          "label": "RetryFailedCharges -> MaxDelay",
+          "areas": [
+            "jobs"
+          ]
+        }
+      ],
+      "total": 13
+    }
+  },
+  "rules": {
+    "rules": [
+      {
+        "line": 2,
+        "text": "src/jobs never depends on src/api",
+        "form": "never",
+        "from": [
+          "src/jobs"
+        ],
+        "to": [
+          "src/api"
+        ],
+        "because": "jobs read the database through src/db"
+      }
+    ],
+    "unread": [],
+    "cutAt": null
+  }
+}

@@ -3,7 +3,7 @@ import * as z from 'zod/v4';
 import { clientName } from '../client-name.js';
 import { resolveRepo } from '../repos.js';
 import { LensLines, LensRead, readLens, sendLensWords, WordsWritten, type LensWords } from '../session-api.js';
-import { checkLines, failureLine, snapshots } from './rules.js';
+import { checkLines, failureLine, quote, snapshots } from './rules.js';
 import { dataResult, repoParam } from './shared.js';
 
 const LensOutput = z.object({ repo: z.string(), ...LensRead.shape });
@@ -64,7 +64,7 @@ function describeLens(repo: string, { range, lens, limits, ...rules }: Read & { 
         `Step ${step.id} "${step.title}": cards ${step.components.join(', ')}; files ${step.files.join(', ') || 'none'}`,
         ...(step.symbols?.length ? [`  Symbols: ${step.symbols.map(symbolLine).join(', ')}`] : []),
         ...(step.dependencies?.length ? [`  Dependencies: ${step.dependencies.join('; ')}`] : []),
-        ...(step.rules?.length ? [`  Rules that name its links: ${step.rules.map((text) => JSON.stringify(text)).join(', ')}`] : []),
+        ...(step.rules?.length ? [`  Rules that name its links: ${step.rules.map(quote).join(', ')}`] : []),
         ...(step.body ? [`  ${step.body}`] : []),
         `${fence}diff`,
         step.diff,

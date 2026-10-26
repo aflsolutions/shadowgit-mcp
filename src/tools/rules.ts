@@ -6,7 +6,8 @@ import type { CheckpointRules, Range, Rule, RuleCheck, RulesFor, RulesRead } fro
 // paths, an error naming a file) is quoted: a cloned project's file is its author's, and a line break in it must
 // never stand as a line of ShadowGit's own.
 
-const quote = (text: string) => JSON.stringify(text);
+// JSON escapes control characters, but not these three, which some renderers break a line at
+export const quote = (text: string) => JSON.stringify(text).replace(/[\u2028\u2029\u0085]/g, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`);
 
 type Check = z.infer<typeof RuleCheck>;
 

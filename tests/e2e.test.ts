@@ -47,6 +47,15 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(INSTRUCTIONS.indexOf(line)).toBeLessThan(INSTRUCTIONS.indexOf('start_session'));
   });
 
+  // Outside a session the app's automatic snapshot takes an edit within seconds, and a checkpoint after it has nothing
+  // left to check: in a project with rules, every edit goes through a session
+  it('asks for a session before any edit in a project with rules, never a checkpoint alone', () => {
+    expect(INSTRUCTIONS).toContain(
+      '- Any edit, even one line, in a project with rules (get_code_context lists them) or to .shadowgit-rules: start_session first, so the checkpoint checks the change against them.',
+    );
+    expect(INSTRUCTIONS).not.toContain('checkpoint it before you reply');
+  });
+
   // Claude Code shows the model a tool's structured output alone, never its text: the rules must be in the schema
   it("puts the rules for links, a why and an excerpt in write_lens_words' schema, never in get_lens's text", async () => {
     const { tools } = await client.listTools();

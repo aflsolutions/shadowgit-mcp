@@ -31,6 +31,11 @@ export interface FakeApp {
    * answers that commit, or 409 when nothing changed. Null answers a canned commit.
    */
   checkpointsIn: string | null;
+  /**
+   * Like the app's poller, which takes any change into an automatic snapshot within seconds unless a session pauses
+   * it: a checkpoint outside a session finds the change in such a snapshot, and nothing left to commit.
+   */
+  snapshotsWithoutSession: boolean;
   /** The check a 200 checkpoint answers beside its commit, as an app that checks rules sends it; null sends none. */
   checkpointRules: object | null;
   /** False is an app without the Lens routes: they answer the catch-all 404. */
@@ -162,6 +167,7 @@ async function listen(): Promise<FakeApp> {
     sessions: [],
     checkpointStatus: 200,
     checkpointsIn: null,
+    snapshotsWithoutSession: false,
     checkpointRules: null,
     lensRoutes: true,
     lensAnswer: { range: FAKE_RANGE, lens: FAKE_LENS },
@@ -228,6 +234,10 @@ async function listen(): Promise<FakeApp> {
       shadowGit(app.checkpointsIn, ['add', '-A']);
       const changed = shadowGit(app.checkpointsIn, ['diff', '--cached', '--name-only']).split('\n').filter(Boolean);
       if (changed.length === 0) return json(409, { success: false, error: 'No changes to commit' });
+      if (app.snapshotsWithoutSession && !app.sessions.some((session) => session.repoPath === body.repoPath)) {
+        shadowGit(app.checkpointsIn, ['commit', '--quiet', '-m', 'Auto snapshot']);
+        return json(409, { success: false, error: 'No changes to commit' });
+      }
       shadowGit(app.checkpointsIn, ['commit', '--quiet', '-m', String(body.title)]);
       return json(200, { success: true, commit: shadowGit(app.checkpointsIn, ['rev-parse', 'HEAD']), filesChanged: changed.length, ...rules() });
     }

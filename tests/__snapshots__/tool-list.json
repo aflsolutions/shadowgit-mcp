@@ -433,6 +433,114 @@
         "repo": {
           "type": "string"
         },
+        "rules": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "cutAt": {
+                  "anyOf": [
+                    {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The first line left unread past 100 rules or 64 KB"
+                },
+                "rules": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "because": {
+                        "description": "Its reason, as written after \"because\"",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "form": {
+                        "description": "never, only or nothing",
+                        "type": "string"
+                      },
+                      "from": {
+                        "description": "The names on its first side; none for a nothing-rule",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "line": {
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991,
+                        "type": "integer"
+                      },
+                      "text": {
+                        "description": "The rule as written, without its reason",
+                        "type": "string"
+                      },
+                      "to": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "line",
+                      "text",
+                      "form",
+                      "from",
+                      "to",
+                      "because"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "unread": {
+                  "description": "Lines read as no rule, as written",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "line": {
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991,
+                        "type": "integer"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "line",
+                      "text"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "rules",
+                "unread",
+                "cutAt"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The project's .shadowgit-rules as read; null without one"
+        },
+        "rulesFailure": {
+          "description": "Why the project's rules couldn't be read",
+          "type": "string"
+        },
         "summary": {
           "additionalProperties": false,
           "properties": {
@@ -1623,6 +1731,84 @@
         },
         "repo": {
           "type": "string"
+        },
+        "rules": {
+          "anyOf": [
+            {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "files": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "rule": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "because": {
+                        "description": "Its reason, as written after \"because\"",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "form": {
+                        "description": "never, only or nothing",
+                        "type": "string"
+                      },
+                      "from": {
+                        "description": "The names on its first side; none for a nothing-rule",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "line": {
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991,
+                        "type": "integer"
+                      },
+                      "text": {
+                        "description": "The rule as written, without its reason",
+                        "type": "string"
+                      },
+                      "to": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "line",
+                      "text",
+                      "form",
+                      "from",
+                      "to",
+                      "because"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "rule",
+                  "files"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The project's rules that hold for the files asked about and the files of the symbols; null without a .shadowgit-rules"
+        },
+        "rulesFailure": {
+          "description": "Why the project's rules couldn't be read",
+          "type": "string"
         }
       },
       "required": [
@@ -2084,6 +2270,13 @@
                       "id": {
                         "type": "string"
                       },
+                      "rules": {
+                        "description": "The texts of the rules that name links it holds",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
                       "symbols": {
                         "items": {
                           "additionalProperties": false,
@@ -2256,6 +2449,147 @@
           "type": "object"
         },
         "repo": {
+          "type": "string"
+        },
+        "rules": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "file": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "added": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "removed": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "added",
+                        "removed"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The rules the range adds to and removes from .shadowgit-rules; null when it leaves the file alone"
+                },
+                "matches": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "count": {
+                        "description": "How many links the range adds that the rule names",
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991,
+                        "type": "integer"
+                      },
+                      "links": {
+                        "description": "The first links, in words; count has them all",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "rule": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "because": {
+                            "description": "Its reason, as written after \"because\"",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "form": {
+                            "description": "never, only or nothing",
+                            "type": "string"
+                          },
+                          "from": {
+                            "description": "The names on its first side; none for a nothing-rule",
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "line": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "text": {
+                            "description": "The rule as written, without its reason",
+                            "type": "string"
+                          },
+                          "to": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "required": [
+                          "line",
+                          "text",
+                          "form",
+                          "from",
+                          "to",
+                          "because"
+                        ],
+                        "type": "object"
+                      },
+                      "steps": {
+                        "description": "The ids of the steps that hold them",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "rule",
+                      "count",
+                      "links",
+                      "steps"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "rules": {
+                  "description": "How many rules it was checked against",
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "rules",
+                "matches",
+                "file"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The range checked against the project's rules, also for a range with no lens; null without rules"
+        },
+        "rulesFailure": {
+          "description": "Why the project's rules couldn't be read",
           "type": "string"
         }
       },

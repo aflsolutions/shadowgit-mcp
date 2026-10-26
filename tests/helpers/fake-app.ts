@@ -81,12 +81,13 @@ export const FAKE_CITED_LENS = {
   })),
 };
 
+const fixture = (name: string): Record<string, unknown> => JSON.parse(readFileSync(new URL(`../fixtures/${name}.json`, import.meta.url), 'utf8')) as Record<string, unknown>;
 // Without the success the app sends beside each answer: the map routes add it, as the Lens route does
-const mapFixture = (name: string): object => {
-  const answer = JSON.parse(readFileSync(new URL(`../fixtures/map/${name}.json`, import.meta.url), 'utf8')) as Record<string, unknown>;
+const withoutSuccess = (answer: Record<string, unknown>): object => {
   delete answer.success;
   return answer;
 };
+const mapFixture = (name: string) => withoutSuccess(fixture(`map/${name}`));
 /**
  * The app's real answers for the webshop of `tests/fixtures/map/project.json`: its summary, its billing area,
  * chargeCard's context, chargeCard with checkout, targets that don't resolve, and src/billing/charge.ts.
@@ -115,6 +116,21 @@ export const FAKE_FACTS_LENS = {
   dependencies: captured.dependencies,
   steps: FAKE_LENS.steps.map((step) => ({ ...step, dependencies: captured.steps[0]?.dependencies ?? [] })),
 };
+/**
+ * The real app's answers for the webshop of `tests/fixtures/rules/project.json`, whose .shadowgit-rules reads
+ * "src/jobs never depends on src/api because jobs read the database through src/db": its summary, the context of
+ * src/jobs/report.ts and src/api/users.ts, a session's checkpoint and Lens that make report.ts import api's countUsers
+ * (as sent, with success), and the Lens of a session that adds a rule alone.
+ */
+export const RULES_ANSWERS = {
+  summary: withoutSuccess(fixture('rules/summary')),
+  context: withoutSuccess(fixture('rules/context')),
+  checkpoint: fixture('rules/checkpoint'),
+  lens: fixture('rules/lens'),
+  rulesOnly: fixture('rules/rules-only'),
+};
+/** The webshop the rules answers are of, its .shadowgit-rules included: path → content. */
+export const RULES_PROJECT = fixture('rules/project') as Record<string, string>;
 /** What the map routes answer by default: the summary, the billing area, and chargeCard's context. */
 export const mapAnswers = () => ({ map: MAP_ANSWERS.summary, area: MAP_ANSWERS.area, context: MAP_ANSWERS.context });
 

@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } 
 import {
   AppNotRunningError, AppTimeoutError, LensRead, activeSessions, createCheckpoint, endSession, readArea, readCodeContext, readLens, readMap, sendLensWords, startSession,
 } from '../src/session-api.js';
-import { FAKE_CITED_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, LENS_ANSWER_WITH_FACTS, MAP_ANSWERS, closedAppUrl, mapAnswers, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { ContextRead, SummaryRead } from '../src/map-shapes.js';
+import { FAKE_CITED_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, LENS_ANSWER_WITH_FACTS, MAP_ANSWERS, RULES_ANSWERS, closedAppUrl, mapAnswers, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { restoreEnv } from './helpers/fixtures.js';
 
 let app: FakeApp;
@@ -121,6 +122,60 @@ describe('a body that never ends', () => {
     const error = await activeSessions().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(AppTimeoutError);
     expect(error).toHaveProperty('message', expect.stringMatching(/^ShadowGit did not answer within 3 s\./));
+  });
+});
+
+describe('the rules an app answers', () => {
+  const RULE = 'src/jobs never depends on src/api';
+  const COMMIT = 'a'.repeat(40);
+
+  it('reads the rules in every answer the app sends them in', () => {
+    const lens = LensRead.parse(RULES_ANSWERS.lens);
+    expect(lens.rules?.matches).toEqual([{
+      rule: expect.objectContaining({ line: 2, text: RULE, form: 'never', from: ['src/jobs'], to: ['src/api'], because: 'jobs read the database through src/db' }),
+      count: 2,
+      links: ['src/jobs/report.ts imports src/api/users.ts', expect.stringMatching(/^dailyReport \(src\/jobs\/report\.ts:4\) calls countUsers/)],
+      steps: ['c1'],
+    }]);
+    expect(lens.lens?.steps[0]?.rules).toEqual([RULE]);
+    const rulesOnly = LensRead.parse(RULES_ANSWERS.rulesOnly);
+    expect(rulesOnly.lens).toBeNull();
+    expect(rulesOnly.rules?.file).toEqual({ added: ['nothing depends on lodash'], removed: [] });
+    expect(SummaryRead.parse(RULES_ANSWERS.summary).rules?.rules[0]?.text).toBe(RULE);
+    expect(ContextRead.parse(RULES_ANSWERS.context).rules).toEqual([{ rule: expect.objectContaining({ text: RULE }), files: ['src/jobs/report.ts'] }]);
+  });
+
+  it("reads a checkpoint's check, whether it ran, is running or failed", async () => {
+    const answers = [
+      RULES_ANSWERS.checkpoint,
+      { success: true, commit: COMMIT, filesChanged: 1, rules: { range: { base: null, head: COMMIT }, status: 'running' } },
+      { success: true, commit: COMMIT, filesChanged: 1, rules: { range: null, status: 'failed', error: '.shadowgit-rules is not a file' } },
+    ];
+    for (const answer of answers) {
+      app.answers['/checkpoint'] = answer;
+      // toEqual reads the undefined success as absent: the reader leaves it out
+      expect(await createCheckpoint(checkpointInput)).toEqual({ ...answer, success: undefined });
+    }
+  });
+
+  it('keeps a saved checkpoint whose check comes in a shape it does not read', async () => {
+    app.answers['/checkpoint'] = { success: true, commit: COMMIT, filesChanged: 1, rules: { range: FAKE_RANGE, status: 'skipped' } };
+    expect(await createCheckpoint(checkpointInput)).toEqual({
+      commit: COMMIT,
+      filesChanged: 1,
+      rules: {
+        range: null,
+        status: 'failed',
+        error: "ShadowGit checked this checkpoint against the project's rules and answered in a shape this version of shadowgit-mcp-server does not read. Ask the user to update shadowgit-mcp-server.",
+      },
+    });
+  });
+
+  it('reads an app before the rules as no rules', async () => {
+    expect(await createCheckpoint(checkpointInput)).toStrictEqual({ commit: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678', filesChanged: 2 });
+    expect(LensRead.parse(LENS_ANSWER_WITH_FACTS).rules).toBeUndefined();
+    expect(SummaryRead.parse(MAP_ANSWERS.summary).rules).toBeUndefined();
+    expect(ContextRead.parse(MAP_ANSWERS.context).rules).toBeUndefined();
   });
 });
 

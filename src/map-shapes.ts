@@ -1,4 +1,5 @@
 import * as z from 'zod/v4';
+import { RulesFor, RulesRead } from './rule-shapes.js';
 
 // The app's map answers, as code-graph 0.6.0's map/query writes them: the package is private, so its shapes are
 // mirrored here. Open values (how, a missing target's reason) are strings, which a newer app may add to; the structure
@@ -111,10 +112,19 @@ const MapAsOf = z
   })
   .describe('The snapshot the answer is drawn from');
 
-/** A map without an area asked for: the project's summary. */
-export const SummaryRead = z.object({ mapAsOf: MapAsOf, summary: MapSummary });
+// An app older than the rules sends neither; rulesFailure only when the rules file can't be read
+const RulesFailure = z.string().optional().describe("Why the project's rules couldn't be read");
+const ProjectRules = RulesRead.nullable().optional().describe("The project's .shadowgit-rules as read; null without one");
+
+/** A map without an area asked for: the project's summary, and its rules. */
+export const SummaryRead = z.object({ mapAsOf: MapAsOf, summary: MapSummary, rules: ProjectRules, rulesFailure: RulesFailure });
 /** One area asked for: the area, or why there is none. */
 export const AreaRead = z.object({ mapAsOf: MapAsOf, area: z.union([AreaView, MissingArea]) });
 /** get_map's answer, one of the two. */
-export const MapRead = z.object({ mapAsOf: MapAsOf, summary: MapSummary.optional(), area: AreaRead.shape.area.optional() });
-export const ContextRead = z.object({ mapAsOf: MapAsOf, context: CodeContext });
+export const MapRead = z.object({ mapAsOf: MapAsOf, summary: MapSummary.optional(), area: AreaRead.shape.area.optional(), rules: ProjectRules, rulesFailure: RulesFailure });
+export const ContextRead = z.object({
+  mapAsOf: MapAsOf,
+  context: CodeContext,
+  rules: RulesFor.nullable().optional().describe("The project's rules that hold for the files asked about and the files of the symbols; null without a .shadowgit-rules"),
+  rulesFailure: RulesFailure,
+});

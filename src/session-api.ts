@@ -1,5 +1,6 @@
 import * as z from 'zod/v4';
 import { AreaRead, ContextRead, SummaryRead } from './map-shapes.js';
+import { CheckpointRules, Range, RuleCheck } from './rule-shapes.js';
 import { toLocalIso } from './time.js';
 
 export class AppNotRunningError extends Error {
@@ -26,6 +27,7 @@ const SLOW_REQUEST_TIMEOUT_MS = 58_000;
 const APP_TOO_OLD = "This version of ShadowGit can't create checkpoints for AI assistants. Ask the user to update the ShadowGit app.";
 const APP_WITHOUT_LENS = 'This version of ShadowGit has no Lens for AI assistants. Ask the user to update the ShadowGit app.';
 const APP_WITHOUT_MAP = 'This version of ShadowGit has no map for AI assistants. Ask the user to update the ShadowGit app.';
+const CHECK_UNREAD = "ShadowGit checked this checkpoint against the project's rules and answered in a shape this version of shadowgit-mcp-server does not read. Ask the user to update shadowgit-mcp-server.";
 const APP_WITHOUT_PIECES = "This version of ShadowGit reads a step's body as plain text only: ask the user to update the ShadowGit app, or send each body as plain text.";
 
 const Session = z.object({
@@ -37,10 +39,10 @@ const Session = z.object({
 });
 const Sessions = z.object({ sessions: z.array(Session) });
 const StartedSession = z.object({ sessionId: z.string() });
-const Checkpoint = z.object({ commit: z.string(), filesChanged: z.number() });
+// The check is read on its own: the checkpoint is saved whatever shape it comes in
+const Checkpoint = z.object({ commit: z.string(), filesChanged: z.number(), rules: z.unknown().optional() });
 const ErrorReply = z.object({ error: z.string() });
 
-const LensRange = z.object({ base: z.string().nullable(), head: z.string() });
 export const LensLines = z.object({ start: z.number().int(), end: z.number().int() });
 /** A symbol of a step, with its lines on each side it has; `basePath` is its file in the base, null when the change added it. */
 const LensSymbol = z.object({ name: z.string(), path: z.string(), basePath: z.string().nullable(), base: LensLines.nullable(), head: LensLines.nullable() });
@@ -66,6 +68,7 @@ const LensSkeleton = z.object({
   steps: z.array(z.object({
     id: z.string(), title: z.string(), body: z.string().nullable(), components: z.array(z.string()), files: z.array(z.string()), diff: z.string(), symbols: z.array(LensSymbol).optional(),
     dependencies: z.array(z.string()).optional().describe("The sentences of the step's own facts"),
+    rules: z.array(z.string()).optional().describe('The texts of the rules that name links it holds'),
   })),
   components: z.array(z.object({
     id: z.string(), name: z.string(), kind: z.string(), delta: z.string(), context: z.boolean(), role: z.string().nullable(), path: z.string(), symbols: z.array(z.string()),
@@ -73,7 +76,14 @@ const LensSkeleton = z.object({
   layers: z.array(z.object({ id: z.string(), name: z.string() })),
   flows: z.array(z.object({ id: z.string(), from: z.string(), to: z.string(), label: z.string() })),
 });
-export const LensRead = z.object({ range: LensRange, lens: LensSkeleton.nullable(), limits: z.record(z.string(), z.number()) });
+// An app older than the rules sends neither; rulesFailure only when the rules file can't be read
+export const LensRead = z.object({
+  range: Range,
+  lens: LensSkeleton.nullable(),
+  rules: RuleCheck.nullable().optional().describe("The range checked against the project's rules, also for a range with no lens; null without rules"),
+  rulesFailure: z.string().optional().describe("Why the project's rules couldn't be read"),
+  limits: z.record(z.string(), z.number()),
+});
 const LensApplied = z.object({ summary: z.boolean(), steps: z.number(), components: z.number(), layers: z.number(), flows: z.number() });
 export const WordsWritten = z.object({ applied: LensApplied, ignored: z.array(z.string()) });
 
@@ -167,7 +177,7 @@ export async function createCheckpoint(input: {
   title: string;
   message?: string;
   author: string;
-}): Promise<{ commit: string | null; filesChanged: number }> {
+}): Promise<{ commit: string | null; filesChanged: number; rules?: z.infer<typeof CheckpointRules> }> {
   // The app runs git add and git commit inside this request, which takes a while on a large project.
   const { status, json } = await request('/checkpoint', input, { timeoutMs: SLOW_REQUEST_TIMEOUT_MS, accept: [404, 409] }).catch((error: unknown) => {
     if (!(error instanceof AppTimeoutError)) throw error;
@@ -178,7 +188,10 @@ export async function createCheckpoint(input: {
   });
   if (status === 404) throw new Error(APP_TOO_OLD);
   if (status === 409) return { commit: null, filesChanged: 0 };
-  return read(Checkpoint, json, 'checkpoint');
+  const { commit, filesChanged, rules } = read(Checkpoint, json, 'checkpoint');
+  if (rules === undefined) return { commit, filesChanged };
+  const check = CheckpointRules.safeParse(rules);
+  return { commit, filesChanged, rules: check.success ? check.data : { range: null, status: 'failed', error: CHECK_UNREAD } };
 }
 
 /** The lens of a range for the agent to word: the latest AI session's without a head. The app may draw it inside the request. */

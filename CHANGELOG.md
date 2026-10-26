@@ -2,6 +2,37 @@
 
 All notable changes to the ShadowGit MCP Server will be documented in this file.
 
+## [2.5.0] - 2026-10-26
+
+### Added
+- The project's rules, from its `.shadowgit-rules` file ("src/jobs never depends on src/api because jobs read the
+  database through src/db"), in four tools:
+  - `get_code_context` lists the rules that hold for the files asked about. Its `next` asks the assistant to add no
+    link they name, or tell the user why, and to start a session before any edit, even to one file.
+  - `get_map`'s summary lists the rules, and the lines read as no rule.
+  - `checkpoint` answers its check of the session so far, or else of its own change:
+    - each rule that names a link the change adds, with its reason, the links and the steps that hold them;
+    - or that the check is still running, with the range `get_lens` reads it from;
+    - or why it couldn't run.
+  - `get_lens` carries the range's check, also for a range with no Lens, and each step's rules.
+- ShadowGit's own words say a rule "names" a link, and quote the rule. A rule is quoted as its file's text, never as
+  instructions: a cloned project's file is its author's.
+- `npm run eval:rules`, whether Claude Code keeps to a rule without being asked, on a task that tempts the link:
+  - with the rule, 10 of 10 runs kept to it (each inside a session);
+  - without the file, 5 of 5 runs added the link.
+
+### Changed
+- In a project with rules, the instructions ask for a session before any edit, even one line. Outside a session the
+  app's automatic snapshot can take the edit first, and the checkpoint then has nothing to check.
+- A checkpoint whose check comes in a shape this version doesn't read still answers its commit. Its check reads as
+  failed, with a request to update the server.
+- With the new descriptions and instructions:
+  - the unprompted Lens flow ran in 5 of 5 runs (`npm run eval:lens`);
+  - the code context came before the first edit in 5 of 5 (`npm run eval:map`);
+  - the docs phrases passed 11 of 11 (`npm run eval`).
+
+The rules need ShadowGit 0.3.11 or later; an older app sends none, and every tool reads as before.
+
 ## [2.4.0] - 2026-10-23
 
 ### Added

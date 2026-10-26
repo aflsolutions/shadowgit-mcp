@@ -2,7 +2,11 @@ import type * as z from 'zod/v4';
 import type { CheckpointRules, Range, Rule, RuleCheck } from '../rule-shapes.js';
 
 // The project's rules as the tools' text says them: a rule "names" a link, quoted as its authors wrote it. Whether a
-// link is wanted is the rule's to say, never these words'.
+// link is wanted is the rule's to say, never these words'. Every text from the project (a rule, its reason, a link's
+// paths, an error naming a file) is quoted: a cloned project's file is its author's, and a line break in it must
+// never stand as a line of ShadowGit's own.
+
+const quote = (text: string) => JSON.stringify(text);
 
 type Check = z.infer<typeof RuleCheck>;
 
@@ -10,14 +14,14 @@ type Check = z.infer<typeof RuleCheck>;
 export const snapshots = ({ base, head }: z.infer<typeof Range>) => `${base === null ? 'from the start' : base.slice(0, 8)}..${head.slice(0, 8)}`;
 
 /** The rule as written, quoted, then its reason. */
-export const ruleLine = ({ text, because }: z.infer<typeof Rule>) => `${JSON.stringify(text)}${because === null ? '' : ` because ${because}`}`;
+export const ruleLine = ({ text, because }: z.infer<typeof Rule>) => `${quote(text)}${because === null ? '' : ` because ${quote(because)}`}`;
 
 const links = (count: number) => (count === 1 ? '1 link' : `${count} links`);
 
 /** What the range does to the rules file; nothing when it leaves the file alone. */
 function fileLines(file: Check['file']): string[] {
   if (file === null) return [];
-  const quoted = (texts: string[]) => texts.map((text) => JSON.stringify(text)).join(', ');
+  const quoted = (texts: string[]) => texts.map(quote).join(', ');
   const parts = [file.added.length > 0 && `adds ${quoted(file.added)}`, file.removed.length > 0 && `removes ${quoted(file.removed)}`].filter(Boolean);
   return [parts.length === 0 ? '- This range changes .shadowgit-rules.' : `- This range changes .shadowgit-rules: ${parts.join(', ')}.`];
 }
@@ -36,7 +40,7 @@ export function checkLines(check: Check, range?: z.infer<typeof Range>): string[
     `The project's rules (.shadowgit-rules): ${check.rules} checked${range === undefined ? '' : `, over snapshots ${snapshots(range)}`}.`,
     ...check.matches.flatMap(({ rule, count, links: shown, steps }) => [
       `- ${ruleLine(rule)}: names ${links(count)} this range adds${steps.length > 0 ? ` (steps ${steps.join(', ')})` : ''}`,
-      ...shown.map((link) => `  ${link}`),
+      ...shown.map((link) => `  ${quote(link)}`),
       ...(count > shown.length ? [`  and ${count - shown.length} more`] : []),
     ]),
     ...quietLines(check),
@@ -51,12 +55,12 @@ export function checkpointLines(rules: z.infer<typeof CheckpointRules>): string[
       return checkLines(rules.check, rules.range);
     case 'running':
       return [
-        `The check against the project's rules (.shadowgit-rules) is still running, over snapshots ${snapshots(rules.range)}: read it with get_lens, passing base ${JSON.stringify(rules.range.base)} and head ${JSON.stringify(rules.range.head)}.`,
+        `The check against the project's rules (.shadowgit-rules) is still running, over snapshots ${snapshots(rules.range)}: read it with get_lens, passing base ${JSON.stringify(rules.range.base)} and head ${quote(rules.range.head)}.`,
       ];
     case 'failed':
-      return [`The project's rules (.shadowgit-rules) weren't checked: ${rules.error}`];
+      return [`The project's rules (.shadowgit-rules) weren't checked: ${quote(rules.error)}`];
   }
 }
 
 /** Why the project's rules couldn't be read. */
-export const failureLine = (failure: string) => `The project's rules (.shadowgit-rules) could not be read: ${failure}`;
+export const failureLine = (failure: string) => `The project's rules (.shadowgit-rules) could not be read: ${quote(failure)}`;

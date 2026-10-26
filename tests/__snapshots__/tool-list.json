@@ -2244,7 +2244,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Read ShadowGit's Lens of a range of snapshots, by default the latest AI session's: its steps with their code, the cards (components) and flows on its canvas, each with an id and its words so far, and what the range makes depend on what: each new, gone or two-way dependency between the project's areas and layers, with the links that make it and the steps that hold it. Read it at the end of a session, after the checkpoint, to word it with write_lens_words; your words may say why a dependency appeared. Needs the ShadowGit app running.",
+    "description": "Read ShadowGit's Lens of a range of snapshots, by default the latest AI session's: its steps with their code, the cards (components) and flows on its canvas, each with an id and its words so far; what the range makes depend on what: each new, gone or two-way dependency between the project's areas and layers, with the links that make it and the steps that hold it; and each of the project's rules (.shadowgit-rules) that names a link the range adds, with its reason, links and steps, also for a range with no Lens. Read it at the end of a session, after the checkpoint, to word it with write_lens_words; your words may say why a dependency appeared, or why a link a rule names is there, quoting the rule. Needs the ShadowGit app running.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {

@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import type * as z from 'zod/v4';
 import type { CheckpointRules, RuleCheck } from '../src/rule-shapes.js';
+import { LensRead } from '../src/session-api.js';
 import { checkpoint } from '../src/tools/checkpoint.js';
-import { RULES_ANSWERS, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { getLens } from '../src/tools/lens.js';
+import { FAKE_LENS, FAKE_RANGE, RULES_ANSWERS, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { makeProject, removeTempDirs, restoreEnv, textOf, useStorage } from './helpers/fixtures.js';
 
 let project: string;
@@ -30,6 +32,7 @@ beforeEach(() => {
   process.env.CLAUDE_PROJECT_DIR = project;
   app.checkpointStatus = 200;
   app.checkpointRules = null;
+  app.lensAnswer = { range: FAKE_RANGE, lens: FAKE_LENS };
 });
 
 describe('checkpoint', () => {
@@ -96,5 +99,43 @@ describe('checkpoint', () => {
     const result = await checkpoint({ title: 'Report' }, 'Claude Code');
     expect(result.structuredContent).not.toHaveProperty('rules');
     expect(textOf(result)).toBe('Saved checkpoint a1b2c3d4 "Report" on webshop (2 files).');
+  });
+});
+
+describe('get_lens', () => {
+  const { range, lens, rules } = LensRead.parse(RULES_ANSWERS.lens);
+  const ONLY = LensRead.parse(RULES_ANSWERS.rulesOnly);
+
+  it('lists the rules that name links the range adds, before its dependencies, and on each step', async () => {
+    app.lensAnswer = { range, lens, rules };
+    const result = await getLens({});
+    expect(result.structuredContent).toMatchObject({ repo: 'webshop', rules });
+    const text = textOf(result);
+    expect(text).toContain("The project's rules (.shadowgit-rules): 1 checked.\n- \"src/jobs never depends on src/api\" because jobs read the database through src/db: names 2 links this range adds (steps c1)\n");
+    expect(text.indexOf("The project's rules (.shadowgit-rules)")).toBeLessThan(text.indexOf('Dependencies:'));
+    expect(text).toContain('\n  Rules that name its links: "src/jobs never depends on src/api"\n');
+  });
+
+  it('carries the check beside a range with no Lens', async () => {
+    app.lensAnswer = { range: ONLY.range, lens: null, rules: ONLY.rules };
+    const result = await getLens({});
+    expect(result.structuredContent).toMatchObject({ lens: null, rules: ONLY.rules });
+    expect(textOf(result)).toBe([
+      `Nothing in webshop's range ${ONLY.range.head.slice(0, 8)} changes code: it has no lens to word.`,
+      "The project's rules (.shadowgit-rules): 2 checked.",
+      '- No rule names a link this range adds.',
+      '- This range changes .shadowgit-rules: adds "nothing depends on lodash".',
+    ].join('\n'));
+  });
+
+  it("says why the rules weren't read", async () => {
+    app.lensAnswer = { range: FAKE_RANGE, lens: FAKE_LENS, rules: null, rulesFailure: '.shadowgit-rules is not a file' };
+    const result = await getLens({});
+    expect(result.structuredContent).toMatchObject({ rules: null, rulesFailure: '.shadowgit-rules is not a file' });
+    expect(textOf(result)).toContain("\nThe project's rules (.shadowgit-rules) could not be read: .shadowgit-rules is not a file\n");
+  });
+
+  it('says nothing of rules for an app that sends none', async () => {
+    expect(textOf(await getLens({}))).not.toContain('.shadowgit-rules');
   });
 });

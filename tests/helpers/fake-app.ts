@@ -35,8 +35,8 @@ export interface FakeApp {
   checkpointRules: object | null;
   /** False is an app without the Lens routes: they answer the catch-all 404. */
   lensRoutes: boolean;
-  /** What GET /lens answers: a range, and its lens or null for a range that changes no code. */
-  lensAnswer: { range: { base: string | null; head: string }; lens: typeof FAKE_LENS | null };
+  /** What GET /lens answers: a range, its lens or null for a range that changes no code, and its rules' check as an app that has them sends it. */
+  lensAnswer: { range: { base: string | null; head: string }; lens: object | null; rules?: object | null; rulesFailure?: string };
   /** 200 keeps the words; 400 is an app older than linked words refusing them; 409 is a range that changes no code. */
   wordsStatus: 200 | 400 | 409;
   /** False is an app without the map routes: they answer the catch-all 404. */

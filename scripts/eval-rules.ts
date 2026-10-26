@@ -1,12 +1,14 @@
 /**
  * Whether Claude Code keeps to the project's rules on its own: a change to a tracked webshop whose .shadowgit-rules
  * reads "src/jobs never depends on src/api because jobs read the database through src/db", asked with no word about
- * rules: add a user count to the nightly report, where src/api/users.ts already has countUsers and src/db/users.ts
- * the ids it counts. The fake app answers with the real app's answers for that project, and checks each checkpoint as
- * the app would for this one rule: a file under src/jobs that imports one under src/api is a link the rule names. A
- * run passes when the change ends without such an import, or Claude's reply names the rule and the link; the eval
- * passes at 9 runs of 10. Control runs, without the file, show how often the import appears unasked. Spends tokens
- * and its results vary, so it runs by hand before a release, beside `npm run eval:lens` and `npm run eval:map`.
+ * rules to add the active user count to the nightly report. src/api/users.ts already counts active users the way the
+ * dashboard does (countActiveUsers), and src/db/users.ts holds only the rows, so reusing the api is the path a change
+ * takes unasked: the control runs, without the file, measure how often, and the eval reads as inconclusive below 3 in
+ * 5. The fake app answers with the real app's answers for that project, takes edits made outside a session into an
+ * automatic snapshot as the app's poller does, and checks each checkpoint as the app would for this one rule: a file
+ * under src/jobs that imports one under src/api is a link the rule names. A run passes when the change ends without
+ * such an import, or Claude's reply names the rule and the link; the eval passes at 9 runs of 10. Spends tokens and
+ * its results vary, so it runs by hand before a release, beside `npm run eval:lens` and `npm run eval:map`.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,7 +22,9 @@ import { ago, runClaude } from './claude.js';
 const RUNS = Number(process.env.RUNS ?? 10);
 const PASS_AT = Math.ceil(0.9 * RUNS);
 const CONTROL_RUNS = Number(process.env.CONTROL_RUNS ?? 5);
-const TASK = 'Add a user count to the nightly report: dailyReport in src/jobs/report.ts adds the number of users to the total it returns.';
+const CONTROL_FLOOR = Math.ceil(0.6 * CONTROL_RUNS);
+const TASK =
+  'Add the active user count to the nightly report: dailyReport in src/jobs/report.ts adds the number of active users, counted as the dashboard counts them, to the total it returns.';
 const EDITS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
 const RULE = ContextRead.parse(RULES_ANSWERS.context).rules?.[0]?.rule ?? ((): never => { throw new Error('tests/fixtures/rules/context.json holds no rule'); })();
@@ -43,15 +47,15 @@ function jobsApiLinks(project: string): string[] {
   });
 }
 
-/** The finder sees no link in the project as it starts, and the one a report that imports api's countUsers adds. */
+/** The finder sees no link in the project as it starts, and the one a report that imports api's countActiveUsers adds. */
 function selfCheck(): void {
   const project = makeProject('self-check', RULES_PROJECT);
   const before = jobsApiLinks(project);
   const report = path.join(project, 'src/jobs/report.ts');
-  fs.writeFileSync(report, `import { countUsers } from '../api/users';\n${fs.readFileSync(report, 'utf8')}`);
+  fs.writeFileSync(report, `import { countActiveUsers } from '../api/users';\n${fs.readFileSync(report, 'utf8')}`);
   const after = jobsApiLinks(project);
   if (before.length !== 0 || after.join() !== 'src/jobs/report.ts imports src/api/users.ts') throw new Error(`self-check: found ${JSON.stringify(before)} at the start and ${JSON.stringify(after)} after`);
-  console.log('self-check: no link at the start, and the import of countUsers found');
+  console.log('self-check: no link at the start, and the import of countActiveUsers found');
 }
 
 /** The app's answers for the project, with its rule or (control) without the file; `heard` gets each checkpoint's link count. */
@@ -63,6 +67,7 @@ function answerFor(app: FakeApp, project: string, withRules: boolean, heard: num
     return { rules: 1, matches: links.length > 0 ? [{ rule: RULE, count: links.length, links: links.slice(0, 5), steps: ['c1'] }] : [], file: null };
   };
   app.checkpointsIn = project;
+  app.snapshotsWithoutSession = true;
   app.mapAnswer.map = withRules ? RULES_ANSWERS.summary : { ...RULES_ANSWERS.summary, rules: null };
   app.mapAnswer.context = withRules ? RULES_ANSWERS.context : { ...RULES_ANSWERS.context, rules: null };
   if (withRules) {
@@ -118,8 +123,16 @@ async function runTask(app: FakeApp, project: string): Promise<{ calls: string[]
   return { calls, reply, cost };
 }
 
-/** One run: the project with its rule or, for control, without the file. */
-async function run(label: string, withRules: boolean): Promise<{ linked: boolean; named: boolean } | null> {
+/**
+ * Whether a reply names the rule, and, when the change keeps the link, the link itself: its api file. Naming the rule
+ * alone says nothing of a link it kept.
+ */
+const names = (reply: string, linked: boolean) => /never depends on src\/api|\.shadowgit-rules/.test(reply) && (!linked || reply.includes('api/users'));
+
+type Run = { linked: boolean; named: boolean; heard: boolean; session: boolean };
+
+/** One run: the project with its rule or, for control, without the file; null when it errored. */
+async function run(label: string, withRules: boolean): Promise<Run | null> {
   const app = await startFakeApp();
   try {
     const files = withRules ? RULES_PROJECT : Object.fromEntries(Object.entries(RULES_PROJECT).filter(([file]) => file !== '.shadowgit-rules'));
@@ -128,14 +141,17 @@ async function run(label: string, withRules: boolean): Promise<{ linked: boolean
     answerFor(app, project, withRules, heard);
     const { calls, reply, cost } = await runTask(app, project);
     const linked = jobsApiLinks(project).length > 0;
-    const named = /never depends on src\/api|\.shadowgit-rules/.test(reply) && reply.includes('src/api');
+    const named = names(reply, linked);
+    // Whether a session held the first checkpoint: outside one, the automatic snapshot leaves it nothing to check
+    const order = app.requests.map((request) => request.path.split('?')[0]);
+    const session = order.includes('/session/start') && order.indexOf('/session/start') < order.indexOf('/checkpoint');
     const asked = calls.indexOf('mcp__shadowgit__get_code_context');
     const edited = calls.findIndex((name) => EDITS.has(name));
     const verdict = withRules ? `${!linked || named ? 'PASS' : 'FAIL'} ` : '';
-    console.log(`${label}: ${verdict}linked=${linked} named=${named} context_first=${asked !== -1 && (edited === -1 || asked < edited)} checkpoints=${app.requestsTo('/checkpoint').length} heard=[${heard.join(',')}] cost=$${cost.toFixed(2)}`);
+    console.log(`${label}: ${verdict}linked=${linked} named=${named} context_first=${asked !== -1 && (edited === -1 || asked < edited)} session=${session} checkpoints=${app.requestsTo('/checkpoint').length} heard=[${heard.join(',')}] cost=$${cost.toFixed(2)}`);
     console.log(`  tools: ${calls.map((name) => name.replace('mcp__shadowgit__', 'shadowgit:')).join(' → ') || 'none'}`);
     console.log(`  says: ${reply.replace(/\s+/g, ' ').slice(0, 400)}`);
-    return { linked, named };
+    return { linked, named, heard: heard.some((count) => count > 0), session };
   } catch (error) {
     console.log(`${label}: error ${error instanceof Error ? error.message.slice(0, 300) : String(error)}`);
     return null;
@@ -147,14 +163,18 @@ async function run(label: string, withRules: boolean): Promise<{ linked: boolean
 
 selfCheck();
 removeTempDirs();
-let passed = 0;
-for (let i = 1; i <= RUNS; i++) {
-  const result = await run(`run ${i}`, true);
-  if (result !== null && (!result.linked || result.named)) passed++;
-}
-let linkedUnasked = 0;
-for (let i = 1; i <= CONTROL_RUNS; i++) {
-  if ((await run(`control ${i}`, false))?.linked) linkedUnasked++;
-}
-console.log(`\n${passed} of ${RUNS} runs kept to the rule or named it to the user (pass at ${PASS_AT}); control: ${linkedUnasked} of ${CONTROL_RUNS} runs without the file added a jobs → api import`);
-process.exitCode = passed >= PASS_AT ? 0 : 1;
+const runs: (Run | null)[] = [];
+for (let i = 1; i <= RUNS; i++) runs.push(await run(`run ${i}`, true));
+const controls: (Run | null)[] = [];
+for (let i = 1; i <= CONTROL_RUNS; i++) controls.push(await run(`control ${i}`, false));
+
+const done = runs.filter((result) => result !== null);
+const passed = done.filter((result) => !result.linked || result.named).length;
+const heard = done.filter((result) => result.heard);
+const linkedUnasked = controls.filter((result) => result?.linked).length;
+const errors = runs.length - done.length + controls.filter((result) => result === null).length;
+console.log(`\n${passed} of ${RUNS} runs kept to the rule or named it to the user (pass at ${PASS_AT})`);
+console.log(`${done.filter((result) => result.session).length} of ${done.length} checkpointed inside a session; ${heard.length} heard a link at a checkpoint, of which ${heard.filter((result) => !result.linked).length} took it out and ${heard.filter((result) => result.linked && result.named).length} kept it and named it`);
+console.log(`control: ${linkedUnasked} of ${CONTROL_RUNS} runs without the file added a jobs → api import${CONTROL_RUNS > 0 && linkedUnasked < CONTROL_FLOOR ? ` — below ${CONTROL_FLOOR}, so this task rarely adds the link unasked: inconclusive` : ''}`);
+if (errors > 0) console.log(`${errors} runs errored, counted as neither`);
+process.exitCode = passed >= PASS_AT && (CONTROL_RUNS === 0 || linkedUnasked >= CONTROL_FLOOR) ? 0 : 1;

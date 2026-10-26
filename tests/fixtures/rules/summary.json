@@ -1,8 +1,8 @@
 {
   "success": true,
   "mapAsOf": {
-    "snapshot": "5af171c7bf0a2f9975fa657c528ca97c556f5bf4",
-    "time": "2026-10-26T08:48:37+01:00",
+    "snapshot": "e86a58502f729666b64998fe9f8cb5f7f30d61a5",
+    "time": "2026-10-26T09:18:48+01:00",
     "behind": 0,
     "changedFiles": {
       "items": [],
@@ -11,10 +11,10 @@
   },
   "summary": {
     "repo": "project",
-    "commit": "5af171c7bf0a2f9975fa657c528ca97c556f5bf4",
+    "commit": "e86a58502f729666b64998fe9f8cb5f7f30d61a5",
     "counts": {
       "files": 20,
-      "symbols": 46,
+      "symbols": 47,
       "areas": 4,
       "calls": 34,
       "processes": 13
@@ -74,7 +74,7 @@
           "label": "src ·",
           "path": "src",
           "files": 2,
-          "symbols": 1,
+          "symbols": 2,
           "layers": [
             "db"
           ]

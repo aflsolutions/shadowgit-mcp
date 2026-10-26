@@ -1,8 +1,8 @@
 {
   "success": true,
   "range": {
-    "base": "5af171c7bf0a2f9975fa657c528ca97c556f5bf4",
-    "head": "4cbe88520833370b07e6ba048ae4de6c66d0b597"
+    "base": "e86a58502f729666b64998fe9f8cb5f7f30d61a5",
+    "head": "c108bcf019a641838b613de7b2bad835bc1666d1"
   },
   "lens": {
     "title": "This AI session",
@@ -12,7 +12,7 @@
     },
     "summary": null,
     "quotes": [
-      "Count users in the nightly report"
+      "Count active users in the nightly report"
     ],
     "dependencies": {
       "facts": [
@@ -30,7 +30,7 @@
           },
           "evidence": [
             "src/jobs/report.ts imports src/api/users.ts",
-            "dailyReport (src/jobs/report.ts:4) calls countUsers (src/api/users.ts:16)"
+            "dailyReport (src/jobs/report.ts:4) calls countActiveUsers (src/api/users.ts:19)"
           ],
           "steps": [
             "c1"
@@ -43,7 +43,7 @@
       {
         "id": "c1",
         "title": "Change dailyReport",
-        "body": "jobs depends on api for the first time. dailyReport now calls countUsers.",
+        "body": "jobs depends on api for the first time. dailyReport now calls countActiveUsers.",
         "components": [
           "k1",
           "k2",
@@ -53,7 +53,7 @@
         "files": [
           "src/jobs/report.ts"
         ],
-        "diff": "diff --git a/src/jobs/report.ts b/src/jobs/report.ts\nindex 6d09b28..b21d592 100644\n--- a/src/jobs/report.ts\n+++ b/src/jobs/report.ts\n@@ -1,7 +1,8 @@\n import { purgeLogs } from './cleanup';\n+import { countUsers } from '../api/users';\n \n export function dailyReport(day: number): number {\n-  return purgeLogs(day) + weeklyTotals(day);\n+  return purgeLogs(day) + weeklyTotals(day) + countUsers();\n }\n \n export function weeklyTotals(day: number): number {\n",
+        "diff": "diff --git a/src/jobs/report.ts b/src/jobs/report.ts\nindex 6d09b28..bae262b 100644\n--- a/src/jobs/report.ts\n+++ b/src/jobs/report.ts\n@@ -1,7 +1,8 @@\n import { purgeLogs } from './cleanup';\n+import { countActiveUsers } from '../api/users';\n \n export function dailyReport(day: number): number {\n-  return purgeLogs(day) + weeklyTotals(day);\n+  return purgeLogs(day) + weeklyTotals(day) + countActiveUsers(Date.now());\n }\n \n export function weeklyTotals(day: number): number {\n",
         "symbols": [
           {
             "name": "dailyReport",
@@ -92,14 +92,14 @@
       },
       {
         "id": "k2",
-        "name": "countUsers",
+        "name": "countActiveUsers",
         "kind": "function",
         "delta": "unchanged",
         "context": true,
         "role": null,
         "path": "src/api/users.ts",
         "symbols": [
-          "countUsers"
+          "countActiveUsers"
         ]
       },
       {
@@ -177,7 +177,7 @@
         "count": 2,
         "links": [
           "src/jobs/report.ts imports src/api/users.ts",
-          "dailyReport (src/jobs/report.ts:4) calls countUsers (src/api/users.ts:16)"
+          "dailyReport (src/jobs/report.ts:4) calls countActiveUsers (src/api/users.ts:19)"
         ],
         "steps": [
           "c1"

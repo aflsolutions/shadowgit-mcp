@@ -1,11 +1,11 @@
 {
   "success": true,
-  "commit": "4cbe88520833370b07e6ba048ae4de6c66d0b597",
+  "commit": "c108bcf019a641838b613de7b2bad835bc1666d1",
   "filesChanged": 1,
   "rules": {
     "range": {
-      "base": "5af171c7bf0a2f9975fa657c528ca97c556f5bf4",
-      "head": "4cbe88520833370b07e6ba048ae4de6c66d0b597"
+      "base": "e86a58502f729666b64998fe9f8cb5f7f30d61a5",
+      "head": "c108bcf019a641838b613de7b2bad835bc1666d1"
     },
     "status": "checked",
     "check": {
@@ -27,7 +27,7 @@
           "count": 2,
           "links": [
             "src/jobs/report.ts imports src/api/users.ts",
-            "dailyReport (src/jobs/report.ts:4) calls countUsers (src/api/users.ts:16)"
+            "dailyReport (src/jobs/report.ts:4) calls countActiveUsers (src/api/users.ts:19)"
           ],
           "steps": [
             "c1"

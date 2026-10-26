@@ -134,7 +134,7 @@ describe('the rules an app answers', () => {
     expect(lens.rules?.matches).toEqual([{
       rule: expect.objectContaining({ line: 2, text: RULE, form: 'never', from: ['src/jobs'], to: ['src/api'], because: 'jobs read the database through src/db' }),
       count: 2,
-      links: ['src/jobs/report.ts imports src/api/users.ts', expect.stringMatching(/^dailyReport \(src\/jobs\/report\.ts:4\) calls countUsers/)],
+      links: ['src/jobs/report.ts imports src/api/users.ts', expect.stringMatching(/^dailyReport \(src\/jobs\/report\.ts:4\) calls countActiveUsers/)],
       steps: ['c1'],
     }]);
     expect(lens.lens?.steps[0]?.rules).toEqual([RULE]);

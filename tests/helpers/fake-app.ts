@@ -220,7 +220,10 @@ async function listen(): Promise<FakeApp> {
       if (app.checkpointStatus === 409) return json(409, { success: false, error: 'No changes to commit' });
       if (app.checkpointStatus === 500) return page(500, '<h1>Internal Server Error</h1>');
       // Read once the commit is made: a check of the project reads its new HEAD
-      const rules = () => (app.checkpointRules === null ? {} : { rules: app.checkpointRules });
+      const rules = () => {
+        const check = app.checkpointRules;
+        return check === null ? {} : { rules: check };
+      };
       if (app.checkpointsIn === null) return json(200, { success: true, commit: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678', filesChanged: 2, ...rules() });
       shadowGit(app.checkpointsIn, ['add', '-A']);
       const changed = shadowGit(app.checkpointsIn, ['diff', '--cached', '--name-only']).split('\n').filter(Boolean);

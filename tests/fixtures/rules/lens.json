@@ -1,0 +1,198 @@
+{
+  "success": true,
+  "range": {
+    "base": "5af171c7bf0a2f9975fa657c528ca97c556f5bf4",
+    "head": "4cbe88520833370b07e6ba048ae4de6c66d0b597"
+  },
+  "lens": {
+    "title": "This AI session",
+    "words": {
+      "source": "facts",
+      "author": null
+    },
+    "summary": null,
+    "quotes": [
+      "Count users in the nightly report"
+    ],
+    "dependencies": {
+      "facts": [
+        {
+          "sentence": "jobs depends on api for the first time",
+          "level": "area",
+          "kind": "new",
+          "from": {
+            "label": "jobs",
+            "path": "src/jobs"
+          },
+          "to": {
+            "label": "api",
+            "path": "src/api"
+          },
+          "evidence": [
+            "src/jobs/report.ts imports src/api/users.ts",
+            "dailyReport (src/jobs/report.ts:4) calls countUsers (src/api/users.ts:16)"
+          ],
+          "steps": [
+            "c1"
+          ]
+        }
+      ],
+      "more": 0
+    },
+    "steps": [
+      {
+        "id": "c1",
+        "title": "Change dailyReport",
+        "body": "jobs depends on api for the first time. dailyReport now calls countUsers.",
+        "components": [
+          "k1",
+          "k2",
+          "k3",
+          "k4"
+        ],
+        "files": [
+          "src/jobs/report.ts"
+        ],
+        "diff": "diff --git a/src/jobs/report.ts b/src/jobs/report.ts\nindex 6d09b28..b21d592 100644\n--- a/src/jobs/report.ts\n+++ b/src/jobs/report.ts\n@@ -1,7 +1,8 @@\n import { purgeLogs } from './cleanup';\n+import { countUsers } from '../api/users';\n \n export function dailyReport(day: number): number {\n-  return purgeLogs(day) + weeklyTotals(day);\n+  return purgeLogs(day) + weeklyTotals(day) + countUsers();\n }\n \n export function weeklyTotals(day: number): number {\n",
+        "symbols": [
+          {
+            "name": "dailyReport",
+            "path": "src/jobs/report.ts",
+            "basePath": "src/jobs/report.ts",
+            "base": {
+              "start": 3,
+              "end": 5
+            },
+            "head": {
+              "start": 4,
+              "end": 6
+            }
+          }
+        ],
+        "dependencies": [
+          "jobs depends on api for the first time"
+        ],
+        "rules": [
+          "src/jobs never depends on src/api"
+        ]
+      }
+    ],
+    "components": [
+      {
+        "id": "k1",
+        "name": "dailyReport",
+        "kind": "function",
+        "delta": "modified",
+        "context": false,
+        "role": null,
+        "path": "src/jobs/report.ts",
+        "symbols": [
+          "dailyReport"
+        ]
+      },
+      {
+        "id": "k2",
+        "name": "countUsers",
+        "kind": "function",
+        "delta": "unchanged",
+        "context": true,
+        "role": null,
+        "path": "src/api/users.ts",
+        "symbols": [
+          "countUsers"
+        ]
+      },
+      {
+        "id": "k3",
+        "name": "purgeLogs",
+        "kind": "function",
+        "delta": "unchanged",
+        "context": true,
+        "role": null,
+        "path": "src/jobs/cleanup.ts",
+        "symbols": [
+          "purgeLogs"
+        ]
+      },
+      {
+        "id": "k4",
+        "name": "notifyOwner",
+        "kind": "function",
+        "delta": "unchanged",
+        "context": true,
+        "role": null,
+        "path": "src/jobs/notify.ts",
+        "symbols": [
+          "notifyOwner"
+        ]
+      }
+    ],
+    "layers": [
+      {
+        "id": "folder:jobs",
+        "name": "jobs"
+      },
+      {
+        "id": "folder:api",
+        "name": "api"
+      }
+    ],
+    "flows": [
+      {
+        "id": "f1",
+        "from": "k1",
+        "to": "k2",
+        "label": "calls"
+      },
+      {
+        "id": "f2",
+        "from": "k1",
+        "to": "k3",
+        "label": "calls"
+      },
+      {
+        "id": "f3",
+        "from": "k4",
+        "to": "k1",
+        "label": "calls"
+      }
+    ]
+  },
+  "rules": {
+    "rules": 1,
+    "matches": [
+      {
+        "rule": {
+          "line": 2,
+          "text": "src/jobs never depends on src/api",
+          "form": "never",
+          "from": [
+            "src/jobs"
+          ],
+          "to": [
+            "src/api"
+          ],
+          "because": "jobs read the database through src/db"
+        },
+        "count": 2,
+        "links": [
+          "src/jobs/report.ts imports src/api/users.ts",
+          "dailyReport (src/jobs/report.ts:4) calls countUsers (src/api/users.ts:16)"
+        ],
+        "steps": [
+          "c1"
+        ]
+      }
+    ],
+    "file": null
+  },
+  "limits": {
+    "summary": 400,
+    "stepTitle": 60,
+    "stepBody": 600,
+    "why": 300,
+    "role": 120,
+    "layerName": 24,
+    "flowLabel": 32
+  }
+}

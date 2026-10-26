@@ -1,0 +1,40 @@
+{
+  "success": true,
+  "commit": "4cbe88520833370b07e6ba048ae4de6c66d0b597",
+  "filesChanged": 1,
+  "rules": {
+    "range": {
+      "base": "5af171c7bf0a2f9975fa657c528ca97c556f5bf4",
+      "head": "4cbe88520833370b07e6ba048ae4de6c66d0b597"
+    },
+    "status": "checked",
+    "check": {
+      "rules": 1,
+      "matches": [
+        {
+          "rule": {
+            "line": 2,
+            "text": "src/jobs never depends on src/api",
+            "form": "never",
+            "from": [
+              "src/jobs"
+            ],
+            "to": [
+              "src/api"
+            ],
+            "because": "jobs read the database through src/db"
+          },
+          "count": 2,
+          "links": [
+            "src/jobs/report.ts imports src/api/users.ts",
+            "dailyReport (src/jobs/report.ts:4) calls countUsers (src/api/users.ts:16)"
+          ],
+          "steps": [
+            "c1"
+          ]
+        }
+      ],
+      "file": null
+    }
+  }
+}

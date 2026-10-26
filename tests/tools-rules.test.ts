@@ -1,10 +1,13 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import type * as z from 'zod/v4';
 import type { CheckpointRules, RuleCheck } from '../src/rule-shapes.js';
 import { LensRead } from '../src/session-api.js';
 import { checkpoint } from '../src/tools/checkpoint.js';
+import { INSTRUCTIONS } from '../src/server.js';
 import { getLens } from '../src/tools/lens.js';
-import { FAKE_LENS, FAKE_RANGE, RULES_ANSWERS, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { getCodeContext, getMap } from '../src/tools/map.js';
+import { FAKE_LENS, FAKE_RANGE, MAP_ANSWERS, RULES_ANSWERS, mapAnswers, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { makeProject, removeTempDirs, restoreEnv, textOf, useStorage } from './helpers/fixtures.js';
 
 let project: string;
@@ -33,6 +36,7 @@ beforeEach(() => {
   app.checkpointStatus = 200;
   app.checkpointRules = null;
   app.lensAnswer = { range: FAKE_RANGE, lens: FAKE_LENS };
+  app.mapAnswer = mapAnswers();
 });
 
 describe('checkpoint', () => {
@@ -151,5 +155,93 @@ describe('get_lens', () => {
 
   it('says nothing of rules for an app that sends none', async () => {
     expect(textOf(await getLens({}))).not.toContain('.shadowgit-rules');
+  });
+});
+
+describe("get_map's summary", () => {
+  const SUMMARY = RULES_ANSWERS.summary as { rules: { rules: unknown[] } };
+
+  it("lists the project's rules and the lines read as no rule", async () => {
+    const rules = { ...SUMMARY.rules, unread: [{ line: 3, text: "jobs can't use api" }], cutAt: 101 };
+    app.mapAnswer.map = { ...SUMMARY, rules };
+    const result = await getMap({}, 'Claude Code');
+    expect(result.structuredContent).toMatchObject({ rules });
+    expect(textOf(result)).toMatch(new RegExp(`\\n${[
+      "The project's rules, from its .shadowgit-rules:",
+      '- line 2: "src/jobs never depends on src/api" because "jobs read the database through src/db"',
+      '- line 3 is no rule: "jobs can\'t use api"',
+      '- From line 101 on, nothing was read: past 100 rules or 64 KB.',
+    ].join('\n').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
+  });
+
+  it('says a rules file holds no rule', async () => {
+    app.mapAnswer.map = { ...SUMMARY, rules: { rules: [], unread: [], cutAt: null } };
+    expect(textOf(await getMap({}, 'Claude Code'))).toMatch(/\nThe project's \.shadowgit-rules holds no rule\.$/);
+  });
+
+  it("says why the rules couldn't be read", async () => {
+    app.mapAnswer.map = { ...SUMMARY, rules: null, rulesFailure: '.shadowgit-rules is not a file' };
+    expect(textOf(await getMap({}, 'Claude Code'))).toMatch(/\nThe project's rules \(\.shadowgit-rules\) could not be read: "\.shadowgit-rules is not a file"$/);
+  });
+
+  it('says nothing of rules for an app before them', async () => {
+    expect(textOf(await getMap({}, 'Claude Code'))).not.toContain('.shadowgit-rules');
+  });
+});
+
+describe('get_code_context', () => {
+  const CONTEXT = RULES_ANSWERS.context as { rules: unknown[] };
+  const asked = { files: ['src/jobs/report.ts', 'src/api/users.ts'] };
+
+  it('lists the rules that hold for the files asked about, and asks to keep to them', async () => {
+    app.mapAnswer.context = CONTEXT;
+    const result = await getCodeContext(asked, 'Claude Code');
+    expect(result.structuredContent).toMatchObject({ rules: CONTEXT.rules, next: expect.stringMatching(/^Keep to the project's rules listed here: a checkpoint lists each link a change adds that one names\. Before editing several files: start_session/) });
+    expect(textOf(result)).toContain([
+      "\n\nThe project's rules (.shadowgit-rules) that hold for these files:",
+      '- "src/jobs never depends on src/api" because "jobs read the database through src/db": "src/jobs/report.ts"',
+      '\nNext: Keep to the project\'s rules listed here',
+    ].join('\n'));
+  });
+
+  it('says nothing of rules for a project without them, or an app before them', async () => {
+    for (const context of [MAP_ANSWERS.context, { ...CONTEXT, rules: [] }, { ...CONTEXT, rules: null }]) {
+      app.mapAnswer.context = context;
+      const result = await getCodeContext(asked, 'Claude Code');
+      expect(textOf(result)).not.toContain('.shadowgit-rules');
+      expect(result.structuredContent).toMatchObject({ next: expect.stringMatching(/^Before editing several files: start_session/) });
+    }
+  });
+
+  it("says why the rules couldn't be read", async () => {
+    app.mapAnswer.context = { ...CONTEXT, rules: null, rulesFailure: '.shadowgit-rules is not a file' };
+    expect(textOf(await getCodeContext(asked, 'Claude Code'))).toContain('\n\nThe project\'s rules (.shadowgit-rules) could not be read: ".shadowgit-rules is not a file"\n\nNext: Before editing');
+  });
+});
+
+describe('the words', () => {
+  // The spec's anti-goals: ShadowGit states the link and quotes the rule, and never gives a verdict of its own
+  const JUDGING = /\b(violat\w*|break\w*|forbid\w*|not allowed|warning|error|bad|should|circular|coupling|risky)\b/i;
+
+  it('states the rules without a verdict, in every answer, description and the instructions', async () => {
+    const { range, lens, rules } = LensRead.parse(RULES_ANSWERS.lens);
+    const ONLY = LensRead.parse(RULES_ANSWERS.rulesOnly);
+    const texts: string[] = [];
+    app.checkpointRules = CAPTURED;
+    texts.push(textOf(await checkpoint({ title: 'Report' }, 'Claude Code')));
+    app.checkpointRules = { range: CAPTURED.range, status: 'running' };
+    texts.push(textOf(await checkpoint({ title: 'Report' }, 'Claude Code')));
+    for (const answer of [{ range, lens, rules }, { range: ONLY.range, lens: null, rules: ONLY.rules }]) {
+      app.lensAnswer = answer;
+      texts.push(textOf(await getLens({})));
+    }
+    app.mapAnswer = { ...mapAnswers(), map: RULES_ANSWERS.summary, context: RULES_ANSWERS.context };
+    texts.push(textOf(await getMap({}, 'Claude Code')), textOf(await getCodeContext({ files: ['src/jobs/report.ts'] }, 'Claude Code')));
+    const tools = JSON.parse(readFileSync(new URL('./__snapshots__/tool-list.json', import.meta.url), 'utf8')) as { name: string; description: string }[];
+    const described = tools.filter((tool) => ['checkpoint', 'get_lens', 'get_map', 'get_code_context'].includes(tool.name)).map((tool) => tool.description);
+    expect(described).toHaveLength(4);
+    for (const text of [...texts, ...described, INSTRUCTIONS]) expect(text).not.toMatch(JUDGING);
+    expect(described.every((description) => description.includes('.shadowgit-rules'))).toBe(true);
+    expect(INSTRUCTIONS).toContain('.shadowgit-rules');
   });
 });

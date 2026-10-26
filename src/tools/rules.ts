@@ -1,5 +1,5 @@
 import type * as z from 'zod/v4';
-import type { CheckpointRules, Range, Rule, RuleCheck } from '../rule-shapes.js';
+import type { CheckpointRules, Range, Rule, RuleCheck, RulesFor, RulesRead } from '../rule-shapes.js';
 
 // The project's rules as the tools' text says them: a rule "names" a link, quoted as its authors wrote it. Whether a
 // link is wanted is the rule's to say, never these words'. Every text from the project (a rule, its reason, a link's
@@ -64,3 +64,23 @@ export function checkpointLines(rules: z.infer<typeof CheckpointRules>): string[
 
 /** Why the project's rules couldn't be read. */
 export const failureLine = (failure: string) => `The project's rules (.shadowgit-rules) could not be read: ${quote(failure)}`;
+
+/** The project's rules as read, with the lines read as none and where reading stopped; nothing without a file. */
+export function readLines(read: z.infer<typeof RulesRead> | null | undefined, failure?: string): string[] {
+  if (failure !== undefined) return [failureLine(failure)];
+  if (!read) return [];
+  if (read.rules.length === 0 && read.unread.length === 0) return ["The project's .shadowgit-rules holds no rule."];
+  return [
+    "The project's rules, from its .shadowgit-rules:",
+    ...read.rules.map((rule) => `- line ${rule.line}: ${ruleLine(rule)}`),
+    ...read.unread.map(({ line, text }) => `- line ${line} is no rule: ${quote(text)}`),
+    ...(read.cutAt === null ? [] : [`- From line ${read.cutAt} on, nothing was read: past 100 rules or 64 KB.`]),
+  ];
+}
+
+/** The rules that hold for the files asked about, each with those files; nothing when none holds. */
+export function holdLines(rules: z.infer<typeof RulesFor> | null | undefined, failure?: string): string[] {
+  if (failure !== undefined) return [failureLine(failure)];
+  if (!rules?.length) return [];
+  return ["The project's rules (.shadowgit-rules) that hold for these files:", ...rules.map(({ rule, files }) => `- ${ruleLine(rule)}: ${files.map(quote).join(', ')}`)];
+}

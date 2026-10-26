@@ -4,11 +4,14 @@ import { clientName } from '../client-name.js';
 import { ContextRead, MapRead } from '../map-shapes.js';
 import { repoArgument, resolveRepo } from '../repos.js';
 import { readArea, readCodeContext, readMap } from '../session-api.js';
+import { holdLines, readLines } from './rules.js';
 import { dataResult, forRepo, repoParam } from './shared.js';
 
 const MapOutput = z.object({ repo: z.string(), ...MapRead.shape });
 // The session flow that follows, in the answer the model reads before it edits
 const NEXT = 'Before editing several files: start_session, which pauses snapshots; when the edits are done: checkpoint, end_session, then get_lens and write_lens_words.';
+// Before them, when the answer lists rules
+const KEEP_TO_RULES = "Keep to the project's rules listed here: a checkpoint lists each link a change adds that one names.";
 const ContextOutput = z.object({ repo: z.string(), ...ContextRead.shape, next: z.string().describe('The steps that follow') });
 
 type Listed<T> = { items: readonly T[]; total: number };
@@ -40,7 +43,7 @@ function drawnFrom({ snapshot, time, behind, changedFiles }: AsOf): string {
   return `${drawn}, ${behind} snapshot${behind === 1 ? '' : 's'} behind the newest. ${changed}`;
 }
 
-function describeSummary(repo: string, mapAsOf: AsOf, summary: NonNullable<Read['summary']>): string {
+function describeSummary(repo: string, { mapAsOf, summary, rules, rulesFailure }: Read & { summary: NonNullable<Read['summary']> }): string {
   const { files, symbols, areas, calls, processes } = summary.counts;
   return [
     `${repo}'s map, ${drawnFrom(mapAsOf)}`,
@@ -52,6 +55,7 @@ function describeSummary(repo: string, mapAsOf: AsOf, summary: NonNullable<Read[
     bullets(summary.links, 'links', (link) => `${link.from} → ${link.to}: ${link.count} calls and imports`),
     'Processes:',
     bullets(summary.processes, 'processes', (process) => `${process.label}: ${process.areas.join(' → ')}`),
+    ...readLines(rules, rulesFailure),
   ].join('\n');
 }
 
@@ -129,7 +133,7 @@ export async function getMap({ area, repo }: { area?: string; repo?: string }, a
   const project = resolveRepo(repo);
   if (area === undefined) {
     const read = await readMap({ repoPath: project.path, aiTool });
-    return dataResult(MapOutput, describeSummary(project.name, read.mapAsOf, read.summary), { repo: project.name, ...read });
+    return dataResult(MapOutput, describeSummary(project.name, read), { repo: project.name, ...read });
   }
   const read = await readArea({ repoPath: project.path, area, aiTool });
   return dataResult(MapOutput, describeArea(project.name, read.mapAsOf, read.area), { repo: project.name, ...read });
@@ -142,8 +146,10 @@ export async function getCodeContext(
   // The app refuses fewer than 1 or more than its 20 targets, in its own words: a newer one may take more
   const project = resolveRepo(repo);
   const read = await readCodeContext({ repoPath: project.path, files, symbols, aiTool });
-  const next = `${forRepo(repo === undefined ? undefined : repoArgument(project))}${NEXT}`;
-  return dataResult(ContextOutput, `${describeContext(project.name, read.mapAsOf, read.context)}\n\nNext: ${next}`, { repo: project.name, ...read, next });
+  const hold = holdLines(read.rules, read.rulesFailure);
+  const next = `${forRepo(repo === undefined ? undefined : repoArgument(project))}${read.rules?.length ? `${KEEP_TO_RULES} ` : ''}${NEXT}`;
+  const text = [describeContext(project.name, read.mapAsOf, read.context), ...(hold.length > 0 ? [hold.join('\n')] : []), `Next: ${next}`].join('\n\n');
+  return dataResult(ContextOutput, text, { repo: project.name, ...read, next });
 }
 
 export function registerMap(server: McpServer): void {
@@ -152,7 +158,7 @@ export function registerMap(server: McpServer): void {
     {
       title: "Read the project's map",
       description:
-        "How a ShadowGit-tracked project is organised, from ShadowGit's map of it, the one the user sees: counts, layers, areas largest first, the calls and imports between areas, processes. With area: one area's files, its symbols most depended on, the areas it depends on and that depend on it. Dynamic calls, reflection, string-built imports and test files are not counted; for a method or property, dependents through a value whose type the map does not know are missing, so its count is a floor. Edits not yet in a snapshot are not on the map. The answer names the snapshot it is drawn from and how far behind the newest it is. Needs the ShadowGit app running.",
+        "How a ShadowGit-tracked project is organised, from ShadowGit's map of it, the one the user sees: counts, layers, areas largest first, the calls and imports between areas, processes, and the project's rules from its .shadowgit-rules file, with the lines read as no rule. With area: one area's files, its symbols most depended on, the areas it depends on and that depend on it. Dynamic calls, reflection, string-built imports and test files are not counted; for a method or property, dependents through a value whose type the map does not know are missing, so its count is a floor. Edits not yet in a snapshot are not on the map. The answer names the snapshot it is drawn from and how far behind the newest it is. Needs the ShadowGit app running.",
       inputSchema: z.object({
         area: z.string().min(1).optional().describe("An area's label as get_map names it, or a folder path, which covers every file under it. Leave out for the whole project"),
         repo: repoParam,
@@ -167,7 +173,7 @@ export function registerMap(server: McpServer): void {
     {
       title: 'Read where code sits and what depends on it',
       description:
-        "Where files and symbols sit in a ShadowGit-tracked project and what depends on them, from ShadowGit's map of it: area and layer, what each uses, its dependents counted by area, its reach within 3 hops, its processes; for two or more, where they land together. 1 to 20 files and symbols in all. Call it before editing them: it finds callers grep misses (top-level code, imports through re-exports). Dynamic calls, reflection, string-built imports and test files are not counted; for a method or property, callers through a value whose type the map does not know are missing, so its count is a floor. Edits not yet in a snapshot are not on the map. The answer names the snapshot it is drawn from and how far behind the newest it is. Needs the ShadowGit app running.",
+        "Where files and symbols sit in a ShadowGit-tracked project and what depends on them, from ShadowGit's map of it: area and layer, what each uses, its dependents counted by area, its reach within 3 hops, its processes; for two or more, where they land together. 1 to 20 files and symbols in all. Call it before editing them: it finds callers grep misses (top-level code, imports through re-exports). It also lists the project's rules that hold for them, from its .shadowgit-rules file, written by the user or the project's authors: what must not depend on what, each with its reason, quoted from the file. Keep to them; if the task can't be done without a link a rule names, tell the user why, quoting the rule. Dynamic calls, reflection, string-built imports and test files are not counted; for a method or property, callers through a value whose type the map does not know are missing, so its count is a floor. Edits not yet in a snapshot are not on the map. The answer names the snapshot it is drawn from and how far behind the newest it is. Needs the ShadowGit app running.",
       inputSchema: z.object({
         files: z.array(z.string().min(1)).optional().describe('Paths relative to the project root, as written'),
         symbols: z

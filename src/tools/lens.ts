@@ -3,6 +3,7 @@ import * as z from 'zod/v4';
 import { clientName } from '../client-name.js';
 import { resolveRepo } from '../repos.js';
 import { LensLines, LensRead, readLens, sendLensWords, WordsWritten, type LensWords } from '../session-api.js';
+import { snapshots } from './rules.js';
 import { dataResult, repoParam } from './shared.js';
 
 const LensOutput = z.object({ repo: z.string(), ...LensRead.shape });
@@ -43,7 +44,7 @@ function describeLens(repo: string, range: Read['range'], lens: NonNullable<Read
   // stepTitle reads "step title"
   const caps = Object.entries(limits).map(([key, max]) => `${key.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`)} ${max}`).join(', ');
   return [
-    `The Lens of ${repo}, snapshots ${range.base === null ? 'from the start' : range.base.slice(0, 8)}..${range.head.slice(0, 8)}; its words now: ${lens.words.source}${lens.words.author ? ` (${lens.words.author})` : ''}.`,
+    `The Lens of ${repo}, snapshots ${snapshots(range)}; its words now: ${lens.words.source}${lens.words.author ? ` (${lens.words.author})` : ''}.`,
     ...(lens.summary ? [`Summary: ${lens.summary}`] : []),
     `Word it with write_lens_words, passing base ${JSON.stringify(range.base)} and head ${JSON.stringify(range.head)}: a summary of two sentences, for each step a title and one or two sentences, for each changed card the role it plays. Name only the ids below; text past its limit is cut (characters: ${caps}).`,
     ...(lens.quotes?.length ? ['Checkpoint messages a why may quote:', ...lens.quotes.map((quote) => `- ${JSON.stringify(quote)}`)] : []),

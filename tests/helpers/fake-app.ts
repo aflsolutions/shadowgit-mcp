@@ -31,6 +31,8 @@ export interface FakeApp {
    * answers that commit, or 409 when nothing changed. Null answers a canned commit.
    */
   checkpointsIn: string | null;
+  /** The check a 200 checkpoint answers beside its commit, as an app that checks rules sends it; null sends none. */
+  checkpointRules: object | null;
   /** False is an app without the Lens routes: they answer the catch-all 404. */
   lensRoutes: boolean;
   /** What GET /lens answers: a range, and its lens or null for a range that changes no code. */
@@ -160,6 +162,7 @@ async function listen(): Promise<FakeApp> {
     sessions: [],
     checkpointStatus: 200,
     checkpointsIn: null,
+    checkpointRules: null,
     lensRoutes: true,
     lensAnswer: { range: FAKE_RANGE, lens: FAKE_LENS },
     answers: {},
@@ -216,12 +219,14 @@ async function listen(): Promise<FakeApp> {
       if (app.checkpointStatus === 404) return page(404, '<pre>Cannot POST /api/checkpoint</pre>');
       if (app.checkpointStatus === 409) return json(409, { success: false, error: 'No changes to commit' });
       if (app.checkpointStatus === 500) return page(500, '<h1>Internal Server Error</h1>');
-      if (app.checkpointsIn === null) return json(200, { success: true, commit: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678', filesChanged: 2 });
+      // Read once the commit is made: a check of the project reads its new HEAD
+      const rules = () => (app.checkpointRules === null ? {} : { rules: app.checkpointRules });
+      if (app.checkpointsIn === null) return json(200, { success: true, commit: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678', filesChanged: 2, ...rules() });
       shadowGit(app.checkpointsIn, ['add', '-A']);
       const changed = shadowGit(app.checkpointsIn, ['diff', '--cached', '--name-only']).split('\n').filter(Boolean);
       if (changed.length === 0) return json(409, { success: false, error: 'No changes to commit' });
       shadowGit(app.checkpointsIn, ['commit', '--quiet', '-m', String(body.title)]);
-      return json(200, { success: true, commit: shadowGit(app.checkpointsIn, ['rev-parse', 'HEAD']), filesChanged: changed.length });
+      return json(200, { success: true, commit: shadowGit(app.checkpointsIn, ['rev-parse', 'HEAD']), filesChanged: changed.length, ...rules() });
     }
     if (app.lensRoutes && route.startsWith('/lens?')) return json(200, { success: true, ...app.lensAnswer, limits: FAKE_LIMITS });
     if (app.lensRoutes && route === '/lens/words') {

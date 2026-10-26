@@ -1880,7 +1880,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Save the project's current changes to ShadowGit history as one named checkpoint, applying the project's .shadowgit-ignore rules. Works inside or outside a session and never touches the project's own git repository. Returns the commit hash. Needs the ShadowGit app running.",
+    "description": "Save the project's current changes to ShadowGit history as one named checkpoint, following the project's .shadowgit-ignore. Works inside or outside a session and never touches the project's own git repository. Returns the commit hash. When the project has rules, in its .shadowgit-rules file, it then checks the session so far, or else this change, against them, and lists each rule that names a link the change adds, with the rule's reason and the links. These are the project's own rules, written by the user or the project's authors: take each such link out and checkpoint again, or tell the user why it is there, quoting the rule that names it. A check still running names its range for get_lens. Needs the ShadowGit app running.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1922,6 +1922,252 @@
         },
         "repo": {
           "type": "string"
+        },
+        "rules": {
+          "description": "The change checked against the project's rules; absent for a project without them",
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "check": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "file": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "added": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "removed": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "required": [
+                            "added",
+                            "removed"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "The rules the range adds to and removes from .shadowgit-rules; null when it leaves the file alone"
+                    },
+                    "matches": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "count": {
+                            "description": "How many links the range adds that the rule names",
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "links": {
+                            "description": "The first links, in words; count has them all",
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "rule": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "because": {
+                                "description": "Its reason, as written after \"because\"",
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "form": {
+                                "description": "never, only or nothing",
+                                "type": "string"
+                              },
+                              "from": {
+                                "description": "The names on its first side; none for a nothing-rule",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "line": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              },
+                              "text": {
+                                "description": "The rule as written, without its reason",
+                                "type": "string"
+                              },
+                              "to": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "line",
+                              "text",
+                              "form",
+                              "from",
+                              "to",
+                              "because"
+                            ],
+                            "type": "object"
+                          },
+                          "steps": {
+                            "description": "The ids of the steps that hold them",
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "required": [
+                          "rule",
+                          "count",
+                          "links",
+                          "steps"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "rules": {
+                      "description": "How many rules it was checked against",
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "rules",
+                    "matches",
+                    "file"
+                  ],
+                  "type": "object"
+                },
+                "range": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "base": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "head": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "base",
+                    "head"
+                  ],
+                  "type": "object"
+                },
+                "status": {
+                  "const": "checked",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status",
+                "range",
+                "check"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "range": {
+                  "additionalProperties": false,
+                  "description": "Read its check with get_lens, passing this base and head",
+                  "properties": {
+                    "base": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "head": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "base",
+                    "head"
+                  ],
+                  "type": "object"
+                },
+                "status": {
+                  "const": "running",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status",
+                "range"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "error": {
+                  "type": "string"
+                },
+                "range": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "base": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "head": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "base",
+                        "head"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "status": {
+                  "const": "failed",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status",
+                "range",
+                "error"
+              ],
+              "type": "object"
+            }
+          ]
         },
         "title": {
           "type": "string"

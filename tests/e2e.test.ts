@@ -42,7 +42,7 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
 
   it('asks for the code context before an edit, ahead of the session', () => {
     const line =
-      "Before your first edit in a tracked project, call get_code_context (load it with tool search if it is deferred) for the files or symbols you will change: it lists what depends on them across the project by area, callers grep misses included (top-level code, imports through re-exports), where the change lands, and the project's rules for them, from its .shadowgit-rules file, which say only what must not depend on what: keep to them. get_map shows how the project is organised.";
+      "Before your first edit in a tracked project, call get_code_context (load it with tool search if it is deferred) for the files or symbols you will change: it lists what depends on them across the project by area, callers grep misses included (top-level code, imports through re-exports), where the change lands, and the project's rules for them, from its .shadowgit-rules file, which say only what must not depend on what: add no link they name. get_map shows how the project is organised.";
     expect(INSTRUCTIONS).toContain(line);
     expect(INSTRUCTIONS.indexOf(line)).toBeLessThan(INSTRUCTIONS.indexOf('start_session'));
   });

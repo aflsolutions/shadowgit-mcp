@@ -37,8 +37,10 @@ export interface FakeApp {
    * it: a checkpoint outside a session finds the change in such a snapshot, and nothing left to commit.
    */
   snapshotsWithoutSession: boolean;
-  /** The check a 200 checkpoint answers beside its commit, as an app that checks rules sends it; null sends none. */
+  /** The check a checkpoint answers beside its commit, or beside the 409 of one that finds nothing new, as an app that checks rules sends it; null sends none. */
   checkpointRules: object | null;
+  /** The snapshot an app from 0.3.13 answers a session's end with, holding the edits it held back; null is an older app. */
+  endCommit: string | null;
   /** False is an app without the Lens routes: they answer the catch-all 404. */
   lensRoutes: boolean;
   /** What GET /lens answers: a range, its lens or null for a range that changes no code, and its rules' check as an app that has them sends it. */
@@ -170,6 +172,7 @@ async function listen(): Promise<FakeApp> {
     checkpointsIn: null,
     snapshotsWithoutSession: false,
     checkpointRules: null,
+    endCommit: null,
     lensRoutes: true,
     lensAnswer: { range: FAKE_RANGE, lens: FAKE_LENS },
     answers: {},
@@ -220,17 +223,17 @@ async function listen(): Promise<FakeApp> {
     }
     if (route === '/session/end') {
       app.sessions = app.sessions.filter((s) => s.id !== body.sessionId);
-      return json(200, { success: true });
+      return json(200, { success: true, ...(app.endCommit !== null && { commit: app.endCommit }) });
     }
     if (route === '/checkpoint') {
-      if (app.checkpointStatus === 404) return page(404, '<pre>Cannot POST /api/checkpoint</pre>');
-      if (app.checkpointStatus === 409) return json(409, { success: false, error: 'No changes to commit' });
-      if (app.checkpointStatus === 500) return page(500, '<h1>Internal Server Error</h1>');
       // Read once the commit is made: a check of the project reads its new HEAD
       const rules = () => {
         const check = app.checkpointRules;
         return check === null ? {} : { rules: check };
       };
+      if (app.checkpointStatus === 404) return page(404, '<pre>Cannot POST /api/checkpoint</pre>');
+      if (app.checkpointStatus === 409) return json(409, { success: false, error: 'No changes to commit', ...rules() });
+      if (app.checkpointStatus === 500) return page(500, '<h1>Internal Server Error</h1>');
       if (app.checkpointsIn === null) return json(200, { success: true, commit: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678', filesChanged: 2, ...rules() });
       shadowGit(app.checkpointsIn, ['add', '-A']);
       const changed = shadowGit(app.checkpointsIn, ['diff', '--cached', '--name-only']).split('\n').filter(Boolean);

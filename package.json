@@ -1,6 +1,6 @@
 {
   "name": "shadowgit-mcp-server",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "MCP server that lets AI assistants read ShadowGit's snapshot history and save their edits as sessions and checkpoints",
   "mcpName": "io.github.aflsolutions/shadowgit",
   "type": "module",

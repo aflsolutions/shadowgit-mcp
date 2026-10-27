@@ -39,6 +39,8 @@ const Session = z.object({
 });
 const Sessions = z.object({ sessions: z.array(Session) });
 const StartedSession = z.object({ sessionId: z.string() });
+// From ShadowGit 0.3.13 the app takes a session's unsaved edits into a snapshot as it ends, and answers it
+const EndedSession = z.object({ commit: z.string().optional() });
 // The checkpoint is saved whatever shape its check comes in: one this version can't read reads as failed
 const Checkpoint = z.object({
   commit: z.string(),
@@ -172,8 +174,11 @@ export async function startSession(repoPath: string, description: string, aiTool
   return read(StartedSession, json, 'session').sessionId;
 }
 
-export async function endSession(sessionId: string): Promise<void> {
-  await request('/session/end', { sessionId });
+/** The snapshot the session ended at, holding the edits it never checkpointed; undefined from an app before 0.3.13. */
+export async function endSession(sessionId: string): Promise<string | undefined> {
+  // The app commits the unsaved edits inside this request, as for a checkpoint
+  const { json } = await request('/session/end', { sessionId }, { timeoutMs: SLOW_REQUEST_TIMEOUT_MS });
+  return read(EndedSession, json, 'session').commit;
 }
 
 export async function createCheckpoint(input: {
@@ -191,7 +196,8 @@ export async function createCheckpoint(input: {
     );
   });
   if (status === 404) throw new Error(APP_TOO_OLD);
-  if (status === 409) return { commit: null, filesChanged: 0 };
+  // Nothing new: an automatic snapshot may have taken the change first, and from 0.3.13 the app checks that snapshot
+  if (status === 409) return { commit: null, filesChanged: 0, ...read(Checkpoint.pick({ rules: true }), json, 'checkpoint') };
   return read(Checkpoint, json, 'checkpoint');
 }
 

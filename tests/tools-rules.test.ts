@@ -143,6 +143,16 @@ describe('checkpoint', () => {
     ].join('\n'));
   });
 
+  it('a checkpoint that finds nothing new lists the check of the newest snapshot, which holds the change', async () => {
+    app.checkpointStatus = 409;
+    app.checkpointRules = CAPTURED;
+    const result = await checkpoint({ title: 'Count users in the nightly report' }, 'Claude Code');
+    expect(result.structuredContent).toEqual({ commit: null, title: 'Count users in the nightly report', files_changed: 0, repo: 'webshop', rules: CAPTURED });
+    const text = textOf(result);
+    expect(text).toMatch(/^No changes since the last snapshot; nothing to checkpoint\.\n/);
+    expect(text).toContain(`The project's rules (.shadowgit-rules): 1 checked, over snapshots ${CAPTURED.range.base?.slice(0, 8)}..${CAPTURED.range.head.slice(0, 8)}.`);
+  });
+
   it("says why the rules weren't checked", async () => {
     app.checkpointRules = { range: null, status: 'failed', error: '.shadowgit-rules is not a file' };
     expect(textOf(await checkpoint({ title: 'Report' }, 'Claude Code'))).toBe(

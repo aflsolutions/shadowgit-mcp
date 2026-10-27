@@ -201,6 +201,15 @@ describe('createCheckpoint', () => {
     await expect(createCheckpoint(checkpointInput)).rejects.toThrow('ShadowGit answered HTTP 500.');
   });
 
+  it('waits up to 58 s for a session to end, as for a checkpoint: the app snapshots its unsaved edits first', async () => {
+    app.hang = true;
+    // Stands in for the 58 s wait: the real timeout is replaced by a 50 ms one, which fails the same way.
+    const timeout = AbortSignal.timeout.bind(AbortSignal);
+    const asked = vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => timeout(50));
+    await expect(endSession('claude-code-1')).rejects.toThrow('ShadowGit did not answer within 58 s.');
+    expect(asked).toHaveBeenCalledWith(58_000);
+  });
+
   it('warns that the checkpoint may still be saving when the app does not answer', async () => {
     app.hang = true;
     // Stands in for the 58 s wait: the real timeout is replaced by a 50 ms one, which fails the same way.

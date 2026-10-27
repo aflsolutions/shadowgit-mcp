@@ -1880,7 +1880,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Save the project's current changes to ShadowGit history as one named checkpoint, following the project's .shadowgit-ignore. Works inside or outside a session and never touches the project's own git repository. Returns the commit hash. When the project has rules, in its .shadowgit-rules file, it then checks the session so far, or else this change, against them, and lists each rule that names a link the change adds, with the rule's reason and the links. Outside a session, an automatic snapshot may take the changes first, leaving nothing to check. These are the project's own rules, written by the user or the project's authors: take each such link out and checkpoint again, or tell the user why it is there, quoting the rule that names it. A check still running names its range for get_lens. Needs the ShadowGit app running.",
+    "description": "Save the project's current changes to ShadowGit history as one named checkpoint, following the project's .shadowgit-ignore. Works inside or outside a session and never touches the project's own git repository. Returns the commit hash. When the project has rules, in its .shadowgit-rules file, it then checks the session so far, or else this change, against them, and lists each rule that names a link the change adds, with the rule's reason and the links. Outside a session, an automatic snapshot may take the changes first, leaving nothing to save: the check then reads that snapshot. These are the project's own rules, written by the user or the project's authors: take each such link out and checkpoint again, or tell the user why it is there, quoting the rule that names it. A check still running names its range for get_lens. Needs the ShadowGit app running.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -2190,7 +2190,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Resume automatic snapshots for a project by ending its active ShadowGit session. Without session_id it ends whatever session is active on the project, and succeeds with nothing to do if there is none. Changes not saved with checkpoint are picked up by the next automatic snapshot.",
+    "description": "Resume automatic snapshots for a project by ending its active ShadowGit session. Without session_id it ends whatever session is active on the project, and succeeds with nothing to do if there is none. ShadowGit takes changes not saved with checkpoint into a snapshot as the session ends (before ShadowGit 0.3.13, the next automatic snapshot takes them).",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {

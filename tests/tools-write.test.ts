@@ -29,6 +29,7 @@ beforeEach(() => {
   app.requests.length = 0;
   app.sessions.length = 0;
   app.checkpointStatus = 200;
+  app.endCommit = null;
 });
 
 afterEach(() => {
@@ -118,6 +119,15 @@ describe('end_session', () => {
     // The Lens reads snapshots: edits ended without a checkpoint are not in one yet
     expect(textOf(result)).toContain('if not, checkpoint them first');
     expect(app.requests.at(-1)).toEqual({ path: '/session/end', body: { sessionId: 'claude-code-7' } });
+  });
+
+  it('goes straight to the Lens when the app takes the unsaved edits into a snapshot as the session ends', async () => {
+    app.endCommit = 'f'.repeat(40);
+    app.sessions.push(fakeSession({ id: 'claude-code-8', repoPath: project }));
+    const result = await endSession({});
+    expect(result.structuredContent).toEqual({ ended: ['claude-code-8'], repo: 'webshop', next: expect.stringMatching(/^get_lens, then write_lens_words/) });
+    expect(textOf(result)).toContain('Ended claude-code-8 on webshop at snapshot ffffffff, which holds its edits. Automatic snapshots resumed.');
+    expect(textOf(result)).not.toContain('checkpoint them first');
   });
 
   it('succeeds with nothing to do when no session is active', async () => {

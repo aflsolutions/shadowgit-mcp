@@ -2,6 +2,15 @@
 
 All notable changes to the ShadowGit MCP Server will be documented in this file.
 
+## [2.5.1] - 2026-10-27
+
+### Changed
+- `end_session` waits up to 58 s, as `checkpoint` does: from ShadowGit 0.3.13 the app takes the session's unsaved
+  edits into a snapshot before it answers. When it has, the answer names that snapshot, and its next step goes
+  straight to `get_lens`. An older app answers as before.
+- `checkpoint` lists the rules check of a checkpoint that finds nothing new. Outside a session the app's automatic
+  snapshot can take the change first; from ShadowGit 0.3.13 the app checks that snapshot.
+
 ## [2.5.0] - 2026-10-26
 
 ### Added

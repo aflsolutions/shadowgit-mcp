@@ -95,6 +95,13 @@ describe('get_docs', () => {
     expect(mixed.structuredContent).toMatchObject({ next: expect.stringMatching(/^Write the words of src\/billing with write_docs/) });
   });
 
+  it("names the project in its steps when it is not the current one, so the next batch and the words go to it", async () => {
+    app.docsAnswer = DOCS_ANSWERS.all;
+    const result = await getDocs({ all: true, repo: 'webshop' });
+    expect(result.structuredContent).toMatchObject({ next: expect.stringMatching(/^For webshop, pass repo "webshop" to each tool\. Write the words of /) });
+    expect(textOf(result)).toContain('Next: For webshop, pass repo "webshop" to each tool. Write the words of');
+  });
+
   it('asks for named pages and the Overview together', async () => {
     await getDocs({ areas: ['src/billing', 'src/jobs'], overview: true });
     expect(docsAsked()).toEqual([`/docs?${new URLSearchParams([['repoPath', project], ['area', 'src/billing'], ['area', 'src/jobs'], ['overview', 'true']])}`]);

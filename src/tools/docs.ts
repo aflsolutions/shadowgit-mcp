@@ -2,11 +2,11 @@ import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { clientName } from '../client-name.js';
 import { DocPiece, DocsCursor, DocsRead, DocsWritten, type DocKey, type DocWords } from '../doc-shapes.js';
-import { resolveRepo } from '../repos.js';
+import { repoArgument, resolveRepo } from '../repos.js';
 import { readDocs, sendDocs, type AppDocWrite } from '../session-api.js';
 import { andList, drawnFrom, list } from './map.js';
 import { quote } from './rules.js';
-import { dataResult, repoParam } from './shared.js';
+import { dataResult, forRepo, repoParam } from './shared.js';
 
 // The app's cursor for all is more here: next is the step that follows, in every tool's answer, and the model reads
 // the structured answer alone
@@ -146,7 +146,9 @@ export async function getDocs({
   if (batch && (areas.length > 0 || overview)) throw new Error(BOTH);
   const project = resolveRepo(repo);
   const { next: cursor, ...read } = await readDocs({ repoPath: project.path, areas, overview, all: batch, next: more });
-  const step = writeStep(read, cursor);
+  // Another project's steps name it: get_docs with more, or write_docs, without repo would read the current one
+  const written = writeStep(read, cursor);
+  const step = written === undefined ? undefined : `${forRepo(repo === undefined ? undefined : repoArgument(project))}${written}`;
   const asked = batch ? 'all' : areas.length > 0 || overview ? 'pages' : 'session';
   return dataResult(DocsOutput, describeDocs(project.name, read, asked, step), { repo: project.name, ...read, more: cursor, ...(step !== undefined && { next: step }) });
 }

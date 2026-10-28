@@ -23,7 +23,7 @@ const PAGES = ['src/billing', 'src/jobs'];
 const STREAMS = process.env.EVAL_STREAMS;
 
 type Request = FakeApp['requests'][number];
-type SentPage = { area?: string; overview?: true; holds?: true; words?: { summary: string; body: { text: string }[][] } };
+type SentPage = { area?: string; holds?: true; words?: { summary: string; body: { text: string }[][] } };
 
 /** The areas whose pages a run wrote after the Lens's words: words that say something, or holds. */
 function pagesWritten(requests: readonly Request[]): Set<string> {
@@ -96,6 +96,7 @@ async function run(i: number): Promise<boolean | null> {
     });
     Object.defineProperty(app, 'lensAnswer', { get: () => lensOf(project, base) });
     // The real app's pages for this change, at the project's newest snapshot
+    app.docsRoutes = true;
     Object.defineProperty(app, 'docsAnswer', { get: () => docsAt(shadowGit(project, ['rev-parse', 'HEAD'])) });
     const stdout = await runClaude({ prompt: TASK, project, app, timeoutMs: 600_000, args: STREAM_ARGS });
     if (STREAMS !== undefined) fs.writeFileSync(path.join(STREAMS, `run-${i}.jsonl`), stdout);

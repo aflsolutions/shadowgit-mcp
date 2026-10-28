@@ -131,8 +131,6 @@ for (const { phrase, prepare, passed } of CASES) {
   let failure: string | undefined;
   try {
     const project = makeWebshop();
-    // An app without docs pages, but for the docs phrases: the fake app's pages are of the map webshop
-    app.docsRoutes = false;
     prepare?.(app, project);
     const { is_error, result } = await askClaude(phrase, app, project);
     if (is_error) failure = `Claude Code reported an error: ${result}`;

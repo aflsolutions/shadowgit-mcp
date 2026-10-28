@@ -28,8 +28,7 @@ const DocRecord = z.object({
 const AreaEnd = z.object({ id: z.string(), label: z.string() });
 const AreaLink = z.object({ ...AreaEnd.shape, count: z.number().int() });
 const AreaFacts = z.object({
-  id: z.string(),
-  label: z.string(),
+  ...AreaEnd.shape,
   folder: z.string(),
   at: z.string().describe('The snapshot of the map the facts are drawn from'),
   layers: z.array(z.string()),

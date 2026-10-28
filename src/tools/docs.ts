@@ -2,11 +2,11 @@ import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { clientName } from '../client-name.js';
 import { DocPiece, DocsCursor, DocsRead, DocsWritten, type DocKey, type DocWords } from '../doc-shapes.js';
-import { repoArgument, resolveRepo } from '../repos.js';
+import { resolveRepo } from '../repos.js';
 import { readDocs, sendDocs, type AppDocWrite } from '../session-api.js';
-import { andList, drawnFrom, list } from './map.js';
+import { andList, drawnFrom, list, plural } from './map.js';
 import { quote } from './rules.js';
-import { dataResult, forRepo, repoParam } from './shared.js';
+import { dataResult, forProject, repoParam, Snapshot } from './shared.js';
 
 // The app's cursor for all is more here: next is the step that follows, in every tool's answer, and the model reads
 // the structured answer alone
@@ -17,10 +17,8 @@ const DocsOutput = z.object({
   next: z.string().optional().describe('The step that follows: write these pages with write_docs'),
 });
 const WrittenOutput = z.object({ repo: z.string(), ...DocsWritten.shape });
-const Snapshot = z.string().regex(/^[0-9a-f]{7,40}$/, 'a snapshot hash');
 
 type Read = z.infer<typeof DocsRead>;
-type Cursor = Read['next'];
 type Page = Read['pages'][number];
 type Facts = NonNullable<Page['facts']>;
 type Words = z.infer<typeof DocWords>;
@@ -29,7 +27,6 @@ const BOTH = 'Ask for all, or name areas and the overview: not both.';
 
 /** A page as the answers name it: the Overview, or an area by its id. */
 export const pageName = (key: z.infer<typeof DocKey>) => ('area' in key ? key.area : 'the Overview');
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
 /** A paragraph as text, each link after its text as the app names it: a symbol in its file, or an area by its id. */
 const paragraph = (pieces: readonly z.infer<typeof DocPiece>[]) =>
@@ -108,7 +105,7 @@ function pageLines(page: Page): string[] {
 const needsWords = ({ state }: Page) => state !== 'current' && state !== 'not-in-map';
 
 /** The pages to write, named, at head, then the next batch of all; none when every page read is current. */
-function writeStep({ head, limits, pages }: Omit<Read, 'next'>, more: Cursor): string | undefined {
+function writeStep({ head, limits, pages, next: more }: Read): string | undefined {
   const asked = pages.filter(needsWords);
   if (asked.length === 0) return undefined;
   const words = `for each page a summary of one sentence (at most ${limits.summary} characters) and a body of short paragraphs (at most ${limits.bodyWords} words) on what the code you read does, linking the symbols and areas it names; a page with no words can start short, from its facts and the code you read, and later sessions add to it; or holds: true where its words still hold`;
@@ -117,9 +114,9 @@ function writeStep({ head, limits, pages }: Omit<Read, 'next'>, more: Cursor): s
   return `Write the words of ${andList(asked.map(({ page }) => pageName(page)))} with write_docs, head ${JSON.stringify(head)}: ${words}.${following}`;
 }
 
-function describeDocs(repo: string, read: Omit<Read, 'next'>, asked: 'session' | 'pages' | 'all', step: string | undefined): string {
+function describeDocs(repo: string, read: Read, all: boolean, step: string | undefined): string {
   if (read.pages.length === 0) {
-    return asked === 'all' ? `Every page of ${repo}'s map has words.` : `The latest AI session in ${repo} changed no area whose docs page needs words.`;
+    return all ? `Every page of ${repo}'s map has words.` : `The latest AI session in ${repo} changed no area whose docs page needs words.`;
   }
   return [
     `${repo}'s docs pages, at snapshot ${read.head.slice(0, 8)}; the map is ${drawnFrom(read.mapAsOf)}`,
@@ -145,32 +142,36 @@ export async function getDocs({
   const batch = all || more !== undefined;
   if (batch && (areas.length > 0 || overview)) throw new Error(BOTH);
   const project = resolveRepo(repo);
-  const { next: cursor, ...read } = await readDocs({ repoPath: project.path, areas, overview, all: batch, next: more });
+  const read = await readDocs({ repoPath: project.path, areas, overview, all: batch, next: more });
   // Another project's steps name it: get_docs with more, or write_docs, without repo would read the current one
-  const written = writeStep(read, cursor);
-  const step = written === undefined ? undefined : `${forRepo(repo === undefined ? undefined : repoArgument(project))}${written}`;
-  const asked = batch ? 'all' : areas.length > 0 || overview ? 'pages' : 'session';
-  return dataResult(DocsOutput, describeDocs(project.name, read, asked, step), { repo: project.name, ...read, more: cursor, ...(step !== undefined && { next: step }) });
+  const written = writeStep(read);
+  const step = written === undefined ? undefined : `${forProject(repo, project)}${written}`;
+  const { next: cursor, ...rest } = read;
+  return dataResult(DocsOutput, describeDocs(project.name, read, batch, step), { repo: project.name, ...rest, more: cursor, ...(step !== undefined && { next: step }) });
 }
 
 /** A page as write_docs takes it: flat, for a model to fill. */
-interface PageInput {
-  area?: string;
-  overview?: boolean;
-  holds?: boolean;
-  summary?: string;
-  body?: (string | z.infer<typeof DocPiece>[])[];
-}
+const PageInput = z.object({
+  area: z.string().min(1).optional().describe("The area's id, as get_docs names it"),
+  overview: z.boolean().optional().describe('The Overview page, in place of an area'),
+  holds: z.boolean().optional().describe('The words the page has still hold: kept again at head, unchanged'),
+  summary: z.string().optional().describe('One sentence on what the area is for'),
+  body: z
+    .array(z.union([z.string(), z.array(DocPiece)]))
+    .optional()
+    .describe('Short paragraphs on how it works: each plain text, or pieces, a piece linking a symbol (file and name) or an area (id) where its text names it'),
+});
 
 /** A page as the app takes it, or why it can't be sent. */
-function appPage({ area, overview, holds, summary, body }: PageInput, place: number): AppDocWrite {
+function appPage({ area, overview, holds, summary, body }: z.infer<typeof PageInput>, place: number): AppDocWrite {
   const page = `Page ${place + 1}`;
   if (area !== undefined && overview) throw new Error(`${page} names an area and the overview: name one.`);
   const key = overview ? { overview: true as const } : area !== undefined ? { area } : null;
   if (key === null) throw new Error(`${page} names no area and not the overview: name one.`);
-  const words = summary !== undefined || body !== undefined;
-  if (holds && words) throw new Error(`${page} sends words and holds: send one.`);
-  if (holds) return { ...key, holds: true };
+  if (holds) {
+    if (summary !== undefined || body !== undefined) throw new Error(`${page} sends words and holds: send one.`);
+    return { ...key, holds: true };
+  }
   if (summary === undefined || body === undefined) {
     throw new Error(`${page} sends neither words (a summary and a body) nor holds: send words, or holds: true where its words still hold.`);
   }
@@ -178,7 +179,7 @@ function appPage({ area, overview, holds, summary, body }: PageInput, place: num
   return { ...key, words: { summary, body: body.map((pieces) => (typeof pieces === 'string' ? [{ text: pieces }] : pieces)) } };
 }
 
-export async function writeDocs({ head, pages, repo }: { head: string; pages: PageInput[]; repo?: string }, author: string): Promise<CallToolResult> {
+export async function writeDocs({ head, pages, repo }: { head: string; pages: z.infer<typeof PageInput>[]; repo?: string }, author: string): Promise<CallToolResult> {
   const sent = pages.map(appPage);
   const project = resolveRepo(repo);
   const written = await sendDocs({ repoPath: project.path, head, author, pages: sent });
@@ -220,19 +221,7 @@ export function registerDocs(server: McpServer): void {
         "Write the words of docs pages get_docs read, at the head it answered. For each page, an area by its id or overview: true, then a summary, one sentence on what it is for (at most 200 characters), and a body, short paragraphs on how it works (at most 400 words), each paragraph text or pieces, a piece linking a symbol (its file and name, as get_docs and get_code_context name them) or an area by its id, where the text names it. Or holds: true, when the words still hold after the changes get_docs listed: they are kept again at head, unchanged. Describe what the code does and how it works, from the code you read and the facts get_docs gave: a page with no words can start short, and later sessions add to it. Links that name nothing at head are made plain text and named back. ShadowGit keeps every version in its own history, never in the project's files.",
       inputSchema: z.object({
         head: Snapshot.describe('The head get_docs answered'),
-        pages: z
-          .array(z.object({
-            area: z.string().min(1).optional().describe("The area's id, as get_docs names it"),
-            overview: z.boolean().optional().describe('The Overview page, in place of an area'),
-            holds: z.boolean().optional().describe('The words the page has still hold: kept again at head, unchanged'),
-            summary: z.string().optional().describe('One sentence on what the area is for'),
-            body: z
-              .array(z.union([z.string(), z.array(DocPiece)]))
-              .optional()
-              .describe('Short paragraphs on how it works: each plain text, or pieces, a piece linking a symbol (file and name) or an area (id) where its text names it'),
-          }))
-          .min(1)
-          .max(10),
+        pages: z.array(PageInput).min(1).max(10),
         repo: repoParam,
       }),
       outputSchema: WrittenOutput,

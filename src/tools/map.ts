@@ -2,10 +2,10 @@ import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { clientName } from '../client-name.js';
 import { ContextRead, MapRead } from '../map-shapes.js';
-import { repoArgument, resolveRepo } from '../repos.js';
+import { resolveRepo } from '../repos.js';
 import { readArea, readCodeContext, readMap } from '../session-api.js';
 import { holdLines, readLines } from './rules.js';
-import { dataResult, forRepo, repoParam } from './shared.js';
+import { dataResult, forProject, repoParam } from './shared.js';
 
 const MapOutput = z.object({ repo: z.string(), ...MapRead.shape });
 // The session flow that follows, in the answer the model reads before it edits
@@ -31,6 +31,7 @@ export function list<T>({ items, total }: Listed<T>, show: (item: T) => string, 
 }
 
 /** "a, b and c". */
+export const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 export const andList = (words: readonly string[]) => (words.length < 2 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`);
 const counts = (byArea: readonly { area: string; count: number }[]) => andList(byArea.map(({ area, count }) => `${area} (${count})`));
 /** What uses or depends on a target, and how: a symbol at its line, or a file. */
@@ -46,12 +47,22 @@ export function drawnFrom({ snapshot, time, behind, changedFiles }: AsOf): strin
 }
 
 /** How far behind the newest snapshot a page's words are, once counted. */
-const since = (behind: number | null) => (behind === null ? '' : behind === 0 ? ' (current)' : ` (${behind} change${behind === 1 ? '' : 's'} since its words)`);
+function since(behind: number | null): string {
+  if (behind === null) return '';
+  if (behind === 0) return ' (current)';
+  return ` (${plural(behind, 'change')} since its words)`;
+}
 
 /** The page summaries, by area id: get_docs takes the id, and a split area's id isn't its folder. */
 function docsLines(docs: Read['docs']): string[] {
   if (!docs?.length) return [];
   return ['Docs pages (get_docs reads them):', ...docs.map(({ area, summary, behind }) => `- ${area}: ${summary}${since(behind)}`)];
+}
+
+/** What each area holding a target is for, from its docs page, before the edit. */
+function contextDocsLines(docs: z.infer<typeof ContextRead>['docs']): string[] {
+  if (!docs?.length) return [];
+  return ['Docs pages of their areas (get_docs reads them):', ...docs.map(({ area, label, summary }) => `- ${label} (area ${area}): ${summary}`)];
 }
 
 function describeSummary(repo: string, mapAsOf: AsOf, summary: NonNullable<Read['summary']>, docs: Read['docs']): string {
@@ -159,10 +170,8 @@ export async function getCodeContext(
   const project = resolveRepo(repo);
   const read = await readCodeContext({ repoPath: project.path, files, symbols, aiTool });
   const hold = holdLines(read.rules, read.rulesFailure);
-  const next = `${forRepo(repo === undefined ? undefined : repoArgument(project))}${read.rules?.length ? NEXT_WITH_RULES : NEXT}`;
-  // What each area holding a target is for, from its docs page, before the edit
-  const pages = read.docs?.length ? ['Docs pages of their areas (get_docs reads them):', ...read.docs.map(({ area, label, summary }) => `- ${label} (area ${area}): ${summary}`)] : [];
-  const text = [describeContext(project.name, read.mapAsOf, read.context), pages.join('\n'), hold.join('\n'), `Next: ${next}`].filter(Boolean).join('\n\n');
+  const next = `${forProject(repo, project)}${read.rules?.length ? NEXT_WITH_RULES : NEXT}`;
+  const text = [describeContext(project.name, read.mapAsOf, read.context), contextDocsLines(read.docs).join('\n'), hold.join('\n'), `Next: ${next}`].filter(Boolean).join('\n\n');
   return dataResult(ContextOutput, text, { repo: project.name, ...read, next });
 }
 

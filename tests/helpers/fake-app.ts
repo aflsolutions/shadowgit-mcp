@@ -53,7 +53,7 @@ export interface FakeApp {
   mapStatus: 200 | 202 | 409 | 500;
   /** The bodies the map routes answer: GET /map without an area, with one, and POST /map/context. */
   mapAnswer: { map: object; area: object; context: object };
-  /** False is an app without the docs routes: they answer the catch-all 404. */
+  /** False, the default, is an app without the docs routes: they answer the catch-all 404. Off unless a test opts in, as its pages are the map webshop's alone. */
   docsRoutes: boolean;
   /** 200 answers; 202 is an app still counting past its deadline, for a read, or still reading the map's names, for a write. */
   docsStatus: 200 | 202;
@@ -199,7 +199,7 @@ async function listen(): Promise<FakeApp> {
     lensRoutes: true,
     lensAnswer: { range: FAKE_RANGE, lens: FAKE_LENS },
     answers: {},
-    docsRoutes: true,
+    docsRoutes: false,
     docsStatus: 200,
     docsAnswer: DOCS_ANSWERS.session,
     docsWritten: null,

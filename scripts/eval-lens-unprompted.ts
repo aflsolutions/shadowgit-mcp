@@ -76,8 +76,6 @@ for (let i = 1; i <= RUNS; i++) {
       get: () => (JSON.stringify(app.requestsTo('/map/context').at(-1) ?? {}).includes('"files"') ? MAP_ANSWERS.checkoutFiles : MAP_ANSWERS.checkoutSymbol),
     });
     app.checkpointsIn = project;
-    // An app without docs pages: this eval measures the session and the Lens's words; eval:docs measures the docs step
-    app.docsRoutes = false;
     Object.defineProperty(app, 'lensAnswer', { get: () => ({ range: range(), lens: DISCOUNT_LENS }) });
     const stdout = await runTask(app, project);
     const { result, total_cost_usd: cost } = JSON.parse(stdout) as { result: string; total_cost_usd: number };

@@ -67,8 +67,6 @@ function answerFor(app: FakeApp, project: string, withRules: boolean, heard: num
   };
   app.checkpointsIn = project;
   app.snapshotsWithoutSession = true;
-  // An app without docs pages: the fake app's pages are of another webshop, and this eval measures the rules alone
-  app.docsRoutes = false;
   app.mapAnswer.map = withRules ? RULES_ANSWERS.summary : { ...RULES_ANSWERS.summary, rules: null };
   app.mapAnswer.context = withRules ? RULES_ANSWERS.context : { ...RULES_ANSWERS.context, rules: null };
   if (withRules) {

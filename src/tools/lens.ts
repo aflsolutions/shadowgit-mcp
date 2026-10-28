@@ -1,18 +1,17 @@
 import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { clientName } from '../client-name.js';
-import { repoArgument, resolveRepo, type Repo } from '../repos.js';
+import { resolveRepo, type Repo } from '../repos.js';
 import { LensLines, LensRead, readDocs, readLens, sendLensWords, WordsWritten, type LensWords } from '../session-api.js';
 import { pageName } from './docs.js';
 import { andList } from './map.js';
 import { passing, quote, rangeLines, snapshots } from './rules.js';
-import { dataResult, forRepo, repoParam } from './shared.js';
+import { dataResult, forProject, repoParam, Snapshot } from './shared.js';
 
 const LensOutput = z.object({ repo: z.string(), ...LensRead.shape });
 const WordsOutput = z.object({ repo: z.string(), ...WordsWritten.shape, next: z.string().optional().describe('The step that follows: the docs pages the session changed') });
 // The docs step is worth a short wait, never a long one: past it the words' answer goes on without it
 const DOCS_PROBE_MS = 20_000;
-const Snapshot = z.string().regex(/^[0-9a-f]{7,40}$/, 'a snapshot hash');
 
 type Read = z.infer<typeof LensRead>;
 type LensSymbol = NonNullable<NonNullable<Read['lens']>['steps'][number]['symbols']>[number];
@@ -102,7 +101,7 @@ async function docsStep(project: Repo, repo: string | undefined): Promise<string
   );
   if (pages.length === 0) return undefined;
   const names = andList(pages.map(({ page }) => pageName(page)));
-  return `${forRepo(repo === undefined ? undefined : repoArgument(project))}The session's last step: the docs pages of the areas it changed, ${names}, need words, so the pages the user reads in ShadowGit describe the code as it is now. A page with no words can start short, from its facts and the code you read. get_docs, then write_docs.`;
+  return `${forProject(repo, project)}The session's last step: the docs pages of the areas it changed, ${names}, need words, so the pages the user reads in ShadowGit describe the code as it is now. A page with no words can start short, from its facts and the code you read. get_docs, then write_docs.`;
 }
 
 export async function writeLensWords(

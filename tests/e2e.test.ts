@@ -154,6 +154,7 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     const words = await client.callTool({ name: 'write_lens_words', arguments: { ...FAKE_RANGE, steps: [{ id: 'c1', title: 'Queue failed charges' }] } });
     expect(words.structuredContent).toMatchObject({ repo: 'demo', applied: { steps: 1 } });
 
+    app.docsRoutes = true;
     const docs = await client.callTool({ name: 'get_docs', arguments: {} });
     expect(docs.structuredContent).toMatchObject({ repo: 'demo', pages: [{ page: { area: 'src/billing' } }, { page: { area: 'src/jobs' } }] });
     const written = await client.callTool({ name: 'write_docs', arguments: { head: FAKE_RANGE.head, pages: [{ overview: true, holds: true }] } });

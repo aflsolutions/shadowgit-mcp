@@ -381,6 +381,41 @@
             }
           ]
         },
+        "docs": {
+          "description": "Each listed area's docs page summary, for the areas whose page has words",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "area": {
+                "description": "The area's id",
+                "type": "string"
+              },
+              "behind": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Changes since the words, once counted; null until then"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "area",
+              "summary",
+              "behind"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
         "mapAsOf": {
           "additionalProperties": false,
           "description": "The snapshot the answer is drawn from",
@@ -1675,6 +1710,31 @@
             "landing"
           ],
           "type": "object"
+        },
+        "docs": {
+          "description": "The docs page summary of each area holding a target, for the areas whose page has words",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "area": {
+                "description": "The area's id",
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "area",
+              "label",
+              "summary"
+            ],
+            "type": "object"
+          },
+          "type": "array"
         },
         "mapAsOf": {
           "additionalProperties": false,

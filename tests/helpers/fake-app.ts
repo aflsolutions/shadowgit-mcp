@@ -53,6 +53,14 @@ export interface FakeApp {
   mapStatus: 200 | 202 | 409 | 500;
   /** The bodies the map routes answer: GET /map without an area, with one, and POST /map/context. */
   mapAnswer: { map: object; area: object; context: object };
+  /** False is an app without the docs routes: they answer the catch-all 404. */
+  docsRoutes: boolean;
+  /** 200 answers; 202 is an app still counting past its deadline, for a read, or still reading the map's names, for a write. */
+  docsStatus: 200 | 202;
+  /** What GET /docs answers, whatever it asks for. */
+  docsAnswer: object;
+  /** What POST /docs answers; null keeps every page sent, dropping no link, at the head sent. */
+  docsWritten: object | null;
   /** A body that answers a route (its path, without the query) with 200 in place of its usual one: a newer app's shape. */
   answers: Partial<Record<string, object>>;
   /** Leaves every request unanswered, like an app busy with a large project. */
@@ -139,6 +147,21 @@ export const RULES_ANSWERS = {
   lens: fixture('rules/lens'),
   rulesOnly: fixture('rules/rules-only'),
 };
+/**
+ * The real app's docs answers for the map webshop (`tests/fixtures/map/project.json`), from a session that adds
+ * lateFee to src/billing/charge.ts and charges it from src/jobs/retry.ts: the session's pages (billing and jobs, no
+ * words), the words written for billing (a link to ghost dropped, src/nowhere refused), billing's page once money.ts
+ * changed after them, the map's and chargeCard's file's page summaries, and the first batch of all, after three more
+ * areas (search, mail, admin) so it has a next.
+ */
+export const DOCS_ANSWERS = {
+  session: withoutSuccess(fixture('docs/session')),
+  written: withoutSuccess(fixture('docs/written')),
+  area: withoutSuccess(fixture('docs/area')),
+  mapSummary: withoutSuccess(fixture('docs/map-summary')),
+  context: withoutSuccess(fixture('docs/context')),
+  all: withoutSuccess(fixture('docs/all')),
+};
 /** The webshop the rules answers are of, its .shadowgit-rules included: path → content. */
 export const RULES_PROJECT = fixture('rules/project') as Record<string, string>;
 /** What the map routes answer by default: the summary, the billing area, and chargeCard's context. */
@@ -176,6 +199,10 @@ async function listen(): Promise<FakeApp> {
     lensRoutes: true,
     lensAnswer: { range: FAKE_RANGE, lens: FAKE_LENS },
     answers: {},
+    docsRoutes: true,
+    docsStatus: 200,
+    docsAnswer: DOCS_ANSWERS.session,
+    docsWritten: null,
     wordsStatus: 200,
     mapRoutes: true,
     mapStatus: 200,
@@ -250,6 +277,20 @@ async function listen(): Promise<FakeApp> {
       if (app.wordsStatus === 409) return json(409, { success: false, error: 'Nothing in this range changes code: it has no lens to word' });
       if (app.wordsStatus === 400) return json(400, { success: false, error: "Not the Lens's words: ✖ Invalid input: expected string, received array\n  → at steps[0].body" });
       return json(200, { success: true, applied: { summary: true, steps: 1, components: 1, layers: 0, flows: 0 }, ignored: ['c99'] });
+    }
+    if (app.docsRoutes && (route.startsWith('/docs?') || route === '/docs')) {
+      const read = route !== '/docs';
+      if (app.docsStatus === 202) {
+        return json(202, {
+          success: false,
+          error: read
+            ? "ShadowGit is drawing this project's map or counting the changes since its pages' words; ask again in a minute"
+            : "ShadowGit is reading this project's map and names; send the words again in a minute",
+        });
+      }
+      if (read) return json(200, { success: true, ...app.docsAnswer });
+      const pages = (body.pages as Record<string, unknown>[]).map((page) => ({ page: 'overview' in page ? { overview: true } : { area: page.area }, kept: true, dropped: [] }));
+      return json(200, { success: true, ...(app.docsWritten ?? { head: body.head, pages }) });
     }
     if (app.mapRoutes && (route.startsWith('/map?') || route === '/map/context')) {
       if (app.mapStatus === 202) return json(202, { success: false, error: "ShadowGit is drawing this project's map; ask again in a minute" });

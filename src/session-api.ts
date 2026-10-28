@@ -1,4 +1,5 @@
 import * as z from 'zod/v4';
+import { DocsRead, DocsWritten, type DocKey, type DocsCursor, type DocWords } from './doc-shapes.js';
 import { AreaRead, ContextRead, SummaryRead } from './map-shapes.js';
 import { CheckpointRules, Range, RuleCheck, RulesFailure } from './rule-shapes.js';
 import { toLocalIso } from './time.js';
@@ -27,6 +28,7 @@ const SLOW_REQUEST_TIMEOUT_MS = 58_000;
 const APP_TOO_OLD = "This version of ShadowGit can't create checkpoints for AI assistants. Ask the user to update the ShadowGit app.";
 const APP_WITHOUT_LENS = 'This version of ShadowGit has no Lens for AI assistants. Ask the user to update the ShadowGit app.';
 const APP_WITHOUT_MAP = 'This version of ShadowGit has no map for AI assistants. Ask the user to update the ShadowGit app.';
+export const APP_WITHOUT_DOCS = 'This version of ShadowGit has no docs pages for AI assistants. Ask the user to update the ShadowGit app.';
 const CHECK_UNREAD = "ShadowGit checked this checkpoint against the project's rules and answered in a shape this version of shadowgit-mcp-server does not read. Ask the user to update shadowgit-mcp-server.";
 const APP_WITHOUT_PIECES = "This version of ShadowGit reads a step's body as plain text only: ask the user to update the ShadowGit app, or send each body as plain text.";
 
@@ -153,7 +155,7 @@ async function request(
 }
 
 /** An answer in the shape this version reads: one of another shape asks for a server update, not a parse error. */
-function read<S extends z.ZodType>(shape: S, json: unknown, what: 'map' | 'lens' | 'session' | 'checkpoint'): z.infer<S> {
+function read<S extends z.ZodType>(shape: S, json: unknown, what: 'map' | 'lens' | 'session' | 'checkpoint' | 'docs page'): z.infer<S> {
   const parsed = shape.safeParse(json);
   if (!parsed.success) throw new Error(`ShadowGit answered with a ${what} this version of shadowgit-mcp-server does not read. Ask the user to update shadowgit-mcp-server.`, { cause: parsed.error });
   return parsed.data;
@@ -247,4 +249,39 @@ export function readArea({ repoPath, area, aiTool }: { repoPath: string; area: s
 /** Where files and symbols sit and what depends on them; the app may draw the map in the request. */
 export function readCodeContext(input: { repoPath: string; files?: string[]; symbols?: { name: string; file?: string }[]; aiTool: string }) {
   return mapAnswer(ContextRead, '/map/context', input);
+}
+
+/** A page's words as the app keeps them, or holds: the words it has still hold, kept again at the new head. */
+export type AppDocWrite = z.infer<typeof DocKey> & ({ words: z.infer<typeof DocWords> } | { holds: true });
+
+/**
+ * Docs pages for the agent to word: without areas or all, the latest AI session's that need words; with areas and
+ * overview, those; with all, a batch of those without words, from `next`. The app may count changes in the request.
+ */
+export async function readDocs(input: {
+  repoPath: string;
+  areas?: string[];
+  overview?: boolean;
+  all?: boolean;
+  next?: z.infer<typeof DocsCursor>;
+  timeoutMs?: number;
+}): Promise<z.infer<typeof DocsRead>> {
+  const query = new URLSearchParams({ repoPath: input.repoPath });
+  for (const area of input.areas ?? []) query.append('area', area);
+  if (input.overview) query.set('overview', 'true');
+  if (input.all) query.set('all', 'true');
+  if (input.next !== undefined) {
+    query.set('after', String(input.next.after));
+    query.set('map', input.next.map);
+  }
+  const { status, json } = await request(`/docs?${query}`, undefined, { timeoutMs: input.timeoutMs ?? SLOW_REQUEST_TIMEOUT_MS, accept: [404] });
+  if (status === 404) throw new Error(APP_WITHOUT_DOCS);
+  return read(DocsRead, json, 'docs page');
+}
+
+/** The agent's words for pages, kept at `head`, the snapshot readDocs answered; the app reads the map's names first. */
+export async function sendDocs(input: { repoPath: string; head: string; author: string; pages: AppDocWrite[] }): Promise<z.infer<typeof DocsWritten>> {
+  const { status, json } = await request('/docs', input, { timeoutMs: SLOW_REQUEST_TIMEOUT_MS, accept: [404] });
+  if (status === 404) throw new Error(APP_WITHOUT_DOCS);
+  return read(DocsWritten, json, 'docs page');
 }

@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import * as z from 'zod/v4';
-import { FAKE_LENS, MAP_PROJECT, fakeSession, startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
+import { DOCS_ANSWERS, FAKE_LENS, MAP_PROJECT, fakeSession, startFakeApp, type FakeApp } from '../tests/helpers/fake-app.js';
 import { makeProject, removeTempDirs, shadowGit, snapshot } from '../tests/helpers/fixtures.js';
 import type { LensWords } from '../src/session-api.js';
 import { ago, runClaude } from './claude.js';
@@ -70,7 +70,31 @@ const CASES: { phrase: string; prepare?: (app: FakeApp, project: string) => void
         return words?.steps?.some((step) => step.id === 'c1' && Boolean(step.title?.trim())) === true;
       }),
   },
+  {
+    phrase: 'What does the billing area do?',
+    // Billing's page as the real app answers it: words by Claude Code, one change since them
+    prepare: (app, project) => {
+      snapshot(project, MAP_PROJECT, 'Add the webshop');
+      app.docsRoutes = true;
+      app.docsAnswer = DOCS_ANSWERS.area;
+    },
+    passed: ({ app }) => docsAsked(app).some((query) => query.getAll('area').includes('src/billing')),
+  },
+  {
+    phrase: 'Document this project in ShadowGit',
+    // The first batch of pages without words, made the last: the Overview and api
+    prepare: (app, project) => {
+      snapshot(project, MAP_PROJECT, 'Add the webshop');
+      app.docsRoutes = true;
+      const all = DOCS_ANSWERS.all as { pages: object[] };
+      app.docsAnswer = { ...all, pages: all.pages.slice(0, 2), next: null };
+    },
+    passed: ({ app }) => docsAsked(app).some((query) => query.get('all') === 'true') && app.requestsTo('/docs').length > 0,
+  },
 ];
+
+/** The queries of the run's GET /docs requests. */
+const docsAsked = (app: FakeApp) => app.requests.flatMap((request) => (request.path.startsWith('/docs?') ? [new URLSearchParams(request.path.slice('/docs?'.length))] : []));
 
 /** The Lens the app would draw of webshop's last snapshot, "Add checkout page": src/checkout.ts added. */
 const CHECKOUT_LENS: typeof FAKE_LENS = {

@@ -1,9 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } from 'vitest';
 import {
-  AppNotRunningError, AppTimeoutError, LensRead, activeSessions, createCheckpoint, endSession, readArea, readCodeContext, readLens, readMap, sendLensWords, startSession,
+  APP_WITHOUT_DOCS, AppNotRunningError, AppTimeoutError, LensRead, activeSessions, createCheckpoint, endSession, readArea, readCodeContext, readDocs, readLens, readMap,
+  sendDocs, sendLensWords, startSession,
 } from '../src/session-api.js';
+import { DocsRead, DocsWritten } from '../src/doc-shapes.js';
 import { ContextRead, SummaryRead } from '../src/map-shapes.js';
-import { FAKE_CITED_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, LENS_ANSWER_WITH_FACTS, MAP_ANSWERS, RULES_ANSWERS, closedAppUrl, mapAnswers, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import {
+  DOCS_ANSWERS, FAKE_CITED_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, LENS_ANSWER_WITH_FACTS, MAP_ANSWERS, RULES_ANSWERS, closedAppUrl, mapAnswers, startFakeApp, type FakeApp,
+} from './helpers/fake-app.js';
 import { restoreEnv } from './helpers/fixtures.js';
 
 let app: FakeApp;
@@ -107,12 +111,15 @@ describe('an answer of a shape this version does not read', () => {
       '/checkpoint': { success: true, commit: 5 },
       '/lens': { success: true, range: FAKE_RANGE, lens: { ...FAKE_LENS, steps: 'none' }, limits: FAKE_LIMITS },
       '/lens/words': { success: true, applied: null },
+      '/docs': { success: true, pages: 'none' },
     };
     await expect(activeSessions()).rejects.toThrow(update('session'));
     await expect(startSession('/projects/webshop', 'Fix login', 'Claude Code')).rejects.toThrow(update('session'));
     await expect(createCheckpoint(checkpointInput)).rejects.toThrow(update('checkpoint'));
     await expect(readLens({ repoPath: '/projects/webshop' })).rejects.toThrow(update('lens'));
     await expect(sendLensWords({ repoPath: '/projects/webshop', base: null, head: FAKE_RANGE.head, author: 'Claude Code', words: {} })).rejects.toThrow(update('lens'));
+    await expect(readDocs({ repoPath: '/projects/webshop' })).rejects.toThrow(update('docs page'));
+    await expect(sendDocs({ repoPath: '/projects/webshop', head: FAKE_RANGE.head, author: 'Claude Code', pages: [{ overview: true, holds: true }] })).rejects.toThrow(update('docs page'));
   });
 });
 
@@ -300,5 +307,76 @@ describe('the map', () => {
   it('says ShadowGit is not running when nothing answers', async () => {
     vi.stubEnv('SHADOWGIT_SESSION_API', await closedAppUrl());
     await expect(readMap(ask)).rejects.toBeInstanceOf(AppNotRunningError);
+  });
+});
+
+describe('docs', () => {
+  const repoPath = '/projects/webshop';
+  const write = {
+    repoPath,
+    head: 'f'.repeat(40),
+    author: 'Claude Code',
+    pages: [{ area: 'src/billing', words: { summary: 'Charges cards.', body: [[{ text: 'Charges cards.' }]] } }, { overview: true as const, holds: true as const }],
+  };
+
+  beforeEach(() => {
+    app.requests.length = 0;
+    app.docsRoutes = true;
+    app.docsStatus = 200;
+    app.docsAnswer = DOCS_ANSWERS.session;
+    app.docsWritten = null;
+  });
+
+  it("reads the real app's docs answers", () => {
+    for (const name of ['session', 'area', 'all'] as const) expect(DocsRead.parse(DOCS_ANSWERS[name])).toEqual(DOCS_ANSWERS[name]);
+    expect(DocsWritten.parse(DOCS_ANSWERS.written)).toEqual(DOCS_ANSWERS.written);
+    const summary = 'Charges and refunds cards, in cents, and records each payment in the ledger.';
+    expect(SummaryRead.parse(DOCS_ANSWERS.mapSummary).docs).toEqual([{ area: 'src/billing', summary, behind: 1 }]);
+    expect(ContextRead.parse(DOCS_ANSWERS.context).docs).toEqual([{ area: 'src/billing', label: 'billing', summary }]);
+  });
+
+  it("asks for the session's pages, named pages, and the next batch", async () => {
+    expect(await readDocs({ repoPath })).toEqual(DOCS_ANSWERS.session);
+    await readDocs({ repoPath, areas: ['src/billing', 'src/jobs'], overview: true });
+    await readDocs({ repoPath, all: true, next: { after: 6, map: 'm'.repeat(40) } });
+    expect(app.requests.map((request) => request.path)).toEqual([
+      `/docs?${new URLSearchParams({ repoPath })}`,
+      `/docs?${new URLSearchParams([['repoPath', repoPath], ['area', 'src/billing'], ['area', 'src/jobs'], ['overview', 'true']])}`,
+      `/docs?${new URLSearchParams({ repoPath, all: 'true', after: '6', map: 'm'.repeat(40) })}`,
+    ]);
+  });
+
+  it('sends the words of pages, and reads what the app kept', async () => {
+    app.docsWritten = DOCS_ANSWERS.written;
+    expect(await sendDocs(write)).toEqual(DOCS_ANSWERS.written);
+    expect(app.requestsTo('/docs')).toEqual([write]);
+  });
+
+  it("says an app without docs needs updating, and passes on the app's sentence while it counts", async () => {
+    app.docsRoutes = false;
+    await expect(readDocs({ repoPath })).rejects.toThrow(APP_WITHOUT_DOCS);
+    await expect(sendDocs(write)).rejects.toThrow(APP_WITHOUT_DOCS);
+    expect(APP_WITHOUT_DOCS).toBe('This version of ShadowGit has no docs pages for AI assistants. Ask the user to update the ShadowGit app.');
+    app.docsRoutes = true;
+    app.docsStatus = 202;
+    await expect(readDocs({ repoPath })).rejects.toThrow(
+      "ShadowGit: ShadowGit is drawing this project's map or counting the changes since its pages' words; ask again in a minute",
+    );
+    await expect(sendDocs(write)).rejects.toThrow("ShadowGit: ShadowGit is reading this project's map and names; send the words again in a minute");
+  });
+
+  it('waits up to 58 s, past the 55 s the app may count for, or as long as asked', async () => {
+    app.hang = true;
+    const timeout = AbortSignal.timeout.bind(AbortSignal);
+    const asked = vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => timeout(50));
+    await expect(readDocs({ repoPath })).rejects.toThrow('ShadowGit did not answer within 58 s.');
+    await expect(sendDocs(write)).rejects.toThrow('ShadowGit did not answer within 58 s.');
+    await expect(readDocs({ repoPath, timeoutMs: 20_000 })).rejects.toThrow('ShadowGit did not answer within 20 s.');
+    expect(asked.mock.calls).toEqual([[58_000], [58_000], [20_000]]);
+  });
+
+  it('reads a map answer from an app before docs', () => {
+    expect(SummaryRead.parse(RULES_ANSWERS.summary)).not.toHaveProperty('docs');
+    expect(ContextRead.parse(RULES_ANSWERS.context)).not.toHaveProperty('docs');
   });
 });

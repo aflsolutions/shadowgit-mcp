@@ -7,12 +7,12 @@ import { RulesFailure, RulesFor, RulesRead } from './rule-shapes.js';
 // descriptions, never these schemas: the descriptions here are for clients that show them.
 
 /** A list as the app caps it: its first items, and how many there are in all. */
-const listed = <T extends z.ZodType>(item: T) =>
+export const listed = <T extends z.ZodType>(item: T) =>
   z.object({ items: z.array(item), total: z.number().int().describe('How many there are in all; items holds the first of them') });
 
 const AreaCount = z.object({ area: z.string(), count: z.number().int() });
 const How = z.string().describe('calls, imports, extends, implements or overrides');
-const SymbolRef = z.object({
+export const SymbolRef = z.object({
   name: z.string(),
   kind: z.string(),
   file: z.string(),
@@ -77,7 +77,7 @@ const CodeContext = z.object({
   landing: Landing.nullable().describe('For two or more targets that resolve; null otherwise'),
 });
 
-const MapSummary = z.object({
+export const MapSummary = z.object({
   repo: z.string(),
   commit: z.string(),
   counts: z.object({ files: z.number().int(), symbols: z.number().int(), areas: z.number().int(), calls: z.number().int(), processes: z.number().int() }),
@@ -103,7 +103,7 @@ const AreaView = z.object({
 
 const MissingArea = z.object({ kind: z.literal('missing'), target: z.string(), near: z.array(z.string()).describe('Area labels spelled close to it') });
 
-const MapAsOf = z
+export const MapAsOf = z
   .object({
     snapshot: z.string(),
     time: z.string().describe("The snapshot's time, ISO 8601"),
@@ -112,18 +112,29 @@ const MapAsOf = z
   })
   .describe('The snapshot the answer is drawn from');
 
+// An app older than the docs pages sends no docs: the pages' summaries, written by the person's agent
+const MapDocs = z
+  .array(z.object({ area: z.string().describe("The area's id"), summary: z.string(), behind: z.number().int().nullable().describe('Changes since the words, once counted; null until then') }))
+  .optional()
+  .describe("Each listed area's docs page summary, for the areas whose page has words");
+const ContextDocs = z
+  .array(z.object({ area: z.string().describe("The area's id"), label: z.string(), summary: z.string() }))
+  .optional()
+  .describe('The docs page summary of each area holding a target, for the areas whose page has words');
+
 // An app older than the rules sends no rules
 const ProjectRules = RulesRead.nullable().optional().describe("The project's .shadowgit-rules as read; null without one");
 
 /** A map without an area asked for: the project's summary, and its rules. */
-export const SummaryRead = z.object({ mapAsOf: MapAsOf, summary: MapSummary, rules: ProjectRules, rulesFailure: RulesFailure });
+export const SummaryRead = z.object({ mapAsOf: MapAsOf, summary: MapSummary, rules: ProjectRules, rulesFailure: RulesFailure, docs: MapDocs });
 /** One area asked for: the area, or why there is none. */
 export const AreaRead = z.object({ mapAsOf: MapAsOf, area: z.union([AreaView, MissingArea]) });
 /** get_map's answer, one of the two. */
-export const MapRead = z.object({ mapAsOf: MapAsOf, summary: MapSummary.optional(), area: AreaRead.shape.area.optional(), rules: ProjectRules, rulesFailure: RulesFailure });
+export const MapRead = z.object({ mapAsOf: MapAsOf, summary: MapSummary.optional(), area: AreaRead.shape.area.optional(), rules: ProjectRules, rulesFailure: RulesFailure, docs: MapDocs });
 export const ContextRead = z.object({
   mapAsOf: MapAsOf,
   context: CodeContext,
   rules: RulesFor.nullable().optional().describe("The project's rules that hold for the files asked about and the files of the symbols; null without a .shadowgit-rules"),
   rulesFailure: RulesFailure,
+  docs: ContextDocs,
 });

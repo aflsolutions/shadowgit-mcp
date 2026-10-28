@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "head": "f62bdb89d909314bf5ac433a7478502a65bdc26d",
+  "pages": [
+    {
+      "page": {
+        "area": "src/billing"
+      },
+      "kept": true,
+      "dropped": [
+        "ghost in src/billing/charge.ts"
+      ]
+    },
+    {
+      "page": {
+        "area": "src/nowhere"
+      },
+      "kept": false,
+      "reason": "Not an area of the map: src/nowhere"
+    }
+  ]
+}

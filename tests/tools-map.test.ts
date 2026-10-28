@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { getCodeContext, getMap } from '../src/tools/map.js';
-import { MAP_ANSWERS, mapAnswers, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { DOCS_ANSWERS, MAP_ANSWERS, RULES_ANSWERS, mapAnswers, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { JUDGING, makeProject, removeTempDirs, restoreEnv, textOf, useStorage } from './helpers/fixtures.js';
 
 let project: string;
@@ -149,5 +149,46 @@ describe('get_code_context', () => {
       expect(textOf(result).length).toBeLessThan(16_000);
       expect(JSON.stringify(result.structuredContent).length).toBeLessThan(16_000);
     }
+  });
+});
+
+describe('the docs pages on the map', () => {
+  const SUMMARY = 'Charges and refunds cards, in cents, and records each payment in the ledger.';
+
+  it("get_map lists each page summary by its area's id, and how far behind its words are", async () => {
+    app.mapAnswer.map = DOCS_ANSWERS.mapSummary;
+    const result = await getMap({}, 'Claude Code');
+    expect(result.structuredContent).toEqual({ repo: 'webshop', ...DOCS_ANSWERS.mapSummary });
+    const text = textOf(result);
+    expect(text).toContain(`Docs pages (get_docs reads them):\n- src/billing: ${SUMMARY} (1 change since its words)\nLinks between areas`);
+    expect(text).not.toMatch(JUDGING);
+    const at = (behind: number | null) => ({ ...DOCS_ANSWERS.mapSummary, docs: [{ area: 'src/billing', summary: SUMMARY, behind }] });
+    app.mapAnswer.map = at(0);
+    expect(textOf(await getMap({}, 'Claude Code'))).toContain(`- src/billing: ${SUMMARY} (current)\n`);
+    app.mapAnswer.map = at(null);
+    expect(textOf(await getMap({}, 'Claude Code'))).toContain(`- src/billing: ${SUMMARY}\n`);
+  });
+
+  it("get_code_context names the pages of its targets' areas", async () => {
+    app.mapAnswer.context = DOCS_ANSWERS.context;
+    const result = await getCodeContext({ files: ['src/billing/charge.ts'] }, 'Claude Code');
+    expect(result.structuredContent).toMatchObject({ docs: [{ area: 'src/billing', label: 'billing', summary: SUMMARY }] });
+    const text = textOf(result);
+    expect(text).toContain(`\n\nDocs pages of their areas (get_docs reads them):\n- billing (area src/billing): ${SUMMARY}\n\nNext: `);
+    expect(text).not.toMatch(JUDGING);
+  });
+
+  it('answers as before for an app before docs, and for pages without words', async () => {
+    for (const [map, context] of [[MAP_ANSWERS.summary, MAP_ANSWERS.context], [RULES_ANSWERS.summary, RULES_ANSWERS.context], [{ ...DOCS_ANSWERS.mapSummary, docs: [] }, { ...DOCS_ANSWERS.context, docs: [] }]] as const) {
+      app.mapAnswer = { ...mapAnswers(), map, context };
+      const summary = await getMap({}, 'Claude Code');
+      const where = await getCodeContext({ files: ['src/billing/charge.ts'] }, 'Claude Code');
+      expect(textOf(summary)).not.toContain('Docs pages');
+      expect(textOf(where)).not.toContain('Docs pages');
+    }
+    expect((await getMap({}, 'Claude Code')).structuredContent).toHaveProperty('docs', []);
+    app.mapAnswer = mapAnswers();
+    expect((await getMap({}, 'Claude Code')).structuredContent).not.toHaveProperty('docs');
+    expect((await getCodeContext({ files: ['src/billing/charge.ts'] }, 'Claude Code')).structuredContent).not.toHaveProperty('docs');
   });
 });

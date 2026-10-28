@@ -1,14 +1,17 @@
 import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { clientName } from '../client-name.js';
-import { resolveRepo } from '../repos.js';
-import { LensLines, LensRead, readLens, sendLensWords, WordsWritten, type LensWords } from '../session-api.js';
+import { resolveRepo, type Repo } from '../repos.js';
+import { LensLines, LensRead, readDocs, readLens, sendLensWords, WordsWritten, type LensWords } from '../session-api.js';
+import { pageName } from './docs.js';
+import { andList } from './map.js';
 import { passing, quote, rangeLines, snapshots } from './rules.js';
-import { dataResult, repoParam } from './shared.js';
+import { dataResult, forProject, repoParam, Snapshot } from './shared.js';
 
 const LensOutput = z.object({ repo: z.string(), ...LensRead.shape });
-const WordsOutput = z.object({ repo: z.string(), ...WordsWritten.shape });
-const Snapshot = z.string().regex(/^[0-9a-f]{7,40}$/, 'a snapshot hash');
+const WordsOutput = z.object({ repo: z.string(), ...WordsWritten.shape, next: z.string().optional().describe('The step that follows: the docs pages the session changed') });
+// The docs step is worth a short wait, never a long one: past it the words' answer goes on without it
+const DOCS_PROBE_MS = 20_000;
 
 type Read = z.infer<typeof LensRead>;
 type LensSymbol = NonNullable<NonNullable<Read['lens']>['steps'][number]['symbols']>[number];
@@ -86,18 +89,34 @@ export async function getLens({ base, head, repo }: { base?: string | null; head
   return dataResult(LensOutput, describeLens(project.name, read.lens, read), data);
 }
 
+/**
+ * The step after the Lens's words: the docs pages the latest AI session changed whose words are missing or behind.
+ * None when the app has no docs, counts past the wait, has no page to update, or answers in a shape this version
+ * doesn't read: the words are kept either way, and get_docs still says why when the agent asks.
+ */
+async function docsStep(project: Repo, repo: string | undefined): Promise<string | undefined> {
+  const pages = await readDocs({ repoPath: project.path, timeoutMs: DOCS_PROBE_MS }).then(
+    (read) => read.pages,
+    () => [],
+  );
+  if (pages.length === 0) return undefined;
+  const names = andList(pages.map(({ page }) => pageName(page)));
+  return `${forProject(repo, project)}The session's last step: the docs pages of the areas it changed, ${names}, need words, so the pages the user reads in ShadowGit describe the code as it is now. A page with no words can start short, from its facts and the code you read. get_docs, then write_docs.`;
+}
+
 export async function writeLensWords(
   { base, head, repo, ...words }: { base: string | null; head: string; repo?: string } & LensWords,
   author: string,
 ): Promise<CallToolResult> {
   const project = resolveRepo(repo);
-  const { applied, ignored } = await sendLensWords({ repoPath: project.path, base, head, author, words });
+  const [{ applied, ignored }, next] = await Promise.all([sendLensWords({ repoPath: project.path, base, head, author, words }), docsStep(project, repo)]);
   const counts = [applied.summary && 'the summary', applied.steps && `${applied.steps} steps`, applied.components && `${applied.components} roles`, applied.layers && `${applied.layers} layers`, applied.flows && `${applied.flows} flows`].filter(Boolean);
   const text = [
     `ShadowGit's Lens shows your words for ${project.name}: ${counts.join(', ') || 'nothing new'}.`,
     ...(ignored.length > 0 ? [`Left out ids the lens does not hold: ${ignored.join(', ')}. Read them again with get_lens.`] : []),
+    ...(next === undefined ? [] : [`Next: ${next}`]),
   ].join(' ');
-  return dataResult(WordsOutput, text, { repo: project.name, applied, ignored });
+  return dataResult(WordsOutput, text, { repo: project.name, applied, ignored, ...(next !== undefined && { next }) });
 }
 
 export function registerLens(server: McpServer): void {
@@ -122,7 +141,7 @@ export function registerLens(server: McpServer): void {
     {
       title: "Write a range's Lens words",
       description:
-        "Write the words the user reads in ShadowGit's Lens for a range get_lens read: a summary, each step's title and body, with a why and an excerpt, each card's role, by the ids get_lens gave. An older ShadowGit takes plain text alone; text past its limit is cut; unknown ids are left out. The app keeps the words in its history: a card's role shows in any later range while its code is unchanged.",
+        "Write the words the user reads in ShadowGit's Lens for a range get_lens read: a summary, each step's title and body, with a why and an excerpt, each card's role, by the ids get_lens gave. An older ShadowGit takes plain text alone; text past its limit is cut; unknown ids are left out. The app keeps the words in its history: a card's role shows in any later range while its code is unchanged. When the session changed areas whose docs pages need words, the answer's next names them, the session's last step: get_docs, then write_docs.",
       inputSchema: z.object({
         base: Snapshot.nullable().describe('The base get_lens answered (null: from the start of the history)'),
         head: Snapshot.describe('The head get_lens answered'),

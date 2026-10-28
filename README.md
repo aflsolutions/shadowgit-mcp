@@ -45,6 +45,8 @@ webshop") when ShadowGit tracks more than one.
 - "Start a ShadowGit session for this refactor", then "Create a checkpoint: Fixed login redirect", then "End the
   ShadowGit session"
 - "Write the Lens words for this session"
+- "What does the billing area do?"
+- "Document this project in ShadowGit"
 
 ## Tools
 
@@ -52,13 +54,15 @@ webshop") when ShadowGit tracks more than one.
 |---|---|
 | `list_repos` | Lists tracked projects, the current one, their last snapshot and any active session |
 | `git_command` | Runs a read-only git command (`log`, `diff`, `show`, `blame`, …) on the snapshot history |
-| `get_map` | Gives how the project is organised: its areas, layers and the links between them, or one area, and the project's rules |
+| `get_map` | Gives how the project is organised: its areas, layers and the links between them, or one area, the project's rules and its docs pages' summaries |
 | `get_code_context` | Gives where files and symbols sit, what depends on them, where a change to them lands, and the project's rules for them |
 | `start_session` | Pauses automatic snapshots while the assistant edits |
 | `checkpoint` | Saves the current changes as one named checkpoint, following `.shadowgit-ignore`, then checks it against the project's `.shadowgit-rules` |
 | `end_session` | Resumes automatic snapshots |
 | `get_lens` | Reads ShadowGit's Lens of a range, by default the latest AI session, with what it makes depend on what and the links a rule names |
 | `write_lens_words` | Writes the Lens's words for that range, kept in the history, with links, a why and an excerpt |
+| `get_docs` | Reads the project's docs pages, one per map area plus an Overview: by default those the latest AI session changed that need words, each with its facts, its words so far and what changed since them |
+| `write_docs` | Writes pages' words, with links to symbols and areas, or keeps words that still hold; kept in the history, never in the project's files |
 
 The other tools work on the current project unless given `repo`.
 

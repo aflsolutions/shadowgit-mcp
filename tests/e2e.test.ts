@@ -47,6 +47,18 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(INSTRUCTIONS.indexOf(line)).toBeLessThan(INSTRUCTIONS.indexOf('start_session'));
   });
 
+  it("sends the user's questions about a part of the project to get_docs, and describes the docs tools as facts", async () => {
+    expect(INSTRUCTIONS).toContain('- What a part of the project does, or documenting it: get_docs, then write_docs.');
+    // The session's last step: the agent loads the docs tools with the session's, before its edits
+    expect(INSTRUCTIONS).toContain("so the user reads your change in ShadowGit's Lens in your words. The docs pages it then names are part of the session: get_docs, write_docs.");
+    const { tools } = await client.listTools();
+    for (const name of ['get_docs', 'write_docs']) {
+      const tool = tools.find((each) => each.name === name);
+      expect(`${tool?.description} ${JSON.stringify(tool?.inputSchema)}`, name).not.toMatch(JUDGING);
+    }
+    expect(INSTRUCTIONS).not.toMatch(JUDGING);
+  });
+
   // Outside a session the app's automatic snapshot takes an edit within seconds, and a checkpoint after it has nothing
   // left to check: in a project with rules, every edit goes through a session
   it('asks for a session before any edit in a project with rules, never a checkpoint alone', () => {
@@ -108,10 +120,10 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(JSON.stringify(tools.map((tool) => tool.outputSchema))).not.toContain('prefixItems');
   });
 
-  it('lists the nine tools exactly as pinned', async () => {
+  it('lists the eleven tools exactly as pinned', async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name)).toEqual([
-      'list_repos', 'git_command', 'get_map', 'get_code_context', 'start_session', 'checkpoint', 'end_session', 'get_lens', 'write_lens_words',
+      'list_repos', 'git_command', 'get_map', 'get_code_context', 'start_session', 'checkpoint', 'end_session', 'get_lens', 'write_lens_words', 'get_docs', 'write_docs',
     ]);
     await expect(JSON.stringify(tools, sortKeys, 2)).toMatchFileSnapshot('__snapshots__/tool-list.json');
   });
@@ -142,10 +154,17 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     const words = await client.callTool({ name: 'write_lens_words', arguments: { ...FAKE_RANGE, steps: [{ id: 'c1', title: 'Queue failed charges' }] } });
     expect(words.structuredContent).toMatchObject({ repo: 'demo', applied: { steps: 1 } });
 
+    app.docsRoutes = true;
+    const docs = await client.callTool({ name: 'get_docs', arguments: {} });
+    expect(docs.structuredContent).toMatchObject({ repo: 'demo', pages: [{ page: { area: 'src/billing' } }, { page: { area: 'src/jobs' } }] });
+    const written = await client.callTool({ name: 'write_docs', arguments: { head: FAKE_RANGE.head, pages: [{ overview: true, holds: true }] } });
+    expect(written.structuredContent).toMatchObject({ repo: 'demo', pages: [{ page: { overview: true }, kept: true }] });
+
     expect(app.requestsTo('/session/start')[0]).toMatchObject({ aiTool: 'shadowgit-e2e', repoPath: project });
     expect(app.requestsTo('/map/context')[0]).toMatchObject({ aiTool: 'shadowgit-e2e', repoPath: project, symbols: [{ name: 'chargeCard' }] });
     expect(app.requestsTo('/checkpoint')[0]).toMatchObject({ author: 'shadowgit-e2e' });
     expect(app.requestsTo('/lens/words')[0]).toMatchObject({ author: 'shadowgit-e2e', repoPath: project, words: { steps: [{ id: 'c1', title: 'Queue failed charges' }] } });
+    expect(app.requestsTo('/docs')[0]).toEqual({ author: 'shadowgit-e2e', repoPath: project, head: FAKE_RANGE.head, pages: [{ overview: true, holds: true }] });
   });
 
   it('sends linked pieces, a why and an excerpt as given', async () => {

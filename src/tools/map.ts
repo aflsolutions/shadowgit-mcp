@@ -2,10 +2,10 @@ import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { clientName } from '../client-name.js';
 import { ContextRead, MapRead } from '../map-shapes.js';
-import { repoArgument, resolveRepo } from '../repos.js';
+import { resolveRepo } from '../repos.js';
 import { readArea, readCodeContext, readMap } from '../session-api.js';
 import { holdLines, readLines } from './rules.js';
-import { dataResult, forRepo, repoParam } from './shared.js';
+import { dataResult, forProject, repoParam } from './shared.js';
 
 const MapOutput = z.object({ repo: z.string(), ...MapRead.shape });
 // The session flow that follows, in the answer the model reads before it edits
@@ -25,27 +25,47 @@ type SymbolTarget = Extract<Target, { kind: 'symbol' }>;
 type Ref = SymbolTarget['dependents']['items'][number];
 
 /** A capped list as text: its items, then how many more there are. */
-function list<T>({ items, total }: Listed<T>, show: (item: T) => string, separator = ', ', noun = ''): string {
+export function list<T>({ items, total }: Listed<T>, show: (item: T) => string, separator = ', ', noun = ''): string {
   const more = total - items.length;
   return `${items.map(show).join(separator)}${more > 0 ? ` …and ${more} more${noun && ` ${noun}`}` : ''}`;
 }
 
 /** "a, b and c". */
-const andList = (words: readonly string[]) => (words.length < 2 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`);
+export const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+export const andList = (words: readonly string[]) => (words.length < 2 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`);
 const counts = (byArea: readonly { area: string; count: number }[]) => andList(byArea.map(({ area, count }) => `${area} (${count})`));
 /** What uses or depends on a target, and how: a symbol at its line, or a file. */
 const ref = (used: Ref) => ('symbol' in used ? `${used.symbol.name} (${used.symbol.file}:${used.symbol.line}, ${andList(used.how)})` : `${used.file} (${andList(used.how)})`);
 /** A capped list as bullets, "- none" when it is empty. */
 const bullets = <T>(listed: Listed<T>, noun: string, show: (item: T) => string) => (listed.total === 0 ? '- none' : list(listed, (item) => `- ${show(item)}`, '\n', noun));
 
-function drawnFrom({ snapshot, time, behind, changedFiles }: AsOf): string {
+export function drawnFrom({ snapshot, time, behind, changedFiles }: AsOf): string {
   const drawn = `drawn from snapshot ${snapshot.slice(0, 8)} (${time})`;
   if (behind === 0) return `${drawn}, the newest.`;
   const changed = changedFiles.total === 0 ? 'No file changed since.' : `${changedFiles.total} files changed since, whose facts may differ: ${list(changedFiles, (file) => file)}.`;
   return `${drawn}, ${behind} snapshot${behind === 1 ? '' : 's'} behind the newest. ${changed}`;
 }
 
-function describeSummary(repo: string, mapAsOf: AsOf, summary: NonNullable<Read['summary']>): string {
+/** How far behind the newest snapshot a page's words are, once counted. */
+function since(behind: number | null): string {
+  if (behind === null) return '';
+  if (behind === 0) return ' (current)';
+  return ` (${plural(behind, 'change')} since its words)`;
+}
+
+/** The page summaries, by area id: get_docs takes the id, and a split area's id isn't its folder. */
+function docsLines(docs: Read['docs']): string[] {
+  if (!docs?.length) return [];
+  return ['Docs pages (get_docs reads them):', ...docs.map(({ area, summary, behind }) => `- ${area}: ${summary}${since(behind)}`)];
+}
+
+/** What each area holding a target is for, from its docs page, before the edit. */
+function contextDocsLines(docs: z.infer<typeof ContextRead>['docs']): string[] {
+  if (!docs?.length) return [];
+  return ['Docs pages of their areas (get_docs reads them):', ...docs.map(({ area, label, summary }) => `- ${label} (area ${area}): ${summary}`)];
+}
+
+function describeSummary(repo: string, mapAsOf: AsOf, summary: NonNullable<Read['summary']>, docs: Read['docs']): string {
   const { files, symbols, areas, calls, processes } = summary.counts;
   return [
     `${repo}'s map, ${drawnFrom(mapAsOf)}`,
@@ -53,6 +73,7 @@ function describeSummary(repo: string, mapAsOf: AsOf, summary: NonNullable<Read[
     `Layers: ${summary.layers.map((layer) => `${layer.name} (${layer.kind}, ${layer.files} files)`).join(', ')}.`,
     'Areas, largest first:',
     bullets(summary.areas, 'areas', (area) => `${area.label} (${area.path}): ${area.files} files, ${area.symbols} symbols; layers ${area.layers.join(', ')}`),
+    ...docsLines(docs),
     'Links between areas, heaviest first:',
     bullets(summary.links, 'links', (link) => `${link.from} → ${link.to}: ${link.count} calls and imports`),
     'Processes:',
@@ -134,7 +155,7 @@ export async function getMap({ area, repo }: { area?: string; repo?: string }, a
   const project = resolveRepo(repo);
   if (area === undefined) {
     const read = await readMap({ repoPath: project.path, aiTool });
-    const text = [describeSummary(project.name, read.mapAsOf, read.summary), ...readLines(read.rules, read.rulesFailure)].join('\n');
+    const text = [describeSummary(project.name, read.mapAsOf, read.summary, read.docs), ...readLines(read.rules, read.rulesFailure)].join('\n');
     return dataResult(MapOutput, text, { repo: project.name, ...read });
   }
   const read = await readArea({ repoPath: project.path, area, aiTool });
@@ -149,8 +170,8 @@ export async function getCodeContext(
   const project = resolveRepo(repo);
   const read = await readCodeContext({ repoPath: project.path, files, symbols, aiTool });
   const hold = holdLines(read.rules, read.rulesFailure);
-  const next = `${forRepo(repo === undefined ? undefined : repoArgument(project))}${read.rules?.length ? NEXT_WITH_RULES : NEXT}`;
-  const text = [describeContext(project.name, read.mapAsOf, read.context), hold.join('\n'), `Next: ${next}`].filter(Boolean).join('\n\n');
+  const next = `${forProject(repo, project)}${read.rules?.length ? NEXT_WITH_RULES : NEXT}`;
+  const text = [describeContext(project.name, read.mapAsOf, read.context), contextDocsLines(read.docs).join('\n'), hold.join('\n'), `Next: ${next}`].filter(Boolean).join('\n\n');
   return dataResult(ContextOutput, text, { repo: project.name, ...read, next });
 }
 

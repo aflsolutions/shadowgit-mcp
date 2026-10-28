@@ -2,6 +2,43 @@
 
 All notable changes to the ShadowGit MCP Server will be documented in this file.
 
+## [2.6.0] - 2026-10-28
+
+### Added
+- Docs pages, one per area of the project's map plus an Overview, written by the assistant. ShadowGit keeps them
+  current: every page says how far behind its words are.
+  - `get_docs` reads pages:
+    - without arguments, the ones the latest AI session changed whose words are missing or behind;
+    - with `areas` and `overview`, those;
+    - with `all`, pages without words, five at a time, with `more` for the next batch.
+
+    Each page comes with ShadowGit's facts from the map, the project's rules naming it, its words so far (who wrote
+    them, at which snapshot) and what changed since them. Its `next` names the pages to write, at the `head` to write
+    them at.
+  - `write_docs` writes a summary and a body for each page, with links to symbols and areas. A page whose words still
+    hold can be sent as `holds: true` instead. Links that name nothing are made plain text and named back.
+- After the Lens's words, `write_lens_words`' `next` names the session's pages that need words, as the session's
+  last step. A page with no words can start short, from its facts and the code the assistant read; later sessions add
+  to it.
+- `get_map`'s summary lists the page summaries by area id, with how far behind each is. `get_code_context` lists the
+  pages of its targets' areas.
+- `npm run eval:docs`, whether Claude Code keeps the pages its change touched without being asked: 5 of 5 runs wrote
+  both pages after the Lens's words. Each run's stream can be kept (`EVAL_STREAMS`) to read why a run stopped. Without
+  the session framing and the structured step, 0 of 2 did; the agents said the pages were beyond their task.
+
+### Changed
+- The instructions name the docs pages as part of a session, and send a question about what part of the project
+  does, or a request to document it, to `get_docs`, then `write_docs`. Two sentences the tool descriptions already
+  carry were cut, to stay under 1,800 characters.
+- With the new instructions:
+  - the unprompted Lens flow ran in 5 of 5 runs (`npm run eval:lens`);
+  - the code context came before the first edit in 5 of 5 (`npm run eval:map`);
+  - the rules were kept in 5 of 5, each inside a session (`npm run eval:rules`, without the control runs);
+  - the docs phrases passed 13 of 13, the two new ones included (`npm run eval`).
+
+The docs need ShadowGit 0.3.14 or later. An older app answers that the app needs an update, and every other tool
+reads as before.
+
 ## [2.5.1] - 2026-10-27
 
 ### Changed

@@ -108,10 +108,10 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(JSON.stringify(tools.map((tool) => tool.outputSchema))).not.toContain('prefixItems');
   });
 
-  it('lists the nine tools exactly as pinned', async () => {
+  it('lists the eleven tools exactly as pinned', async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name)).toEqual([
-      'list_repos', 'git_command', 'get_map', 'get_code_context', 'start_session', 'checkpoint', 'end_session', 'get_lens', 'write_lens_words',
+      'list_repos', 'git_command', 'get_map', 'get_code_context', 'start_session', 'checkpoint', 'end_session', 'get_lens', 'write_lens_words', 'get_docs', 'write_docs',
     ]);
     await expect(JSON.stringify(tools, sortKeys, 2)).toMatchFileSnapshot('__snapshots__/tool-list.json');
   });
@@ -142,10 +142,16 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     const words = await client.callTool({ name: 'write_lens_words', arguments: { ...FAKE_RANGE, steps: [{ id: 'c1', title: 'Queue failed charges' }] } });
     expect(words.structuredContent).toMatchObject({ repo: 'demo', applied: { steps: 1 } });
 
+    const docs = await client.callTool({ name: 'get_docs', arguments: {} });
+    expect(docs.structuredContent).toMatchObject({ repo: 'demo', pages: [{ page: { area: 'src/billing' } }, { page: { area: 'src/jobs' } }] });
+    const written = await client.callTool({ name: 'write_docs', arguments: { head: FAKE_RANGE.head, pages: [{ overview: true, holds: true }] } });
+    expect(written.structuredContent).toMatchObject({ repo: 'demo', pages: [{ page: { overview: true }, kept: true }] });
+
     expect(app.requestsTo('/session/start')[0]).toMatchObject({ aiTool: 'shadowgit-e2e', repoPath: project });
     expect(app.requestsTo('/map/context')[0]).toMatchObject({ aiTool: 'shadowgit-e2e', repoPath: project, symbols: [{ name: 'chargeCard' }] });
     expect(app.requestsTo('/checkpoint')[0]).toMatchObject({ author: 'shadowgit-e2e' });
     expect(app.requestsTo('/lens/words')[0]).toMatchObject({ author: 'shadowgit-e2e', repoPath: project, words: { steps: [{ id: 'c1', title: 'Queue failed charges' }] } });
+    expect(app.requestsTo('/docs')[0]).toEqual({ author: 'shadowgit-e2e', repoPath: project, head: FAKE_RANGE.head, pages: [{ overview: true, holds: true }] });
   });
 
   it('sends linked pieces, a why and an excerpt as given', async () => {

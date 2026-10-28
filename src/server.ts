@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { registerCheckpoint } from './tools/checkpoint.js';
+import { registerDocs } from './tools/docs.js';
 import { registerEndSession } from './tools/end-session.js';
 import { registerGitCommand } from './tools/git-command.js';
 import { registerLens } from './tools/lens.js';
@@ -32,5 +33,6 @@ export function buildServer(): McpServer {
   registerCheckpoint(server);
   registerEndSession(server);
   registerLens(server);
+  registerDocs(server);
   return server;
 }

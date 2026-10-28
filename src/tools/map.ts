@@ -25,20 +25,20 @@ type SymbolTarget = Extract<Target, { kind: 'symbol' }>;
 type Ref = SymbolTarget['dependents']['items'][number];
 
 /** A capped list as text: its items, then how many more there are. */
-function list<T>({ items, total }: Listed<T>, show: (item: T) => string, separator = ', ', noun = ''): string {
+export function list<T>({ items, total }: Listed<T>, show: (item: T) => string, separator = ', ', noun = ''): string {
   const more = total - items.length;
   return `${items.map(show).join(separator)}${more > 0 ? ` …and ${more} more${noun && ` ${noun}`}` : ''}`;
 }
 
 /** "a, b and c". */
-const andList = (words: readonly string[]) => (words.length < 2 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`);
+export const andList = (words: readonly string[]) => (words.length < 2 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`);
 const counts = (byArea: readonly { area: string; count: number }[]) => andList(byArea.map(({ area, count }) => `${area} (${count})`));
 /** What uses or depends on a target, and how: a symbol at its line, or a file. */
 const ref = (used: Ref) => ('symbol' in used ? `${used.symbol.name} (${used.symbol.file}:${used.symbol.line}, ${andList(used.how)})` : `${used.file} (${andList(used.how)})`);
 /** A capped list as bullets, "- none" when it is empty. */
 const bullets = <T>(listed: Listed<T>, noun: string, show: (item: T) => string) => (listed.total === 0 ? '- none' : list(listed, (item) => `- ${show(item)}`, '\n', noun));
 
-function drawnFrom({ snapshot, time, behind, changedFiles }: AsOf): string {
+export function drawnFrom({ snapshot, time, behind, changedFiles }: AsOf): string {
   const drawn = `drawn from snapshot ${snapshot.slice(0, 8)} (${time})`;
   if (behind === 0) return `${drawn}, the newest.`;
   const changed = changedFiles.total === 0 ? 'No file changed since.' : `${changedFiles.total} files changed since, whose facts may differ: ${list(changedFiles, (file) => file)}.`;

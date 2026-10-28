@@ -3165,5 +3165,1218 @@
       "type": "object"
     },
     "title": "Write a range's Lens words"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Read the docs pages ShadowGit keeps for a tracked project: one per area of its map, plus an Overview, each written by an AI assistant. A page comes with the facts ShadowGit draws from the map (folder, sizes, layers, what it depends on and what depends on it, processes, its most depended-on symbols, the project's rules that name it), its words so far with who wrote them and at which snapshot, and what changed in the area since them: symbols changed in their code, dependency facts, links that no longer name anything. With no arguments: the pages the latest AI session changed whose words are missing or behind. With areas, and overview: those pages. With all: pages without words, largest area first, five at a time, with next for the following batch. Answers head, the snapshot write_docs keeps the words at. Needs the ShadowGit app running.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "all": {
+          "description": "Pages without words, five at a time",
+          "type": "boolean"
+        },
+        "areas": {
+          "description": "Area ids, as get_docs names them: most are the area's folder, as get_map lists it",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "next": {
+          "description": "The next get_docs answered with all, as given: the following batch",
+          "properties": {
+            "after": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "map": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "after",
+            "map"
+          ],
+          "type": "object"
+        },
+        "overview": {
+          "description": "The Overview page, alone or with areas",
+          "type": "boolean"
+        },
+        "repo": {
+          "description": "Project name or absolute path. Defaults to the current project.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "get_docs",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "head": {
+          "description": "The newest snapshot, which write_docs keeps the words at",
+          "type": "string"
+        },
+        "limits": {
+          "additionalProperties": false,
+          "properties": {
+            "bodyWords": {
+              "description": "Words",
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "summary": {
+              "description": "Characters",
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "summary",
+            "bodyWords"
+          ],
+          "type": "object"
+        },
+        "mapAsOf": {
+          "additionalProperties": false,
+          "description": "The snapshot the answer is drawn from",
+          "properties": {
+            "behind": {
+              "description": "How many newer snapshots there are",
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "changedFiles": {
+              "additionalProperties": false,
+              "description": "Files changed since: their facts may differ from the newest snapshot's",
+              "properties": {
+                "items": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "total": {
+                  "description": "How many there are in all; items holds the first of them",
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "items",
+                "total"
+              ],
+              "type": "object"
+            },
+            "snapshot": {
+              "type": "string"
+            },
+            "time": {
+              "description": "The snapshot's time, ISO 8601",
+              "type": "string"
+            }
+          },
+          "required": [
+            "snapshot",
+            "time",
+            "behind",
+            "changedFiles"
+          ],
+          "type": "object"
+        },
+        "next": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "after": {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                },
+                "map": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "after",
+                "map"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "For all: the next batch, to pass back whole; null at the last"
+        },
+        "pages": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "changes": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "areas": {
+                        "additionalProperties": false,
+                        "description": "The Overview's: areas the map gained and lost",
+                        "properties": {
+                          "added": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "removed": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "required": [
+                          "added",
+                          "removed"
+                        ],
+                        "type": "object"
+                      },
+                      "count": {
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991,
+                        "type": "integer"
+                      },
+                      "dependencies": {
+                        "description": "The dependency facts naming the area, in words",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "goneLinks": {
+                        "description": "Links of the words that name nothing now",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "layers": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "added": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "removed": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "required": [
+                          "added",
+                          "removed"
+                        ],
+                        "type": "object"
+                      },
+                      "symbols": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "items": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "change": {
+                                  "description": "code, runtime or exports",
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "path": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "path",
+                                "change"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "total": {
+                            "description": "How many there are in all; items holds the first of them",
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "items",
+                          "total"
+                        ],
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "count",
+                      "symbols",
+                      "dependencies",
+                      "goneLinks"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "What changed since the words; null without words or a count"
+              },
+              "countFailure": {
+                "description": "Why the changes couldn't be counted",
+                "type": "string"
+              },
+              "facts": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "at": {
+                            "description": "The snapshot of the map the facts are drawn from",
+                            "type": "string"
+                          },
+                          "dependedOnBy": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "count": {
+                                  "maximum": 9007199254740991,
+                                  "minimum": -9007199254740991,
+                                  "type": "integer"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "label",
+                                "count"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "dependsOn": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "count": {
+                                  "maximum": 9007199254740991,
+                                  "minimum": -9007199254740991,
+                                  "type": "integer"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "label",
+                                "count"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "files": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "folder": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "layers": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "mostDepended": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "items": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "dependents": {
+                                      "maximum": 9007199254740991,
+                                      "minimum": -9007199254740991,
+                                      "type": "integer"
+                                    },
+                                    "symbol": {
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "area": {
+                                          "description": "The area's label, as ShadowGit's Map shows it",
+                                          "type": "string"
+                                        },
+                                        "file": {
+                                          "type": "string"
+                                        },
+                                        "kind": {
+                                          "type": "string"
+                                        },
+                                        "layer": {
+                                          "type": "string"
+                                        },
+                                        "line": {
+                                          "description": "1-based, as an editor shows it",
+                                          "maximum": 9007199254740991,
+                                          "minimum": -9007199254740991,
+                                          "type": "integer"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "name",
+                                        "kind",
+                                        "file",
+                                        "line",
+                                        "area",
+                                        "layer"
+                                      ],
+                                      "type": "object"
+                                    }
+                                  },
+                                  "required": [
+                                    "symbol",
+                                    "dependents"
+                                  ],
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              },
+                              "total": {
+                                "description": "How many there are in all; items holds the first of them",
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "items",
+                              "total"
+                            ],
+                            "type": "object"
+                          },
+                          "processes": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "items": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "total": {
+                                "description": "How many there are in all; items holds the first of them",
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "items",
+                              "total"
+                            ],
+                            "type": "object"
+                          },
+                          "symbols": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "folder",
+                          "at",
+                          "layers",
+                          "files",
+                          "symbols",
+                          "dependsOn",
+                          "dependedOnBy",
+                          "processes",
+                          "mostDepended"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "areas": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "items": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "files": {
+                                      "maximum": 9007199254740991,
+                                      "minimum": -9007199254740991,
+                                      "type": "integer"
+                                    },
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "layers": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "path": {
+                                      "type": "string"
+                                    },
+                                    "symbols": {
+                                      "maximum": 9007199254740991,
+                                      "minimum": -9007199254740991,
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "label",
+                                    "path",
+                                    "files",
+                                    "symbols",
+                                    "layers"
+                                  ],
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              },
+                              "total": {
+                                "description": "How many there are in all; items holds the first of them",
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "items",
+                              "total"
+                            ],
+                            "type": "object"
+                          },
+                          "at": {
+                            "type": "string"
+                          },
+                          "counts": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "areas": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              },
+                              "calls": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              },
+                              "files": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              },
+                              "processes": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              },
+                              "symbols": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "files",
+                              "symbols",
+                              "areas",
+                              "calls",
+                              "processes"
+                            ],
+                            "type": "object"
+                          },
+                          "layers": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "files": {
+                                  "maximum": 9007199254740991,
+                                  "minimum": -9007199254740991,
+                                  "type": "integer"
+                                },
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "kind",
+                                "files"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "links": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "items": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "count": {
+                                      "maximum": 9007199254740991,
+                                      "minimum": -9007199254740991,
+                                      "type": "integer"
+                                    },
+                                    "from": {
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "label": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "label"
+                                      ],
+                                      "type": "object"
+                                    },
+                                    "to": {
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "label": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "label"
+                                      ],
+                                      "type": "object"
+                                    }
+                                  },
+                                  "required": [
+                                    "from",
+                                    "to",
+                                    "count"
+                                  ],
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              },
+                              "total": {
+                                "description": "How many there are in all; items holds the first of them",
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "items",
+                              "total"
+                            ],
+                            "type": "object"
+                          },
+                          "processes": {
+                            "additionalProperties": false,
+                            "description": "Flows through the code, each with the areas it passes through in order",
+                            "properties": {
+                              "items": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "areas": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "label",
+                                    "areas"
+                                  ],
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              },
+                              "total": {
+                                "description": "How many there are in all; items holds the first of them",
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "items",
+                              "total"
+                            ],
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "at",
+                          "counts",
+                          "layers",
+                          "areas",
+                          "links",
+                          "processes"
+                        ],
+                        "type": "object"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Null for a page no longer in the map"
+              },
+              "former": {
+                "description": "Pages no longer in the map whose files the area now holds, with their words",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "area": {
+                      "type": "string"
+                    },
+                    "words": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "body": {
+                          "description": "Paragraphs, each its pieces",
+                          "items": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "area": {
+                                  "type": "string"
+                                },
+                                "symbol": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "file": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "file",
+                                    "name"
+                                  ],
+                                  "type": "object"
+                                },
+                                "text": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "text"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "type": "array"
+                        },
+                        "summary": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "summary",
+                        "body"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "area",
+                    "words"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "label": {
+                "type": "string"
+              },
+              "page": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "area": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "area"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "overview": {
+                        "const": true,
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "overview"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              "rules": {
+                "description": "The project's rules naming the area, as written",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "state": {
+                "description": "no-words, current, behind, not-in-map or not-counted",
+                "type": "string"
+              },
+              "words": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "at": {
+                        "description": "The snapshot the words were written at",
+                        "type": "string"
+                      },
+                      "author": {
+                        "type": "string"
+                      },
+                      "then": {
+                        "additionalProperties": false,
+                        "description": "The Overview's: the map's area ids and layer names at the time",
+                        "properties": {
+                          "areas": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "layers": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "required": [
+                          "areas",
+                          "layers"
+                        ],
+                        "type": "object"
+                      },
+                      "time": {
+                        "description": "When, ISO 8601",
+                        "type": "string"
+                      },
+                      "version": {
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991,
+                        "type": "integer"
+                      },
+                      "words": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "body": {
+                            "description": "Paragraphs, each its pieces",
+                            "items": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "area": {
+                                    "type": "string"
+                                  },
+                                  "symbol": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "file": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "file",
+                                      "name"
+                                    ],
+                                    "type": "object"
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "text"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            "type": "array"
+                          },
+                          "summary": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "summary",
+                          "body"
+                        ],
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "version",
+                      "words",
+                      "author",
+                      "at",
+                      "time"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "page",
+              "label",
+              "state",
+              "facts",
+              "rules",
+              "words",
+              "changes"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "repo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo",
+        "head",
+        "mapAsOf",
+        "pages",
+        "next",
+        "limits"
+      ],
+      "type": "object"
+    },
+    "title": "Read docs pages"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Write the words of docs pages get_docs read, at the head it answered. For each page, an area by its id or overview: true, then a summary, one sentence on what it is for (at most 200 characters), and a body, short paragraphs on how it works (at most 400 words), each paragraph text or pieces, a piece linking a symbol (its file and name, as get_docs and get_code_context name them) or an area by its id, where the text names it. Or holds: true, when the words still hold after the changes get_docs listed: they are kept again at head, unchanged. Describe what the code does and how it works; links that name nothing at head are made plain text and named back. ShadowGit keeps every version in its own history, never in the project's files.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "head": {
+          "description": "The head get_docs answered",
+          "pattern": "^[0-9a-f]{7,40}$",
+          "type": "string"
+        },
+        "pages": {
+          "items": {
+            "properties": {
+              "area": {
+                "description": "The area's id, as get_docs names it",
+                "minLength": 1,
+                "type": "string"
+              },
+              "body": {
+                "description": "Short paragraphs on how it works: each plain text, or pieces, a piece linking a symbol (file and name) or an area (id) where its text names it",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "items": {
+                        "properties": {
+                          "area": {
+                            "type": "string"
+                          },
+                          "symbol": {
+                            "properties": {
+                              "file": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "file",
+                              "name"
+                            ],
+                            "type": "object"
+                          },
+                          "text": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "text"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              "holds": {
+                "description": "The words the page has still hold: kept again at head, unchanged",
+                "type": "boolean"
+              },
+              "overview": {
+                "description": "The Overview page, in place of an area",
+                "type": "boolean"
+              },
+              "summary": {
+                "description": "One sentence on what the area is for",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "type": "array"
+        },
+        "repo": {
+          "description": "Project name or absolute path. Defaults to the current project.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "head",
+        "pages"
+      ],
+      "type": "object"
+    },
+    "name": "write_docs",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "head": {
+          "type": "string"
+        },
+        "pages": {
+          "items": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "dropped": {
+                    "description": "Links made plain text, naming nothing at head",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "kept": {
+                    "const": true,
+                    "type": "boolean"
+                  },
+                  "page": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "area": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "area"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "overview": {
+                            "const": true,
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "overview"
+                        ],
+                        "type": "object"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "page",
+                  "kept",
+                  "dropped"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "kept": {
+                    "const": false,
+                    "type": "boolean"
+                  },
+                  "page": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "area": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "area"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "overview": {
+                            "const": true,
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "overview"
+                        ],
+                        "type": "object"
+                      }
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "page",
+                  "kept",
+                  "reason"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "repo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo",
+        "head",
+        "pages"
+      ],
+      "type": "object"
+    },
+    "title": "Write docs pages"
   }
 ]

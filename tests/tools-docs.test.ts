@@ -30,16 +30,24 @@ beforeEach(() => {
 
 const docsAsked = () => app.requests.filter((request) => request.path.startsWith('/docs?')).map((request) => request.path);
 const HEAD = 'f62bdb89d909314bf5ac433a7478502a65bdc26d';
+/** The write step get_docs answers, where the model reads it: in the structured answer. */
+const step = (pages: string, head: string, more = '') =>
+  `Write the words of ${pages} with write_docs, head "${head}": for each page a summary of one sentence (at most 200 characters) and a body of short paragraphs (at most 400 words) on what the code you read does, linking the symbols and areas it names; a page with no words can start short, from its facts and the code you read, and later sessions add to it; or holds: true where its words still hold.${more}`;
+/** An app's answer as get_docs gives it: the app's cursor as more, and the step as next. */
+const asGiven = (answer: object, next: string) => {
+  const { next: more, ...rest } = answer as { next: unknown };
+  return { repo: 'webshop', ...rest, more, next };
+};
 
 describe('get_docs', () => {
   it("reads the session's pages, with their facts, words and changes", async () => {
     const result = await getDocs({});
     expect(docsAsked()).toEqual([`/docs?${new URLSearchParams({ repoPath: project })}`]);
-    expect(result.structuredContent).toEqual({ repo: 'webshop', ...DOCS_ANSWERS.session });
+    expect(result.structuredContent).toEqual(asGiven(DOCS_ANSWERS.session, step('src/billing and src/jobs', HEAD)));
     const text = textOf(result);
     expect(text).toContain('Page "billing" (area src/billing): no words yet.');
     expect(text).toContain('Page "jobs" (area src/jobs): no words yet.');
-    expect(text).toContain(`Write with write_docs, head "${HEAD}"`);
+    expect(text.split('\n').at(-1)).toBe(`Next: ${step('src/billing and src/jobs', HEAD)}`);
     expect(text).not.toMatch(JUDGING);
     await expect(text).toMatchFileSnapshot('__snapshots__/get-docs-session.txt');
   });
@@ -56,21 +64,35 @@ describe('get_docs', () => {
     await expect(text).toMatchFileSnapshot('__snapshots__/get-docs-area.txt');
   });
 
-  it("passes all's next back whole", async () => {
+  it("passes all's cursor back whole, as more", async () => {
     app.docsAnswer = DOCS_ANSWERS.all;
     const result = await getDocs({ all: true });
-    const next = { after: 6, map: '7645e40324841dedfe41b3d6f0bda4b745e6136d' };
-    expect(result.structuredContent).toMatchObject({ next });
+    const more = { after: 6, map: '7645e40324841dedfe41b3d6f0bda4b745e6136d' };
+    const next = step('the Overview, src/api, src/admin, src/mail and src/search', '7645e40324841dedfe41b3d6f0bda4b745e6136d', ` Then get_docs with more ${JSON.stringify(more)} for the next pages without words.`);
+    expect(result.structuredContent).toEqual(asGiven(DOCS_ANSWERS.all, next));
     const text = textOf(result);
     expect(text).toContain('Page "Overview" (the Overview): no words yet.');
-    expect(text.split('\n').at(-1)).toBe(`More pages without words: get_docs with all and next ${JSON.stringify(next)}.`);
+    expect(text.split('\n').at(-1)).toBe(`Next: ${next}`);
     expect(text).not.toMatch(JUDGING);
     await expect(text).toMatchFileSnapshot('__snapshots__/get-docs-all.txt');
-    // next alone asks for the following batch, as next with all does
-    await getDocs({ next });
-    await getDocs({ all: true, next });
-    const following = `/docs?${new URLSearchParams({ repoPath: project, all: 'true', after: '6', map: next.map })}`;
+    // more alone asks for the following batch, as more with all does
+    await getDocs({ more });
+    await getDocs({ all: true, more });
+    const following = `/docs?${new URLSearchParams({ repoPath: project, all: 'true', after: '6', map: more.map })}`;
     expect(docsAsked()).toEqual([`/docs?${new URLSearchParams({ repoPath: project, all: 'true' })}`, following, following]);
+  });
+
+  it('asks to write only the pages that need words: never a current page, nor one the map no longer holds', async () => {
+    const pages = (DOCS_ANSWERS.area as { pages: { state: string }[] }).pages;
+    app.docsAnswer = { ...DOCS_ANSWERS.area, pages: pages.map((page) => ({ ...page, state: 'current' })) };
+    const current = await getDocs({ areas: ['src/billing'] });
+    expect(current.structuredContent).not.toHaveProperty('next');
+    expect(textOf(current)).not.toContain('Next:');
+    expect(textOf(current)).toContain('Page "billing" (area src/billing): current: words written by Claude Code at f62bdb89.');
+    const gone = { ...pages[0], page: { area: 'src/old' }, label: 'src/old', state: 'not-in-map', facts: null, changes: null };
+    app.docsAnswer = { ...DOCS_ANSWERS.session, pages: [...(DOCS_ANSWERS.session as { pages: object[] }).pages.slice(0, 1), gone] };
+    const mixed = await getDocs({ areas: ['src/billing', 'src/old'] });
+    expect(mixed.structuredContent).toMatchObject({ next: expect.stringMatching(/^Write the words of src\/billing with write_docs/) });
   });
 
   it('asks for named pages and the Overview together', async () => {
@@ -78,16 +100,18 @@ describe('get_docs', () => {
     expect(docsAsked()).toEqual([`/docs?${new URLSearchParams([['repoPath', project], ['area', 'src/billing'], ['area', 'src/jobs'], ['overview', 'true']])}`]);
   });
 
-  it('says when no page is asked for', async () => {
+  it('says when no page is asked for, with no step to take', async () => {
     app.docsAnswer = { ...DOCS_ANSWERS.session, pages: [] };
-    expect(textOf(await getDocs({}))).toBe("The latest AI session in webshop changed no area whose docs page needs words.");
+    const none = await getDocs({});
+    expect(textOf(none)).toBe("The latest AI session in webshop changed no area whose docs page needs words.");
+    expect(none.structuredContent).not.toHaveProperty('next');
     app.docsAnswer = { ...DOCS_ANSWERS.all, pages: [], next: null };
     expect(textOf(await getDocs({ all: true }))).toBe("Every page of webshop's map has words.");
   });
 
   it('refuses all with areas, and says what the app answers while it counts', async () => {
     await expect(getDocs({ all: true, areas: ['src/billing'] })).rejects.toThrow('Ask for all, or name areas and the overview: not both.');
-    await expect(getDocs({ next: { after: 6, map: 'm' }, overview: true })).rejects.toThrow('Ask for all, or name areas and the overview: not both.');
+    await expect(getDocs({ more: { after: 6, map: 'm' }, overview: true })).rejects.toThrow('Ask for all, or name areas and the overview: not both.');
     expect(app.requests).toEqual([]);
     app.docsStatus = 202;
     await expect(getDocs({})).rejects.toThrow(

@@ -48,7 +48,9 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
   });
 
   it("sends the user's questions about a part of the project to get_docs, and describes the docs tools as facts", async () => {
-    expect(INSTRUCTIONS).toContain('- The user asks what part of the project does, or to document it: get_docs (areas, or all: true for the whole project), then write_docs.');
+    expect(INSTRUCTIONS).toContain('- What a part of the project does, or documenting it: get_docs, then write_docs.');
+    // The session's last step: the agent loads the docs tools with the session's, before its edits
+    expect(INSTRUCTIONS).toContain("so the user reads your change in ShadowGit's Lens in your words. The docs pages it then names are part of the session: get_docs, write_docs.");
     const { tools } = await client.listTools();
     for (const name of ['get_docs', 'write_docs']) {
       const tool = tools.find((each) => each.name === name);

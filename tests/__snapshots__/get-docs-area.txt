@@ -12,4 +12,4 @@ Page "billing" (area src/billing): 1 change since its words, written by Claude C
   Symbols changed since the words:
   - splitCents (src/billing/money.ts): code
 
-Write with write_docs, head "32cfc99c1f015796b0365e2f19aaa2840eebf35c": for each page a summary of one sentence (at most 200 characters) and a body of short paragraphs (at most 400 words), naming symbols and areas with links; or holds: true where the words still hold.
+Next: Write the words of src/billing with write_docs, head "32cfc99c1f015796b0365e2f19aaa2840eebf35c": for each page a summary of one sentence (at most 200 characters) and a body of short paragraphs (at most 400 words) on what the code you read does, linking the symbols and areas it names; a page with no words can start short, from its facts and the code you read, and later sessions add to it; or holds: true where its words still hold.

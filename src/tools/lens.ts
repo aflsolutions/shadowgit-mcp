@@ -102,7 +102,7 @@ async function docsStep(project: Repo, repo: string | undefined): Promise<string
   );
   if (pages.length === 0) return undefined;
   const names = andList(pages.map(({ page }) => pageName(page)));
-  return `${forRepo(repo === undefined ? undefined : repoArgument(project))}Update the docs pages this session changed: get_docs, then write_docs (${names}).`;
+  return `${forRepo(repo === undefined ? undefined : repoArgument(project))}The session's last step: the docs pages of the areas it changed, ${names}, need words, so the pages the user reads in ShadowGit describe the code as it is now. A page with no words can start short, from its facts and the code you read. get_docs, then write_docs.`;
 }
 
 export async function writeLensWords(
@@ -142,7 +142,7 @@ export function registerLens(server: McpServer): void {
     {
       title: "Write a range's Lens words",
       description:
-        "Write the words the user reads in ShadowGit's Lens for a range get_lens read: a summary, each step's title and body, with a why and an excerpt, each card's role, by the ids get_lens gave. An older ShadowGit takes plain text alone; text past its limit is cut; unknown ids are left out. The app keeps the words in its history: a card's role shows in any later range while its code is unchanged.",
+        "Write the words the user reads in ShadowGit's Lens for a range get_lens read: a summary, each step's title and body, with a why and an excerpt, each card's role, by the ids get_lens gave. An older ShadowGit takes plain text alone; text past its limit is cut; unknown ids are left out. The app keeps the words in its history: a card's role shows in any later range while its code is unchanged. When the session changed areas whose docs pages need words, the answer's next names them, the session's last step: get_docs, then write_docs.",
       inputSchema: z.object({
         base: Snapshot.nullable().describe('The base get_lens answered (null: from the start of the history)'),
         head: Snapshot.describe('The head get_lens answered'),

@@ -33,7 +33,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const DOCS_STEP = 'Update the docs pages this session changed: get_docs, then write_docs (src/billing and src/jobs).';
+const DOCS_STEP = "The session's last step: the docs pages of the areas it changed, src/billing and src/jobs, need words, so the pages the user reads in ShadowGit describe the code as it is now. A page with no words can start short, from its facts and the code you read. get_docs, then write_docs.";
 
 describe('get_lens', () => {
   it("reads the latest session's lens of the current project, every id with its code, and says how to word it", async () => {
@@ -175,7 +175,7 @@ describe('write_lens_words', () => {
     expect(textOf(result)).not.toMatch(JUDGING);
     const pages = (answer: object) => (answer as { pages: object[] }).pages;
     app.docsAnswer = { ...DOCS_ANSWERS.session, pages: [...pages(DOCS_ANSWERS.all).slice(0, 1), ...pages(DOCS_ANSWERS.session).slice(0, 1)] };
-    expect(textOf(await writeLensWords({ ...FAKE_RANGE, summary: 'A summary.' }, 'Claude Code'))).toContain('get_docs, then write_docs (the Overview and src/billing).');
+    expect(textOf(await writeLensWords({ ...FAKE_RANGE, summary: 'A summary.' }, 'Claude Code'))).toContain('the docs pages of the areas it changed, the Overview and src/billing, need words');
   });
 
   it('answers as before when the app has no docs, counts past its deadline, has none to update, or answers a shape it does not read', async () => {

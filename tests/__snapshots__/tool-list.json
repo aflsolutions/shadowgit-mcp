@@ -2916,7 +2916,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Write the words the user reads in ShadowGit's Lens for a range get_lens read: a summary, each step's title and body, with a why and an excerpt, each card's role, by the ids get_lens gave. An older ShadowGit takes plain text alone; text past its limit is cut; unknown ids are left out. The app keeps the words in its history: a card's role shows in any later range while its code is unchanged.",
+    "description": "Write the words the user reads in ShadowGit's Lens for a range get_lens read: a summary, each step's title and body, with a why and an excerpt, each card's role, by the ids get_lens gave. An older ShadowGit takes plain text alone; text past its limit is cut; unknown ids are left out. The app keeps the words in its history: a card's role shows in any later range while its code is unchanged. When the session changed areas whose docs pages need words, the answer's next names them, the session's last step: get_docs, then write_docs.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -3177,7 +3177,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Read the docs pages ShadowGit keeps for a tracked project: one per area of its map, plus an Overview, each written by an AI assistant. A page comes with the facts ShadowGit draws from the map (folder, sizes, layers, what it depends on and what depends on it, processes, its most depended-on symbols, the project's rules that name it), its words so far with who wrote them and at which snapshot, and what changed in the area since them: symbols changed in their code, dependency facts, links that no longer name anything. With no arguments: the pages the latest AI session changed whose words are missing or behind. With areas, and overview: those pages. With all: pages without words, largest area first, five at a time, with next for the following batch. Answers head, the snapshot write_docs keeps the words at. Needs the ShadowGit app running.",
+    "description": "Read the docs pages ShadowGit keeps for a tracked project: one per area of its map, plus an Overview, each written by an AI assistant. A page comes with the facts ShadowGit draws from the map (folder, sizes, layers, what it depends on and what depends on it, processes, its most depended-on symbols, the project's rules that name it), its words so far with who wrote them and at which snapshot, and what changed in the area since them: symbols changed in their code, dependency facts, links that no longer name anything. With no arguments: the pages the latest AI session changed whose words are missing or behind. With areas, and overview: those pages. With all: pages without words, largest area first, five at a time, with more for the following batch. Answers head, the snapshot write_docs keeps the words at, and next: write the pages' words with write_docs. Needs the ShadowGit app running.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -3194,8 +3194,8 @@
           "maxItems": 20,
           "type": "array"
         },
-        "next": {
-          "description": "The next get_docs answered with all, as given: the following batch",
+        "more": {
+          "description": "The more get_docs answered with all, as given: the following batch",
           "properties": {
             "after": {
               "maximum": 9007199254740991,
@@ -3304,7 +3304,7 @@
           ],
           "type": "object"
         },
-        "next": {
+        "more": {
           "anyOf": [
             {
               "additionalProperties": false,
@@ -3328,7 +3328,11 @@
               "type": "null"
             }
           ],
-          "description": "For all: the next batch, to pass back whole; null at the last"
+          "description": "For all: the following batch, to pass back as more; null at the last"
+        },
+        "next": {
+          "description": "The step that follows: write these pages with write_docs",
+          "type": "string"
         },
         "pages": {
           "items": {
@@ -4152,8 +4156,8 @@
         "head",
         "mapAsOf",
         "pages",
-        "next",
-        "limits"
+        "limits",
+        "more"
       ],
       "type": "object"
     },
@@ -4166,7 +4170,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Write the words of docs pages get_docs read, at the head it answered. For each page, an area by its id or overview: true, then a summary, one sentence on what it is for (at most 200 characters), and a body, short paragraphs on how it works (at most 400 words), each paragraph text or pieces, a piece linking a symbol (its file and name, as get_docs and get_code_context name them) or an area by its id, where the text names it. Or holds: true, when the words still hold after the changes get_docs listed: they are kept again at head, unchanged. Describe what the code does and how it works; links that name nothing at head are made plain text and named back. ShadowGit keeps every version in its own history, never in the project's files.",
+    "description": "Write the words of docs pages get_docs read, at the head it answered. For each page, an area by its id or overview: true, then a summary, one sentence on what it is for (at most 200 characters), and a body, short paragraphs on how it works (at most 400 words), each paragraph text or pieces, a piece linking a symbol (its file and name, as get_docs and get_code_context name them) or an area by its id, where the text names it. Or holds: true, when the words still hold after the changes get_docs listed: they are kept again at head, unchanged. Describe what the code does and how it works, from the code you read and the facts get_docs gave: a page with no words can start short, and later sessions add to it. Links that name nothing at head are made plain text and named back. ShadowGit keeps every version in its own history, never in the project's files.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {

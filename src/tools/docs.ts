@@ -8,11 +8,19 @@ import { andList, drawnFrom, list } from './map.js';
 import { quote } from './rules.js';
 import { dataResult, repoParam } from './shared.js';
 
-const DocsOutput = z.object({ repo: z.string(), ...DocsRead.shape });
+// The app's cursor for all is more here: next is the step that follows, in every tool's answer, and the model reads
+// the structured answer alone
+const DocsOutput = z.object({
+  repo: z.string(),
+  ...DocsRead.omit({ next: true }).shape,
+  more: DocsCursor.nullable().describe('For all: the following batch, to pass back as more; null at the last'),
+  next: z.string().optional().describe('The step that follows: write these pages with write_docs'),
+});
 const WrittenOutput = z.object({ repo: z.string(), ...DocsWritten.shape });
 const Snapshot = z.string().regex(/^[0-9a-f]{7,40}$/, 'a snapshot hash');
 
 type Read = z.infer<typeof DocsRead>;
+type Cursor = Read['next'];
 type Page = Read['pages'][number];
 type Facts = NonNullable<Page['facts']>;
 type Words = z.infer<typeof DocWords>;
@@ -96,17 +104,27 @@ function pageLines(page: Page): string[] {
   ];
 }
 
-function describeDocs(repo: string, read: Read, asked: 'session' | 'pages' | 'all'): string {
+/** Whether a page asks for words: a current one doesn't, and the map no longer holds an area whose page left it. */
+const needsWords = ({ state }: Page) => state !== 'current' && state !== 'not-in-map';
+
+/** The pages to write, named, at head, then the next batch of all; none when every page read is current. */
+function writeStep({ head, limits, pages }: Omit<Read, 'next'>, more: Cursor): string | undefined {
+  const asked = pages.filter(needsWords);
+  if (asked.length === 0) return undefined;
+  const words = `for each page a summary of one sentence (at most ${limits.summary} characters) and a body of short paragraphs (at most ${limits.bodyWords} words) on what the code you read does, linking the symbols and areas it names; a page with no words can start short, from its facts and the code you read, and later sessions add to it; or holds: true where its words still hold`;
+  const following = more === null ? '' : ` Then get_docs with more ${JSON.stringify(more)} for the next pages without words.`;
+  // A first page needs no whole folder read: it says what the facts and the code read show, and grows with the work
+  return `Write the words of ${andList(asked.map(({ page }) => pageName(page)))} with write_docs, head ${JSON.stringify(head)}: ${words}.${following}`;
+}
+
+function describeDocs(repo: string, read: Omit<Read, 'next'>, asked: 'session' | 'pages' | 'all', step: string | undefined): string {
   if (read.pages.length === 0) {
     return asked === 'all' ? `Every page of ${repo}'s map has words.` : `The latest AI session in ${repo} changed no area whose docs page needs words.`;
   }
-  const { head, limits, next } = read;
   return [
-    `${repo}'s docs pages, at snapshot ${head.slice(0, 8)}; the map is ${drawnFrom(read.mapAsOf)}`,
-    '',
-    ...read.pages.flatMap((page) => [...pageLines(page), '']),
-    `Write with write_docs, head ${JSON.stringify(head)}: for each page a summary of one sentence (at most ${limits.summary} characters) and a body of short paragraphs (at most ${limits.bodyWords} words), naming symbols and areas with links; or holds: true where the words still hold.`,
-    ...(next === null ? [] : [`More pages without words: get_docs with all and next ${JSON.stringify(next)}.`]),
+    `${repo}'s docs pages, at snapshot ${read.head.slice(0, 8)}; the map is ${drawnFrom(read.mapAsOf)}`,
+    ...read.pages.flatMap((page) => ['', ...pageLines(page)]),
+    ...(step === undefined ? [] : ['', `Next: ${step}`]),
   ].join('\n');
 }
 
@@ -114,22 +132,23 @@ export async function getDocs({
   areas = [],
   overview = false,
   all = false,
-  next,
+  more,
   repo,
 }: {
   areas?: string[];
   overview?: boolean;
   all?: boolean;
-  next?: z.infer<typeof DocsCursor>;
+  more?: z.infer<typeof DocsCursor>;
   repo?: string;
 }): Promise<CallToolResult> {
-  // next goes on from all's answer: it is a batch of all
-  const batch = all || next !== undefined;
+  // more goes on from all's answer: it is a batch of all
+  const batch = all || more !== undefined;
   if (batch && (areas.length > 0 || overview)) throw new Error(BOTH);
   const project = resolveRepo(repo);
-  const read = await readDocs({ repoPath: project.path, areas, overview, all: batch, next });
+  const { next: cursor, ...read } = await readDocs({ repoPath: project.path, areas, overview, all: batch, next: more });
+  const step = writeStep(read, cursor);
   const asked = batch ? 'all' : areas.length > 0 || overview ? 'pages' : 'session';
-  return dataResult(DocsOutput, describeDocs(project.name, read, asked), { repo: project.name, ...read });
+  return dataResult(DocsOutput, describeDocs(project.name, read, asked, step), { repo: project.name, ...read, more: cursor, ...(step !== undefined && { next: step }) });
 }
 
 /** A page as write_docs takes it: flat, for a model to fill. */
@@ -178,12 +197,12 @@ export function registerDocs(server: McpServer): void {
     {
       title: 'Read docs pages',
       description:
-        "Read the docs pages ShadowGit keeps for a tracked project: one per area of its map, plus an Overview, each written by an AI assistant. A page comes with the facts ShadowGit draws from the map (folder, sizes, layers, what it depends on and what depends on it, processes, its most depended-on symbols, the project's rules that name it), its words so far with who wrote them and at which snapshot, and what changed in the area since them: symbols changed in their code, dependency facts, links that no longer name anything. With no arguments: the pages the latest AI session changed whose words are missing or behind. With areas, and overview: those pages. With all: pages without words, largest area first, five at a time, with next for the following batch. Answers head, the snapshot write_docs keeps the words at. Needs the ShadowGit app running.",
+        "Read the docs pages ShadowGit keeps for a tracked project: one per area of its map, plus an Overview, each written by an AI assistant. A page comes with the facts ShadowGit draws from the map (folder, sizes, layers, what it depends on and what depends on it, processes, its most depended-on symbols, the project's rules that name it), its words so far with who wrote them and at which snapshot, and what changed in the area since them: symbols changed in their code, dependency facts, links that no longer name anything. With no arguments: the pages the latest AI session changed whose words are missing or behind. With areas, and overview: those pages. With all: pages without words, largest area first, five at a time, with more for the following batch. Answers head, the snapshot write_docs keeps the words at, and next: write the pages' words with write_docs. Needs the ShadowGit app running.",
       inputSchema: z.object({
         areas: z.array(z.string().min(1)).max(20).optional().describe("Area ids, as get_docs names them: most are the area's folder, as get_map lists it"),
         overview: z.boolean().optional().describe('The Overview page, alone or with areas'),
         all: z.boolean().optional().describe('Pages without words, five at a time'),
-        next: DocsCursor.optional().describe('The next get_docs answered with all, as given: the following batch'),
+        more: DocsCursor.optional().describe('The more get_docs answered with all, as given: the following batch'),
         repo: repoParam,
       }),
       outputSchema: DocsOutput,
@@ -196,7 +215,7 @@ export function registerDocs(server: McpServer): void {
     {
       title: 'Write docs pages',
       description:
-        "Write the words of docs pages get_docs read, at the head it answered. For each page, an area by its id or overview: true, then a summary, one sentence on what it is for (at most 200 characters), and a body, short paragraphs on how it works (at most 400 words), each paragraph text or pieces, a piece linking a symbol (its file and name, as get_docs and get_code_context name them) or an area by its id, where the text names it. Or holds: true, when the words still hold after the changes get_docs listed: they are kept again at head, unchanged. Describe what the code does and how it works; links that name nothing at head are made plain text and named back. ShadowGit keeps every version in its own history, never in the project's files.",
+        "Write the words of docs pages get_docs read, at the head it answered. For each page, an area by its id or overview: true, then a summary, one sentence on what it is for (at most 200 characters), and a body, short paragraphs on how it works (at most 400 words), each paragraph text or pieces, a piece linking a symbol (its file and name, as get_docs and get_code_context name them) or an area by its id, where the text names it. Or holds: true, when the words still hold after the changes get_docs listed: they are kept again at head, unchanged. Describe what the code does and how it works, from the code you read and the facts get_docs gave: a page with no words can start short, and later sessions add to it. Links that name nothing at head are made plain text and named back. ShadowGit keeps every version in its own history, never in the project's files.",
       inputSchema: z.object({
         head: Snapshot.describe('The head get_docs answered'),
         pages: z

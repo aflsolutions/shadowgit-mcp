@@ -10,16 +10,16 @@ import { registerStartSession } from './tools/start-session.js';
 import { VERSION } from './version.js';
 
 export const INSTRUCTIONS = [
-  "ShadowGit snapshots each tracked project every few minutes into a separate history (.shadowgit.git), so it holds changes the project's own git never saw.",
+  "ShadowGit snapshots each tracked project every few minutes into a separate history (.shadowgit.git), so it holds changes the project's git never saw.",
   "Before your first edit in a tracked project, call get_code_context (load it with tool search if it is deferred) for the files or symbols you will change: it lists what depends on them across the project by area, callers grep misses included (top-level code, imports through re-exports), where the change lands, and the project's rules for them, from its .shadowgit-rules file, which say only what must not depend on what: add no link they name. get_map shows how the project is organised.",
   'Task → tool:',
   "- What changed recently, a file's history, when something broke, what the user was doing at a given time: git_command with read-only git (log --since, diff, show, blame).",
-  "- Before editing several files in a tracked project: start_session, which pauses snapshots. When a session's edits are done, whoever started it: checkpoint with a specific title, end_session, then get_lens and write_lens_words (a summary, a title and a sentence for each step, a role for each changed card), so the user reads your change in ShadowGit's Lens in your words.",
-  '- The user asks what part of the project does, or to document it: get_docs (areas, or all: true for the whole project), then write_docs.',
+  "- Before editing several files in a tracked project: start_session, which pauses snapshots. When a session's edits are done, whoever started it: checkpoint with a specific title, end_session, then get_lens and write_lens_words (a summary, a title and a sentence for each step, a role for each changed card), so the user reads your change in ShadowGit's Lens in your words. The docs pages it then names are part of the session: get_docs, write_docs.",
+  '- What a part of the project does, or documenting it: get_docs, then write_docs.',
   '- Any edit, even one line, in a project with rules (get_code_context lists them) or to .shadowgit-rules: start_session first, so the checkpoint checks the change against them.',
   '- The user asks to save or checkpoint their work: checkpoint.',
   "- A project name you don't recognise: list_repos.",
-  "Every tool defaults to the project you are working in; pass repo only for another project. Times in older snapshot titles may be UTC; git's own dates are correct.",
+  "Every tool defaults to the project you are working in; pass repo only for another project. Older snapshot titles may give UTC times; git's dates are right.",
 ].join('\n');
 
 export function buildServer(): McpServer {

@@ -25,5 +25,4 @@ Page "search" (area src/search): no words yet.
   Facts: folder src/search; 1 files, 15 symbols; layers search.
   Depends on: none. Depended on by: none.
 
-Write with write_docs, head "7645e40324841dedfe41b3d6f0bda4b745e6136d": for each page a summary of one sentence (at most 200 characters) and a body of short paragraphs (at most 400 words), naming symbols and areas with links; or holds: true where the words still hold.
-More pages without words: get_docs with all and next {"after":6,"map":"7645e40324841dedfe41b3d6f0bda4b745e6136d"}.
+Next: Write the words of the Overview, src/api, src/admin, src/mail and src/search with write_docs, head "7645e40324841dedfe41b3d6f0bda4b745e6136d": for each page a summary of one sentence (at most 200 characters) and a body of short paragraphs (at most 400 words) on what the code you read does, linking the symbols and areas it names; a page with no words can start short, from its facts and the code you read, and later sessions add to it; or holds: true where its words still hold. Then get_docs with more {"after":6,"map":"7645e40324841dedfe41b3d6f0bda4b745e6136d"} for the next pages without words.

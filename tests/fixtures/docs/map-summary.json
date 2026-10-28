@@ -1,0 +1,164 @@
+{
+  "success": true,
+  "mapAsOf": {
+    "snapshot": "32cfc99c1f015796b0365e2f19aaa2840eebf35c",
+    "time": "2026-10-28T12:15:52+01:00",
+    "behind": 0,
+    "changedFiles": {
+      "items": [],
+      "total": 0
+    }
+  },
+  "summary": {
+    "repo": "project",
+    "commit": "32cfc99c1f015796b0365e2f19aaa2840eebf35c",
+    "counts": {
+      "files": 19,
+      "symbols": 45,
+      "areas": 3,
+      "calls": 34,
+      "processes": 13
+    },
+    "layers": [
+      {
+        "name": "api",
+        "kind": "folder",
+        "files": 7
+      },
+      {
+        "name": "billing",
+        "kind": "folder",
+        "files": 6
+      },
+      {
+        "name": "jobs",
+        "kind": "folder",
+        "files": 5
+      }
+    ],
+    "areas": {
+      "items": [
+        {
+          "label": "api",
+          "path": "src/api",
+          "files": 8,
+          "symbols": 17,
+          "layers": [
+            "api"
+          ]
+        },
+        {
+          "label": "billing",
+          "path": "src/billing",
+          "files": 6,
+          "symbols": 16,
+          "layers": [
+            "billing"
+          ]
+        },
+        {
+          "label": "jobs",
+          "path": "src/jobs",
+          "files": 5,
+          "symbols": 12,
+          "layers": [
+            "jobs"
+          ]
+        }
+      ],
+      "total": 3
+    },
+    "links": {
+      "items": [
+        {
+          "from": "jobs",
+          "to": "billing",
+          "count": 5
+        },
+        {
+          "from": "api",
+          "to": "billing",
+          "count": 3
+        }
+      ],
+      "total": 2
+    },
+    "processes": {
+      "items": [
+        {
+          "label": "StartServer -> RoundCents",
+          "areas": [
+            "api",
+            "billing"
+          ]
+        },
+        {
+          "label": "StartServer -> RecordPayment",
+          "areas": [
+            "api",
+            "billing"
+          ]
+        },
+        {
+          "label": "StartServer -> Shipping",
+          "areas": [
+            "api"
+          ]
+        },
+        {
+          "label": "InvoiceLine -> RoundCents",
+          "areas": [
+            "billing"
+          ]
+        },
+        {
+          "label": "CleanupCarts -> MaxDelay",
+          "areas": [
+            "jobs"
+          ]
+        },
+        {
+          "label": "StartServer -> ValidateCart",
+          "areas": [
+            "api"
+          ]
+        },
+        {
+          "label": "StartServer -> UserName",
+          "areas": [
+            "api"
+          ]
+        },
+        {
+          "label": "RetryFailedCharges -> RoundCents",
+          "areas": [
+            "jobs",
+            "billing"
+          ]
+        },
+        {
+          "label": "RetryFailedCharges -> RecordPayment",
+          "areas": [
+            "jobs",
+            "billing"
+          ]
+        },
+        {
+          "label": "RetryFailedCharges -> MaxDelay",
+          "areas": [
+            "jobs"
+          ]
+        }
+      ],
+      "total": 13
+    }
+  },
+  "rules": null,
+  "docs": [
+    {
+      "area": "src/billing",
+      "summary": "Charges and refunds cards, in cents, and records each payment in the ledger.",
+      "behind": 1
+    }
+  ]
+}

@@ -1,0 +1,478 @@
+{
+  "success": true,
+  "head": "7645e40324841dedfe41b3d6f0bda4b745e6136d",
+  "mapAsOf": {
+    "snapshot": "7645e40324841dedfe41b3d6f0bda4b745e6136d",
+    "time": "2026-10-28T12:15:54+01:00",
+    "behind": 0,
+    "changedFiles": {
+      "items": [],
+      "total": 0
+    }
+  },
+  "pages": [
+    {
+      "page": {
+        "overview": true
+      },
+      "label": "Overview",
+      "state": "no-words",
+      "facts": {
+        "at": "7645e40324841dedfe41b3d6f0bda4b745e6136d",
+        "counts": {
+          "files": 22,
+          "symbols": 90,
+          "areas": 6,
+          "calls": 34,
+          "processes": 13
+        },
+        "layers": [
+          {
+            "name": "admin",
+            "kind": "folder",
+            "files": 1
+          },
+          {
+            "name": "api",
+            "kind": "folder",
+            "files": 7
+          },
+          {
+            "name": "billing",
+            "kind": "folder",
+            "files": 6
+          },
+          {
+            "name": "jobs",
+            "kind": "folder",
+            "files": 5
+          },
+          {
+            "name": "mail",
+            "kind": "folder",
+            "files": 1
+          },
+          {
+            "name": "search",
+            "kind": "folder",
+            "files": 1
+          }
+        ],
+        "areas": {
+          "items": [
+            {
+              "label": "api",
+              "path": "src/api",
+              "files": 7,
+              "symbols": 17,
+              "layers": [
+                "api"
+              ],
+              "id": "src/api"
+            },
+            {
+              "label": "billing",
+              "path": "src/billing",
+              "files": 6,
+              "symbols": 16,
+              "layers": [
+                "billing"
+              ],
+              "id": "src/billing"
+            },
+            {
+              "label": "admin",
+              "path": "src/admin",
+              "files": 2,
+              "symbols": 15,
+              "layers": [
+                "admin"
+              ],
+              "id": "src/admin"
+            },
+            {
+              "label": "mail",
+              "path": "src/mail",
+              "files": 1,
+              "symbols": 15,
+              "layers": [
+                "mail"
+              ],
+              "id": "src/mail"
+            },
+            {
+              "label": "search",
+              "path": "src/search",
+              "files": 1,
+              "symbols": 15,
+              "layers": [
+                "search"
+              ],
+              "id": "src/search"
+            },
+            {
+              "label": "jobs",
+              "path": "src/jobs",
+              "files": 5,
+              "symbols": 12,
+              "layers": [
+                "jobs"
+              ],
+              "id": "src/jobs"
+            }
+          ],
+          "total": 6
+        },
+        "links": {
+          "items": [
+            {
+              "from": {
+                "id": "src/jobs",
+                "label": "jobs"
+              },
+              "to": {
+                "id": "src/billing",
+                "label": "billing"
+              },
+              "count": 5
+            },
+            {
+              "from": {
+                "id": "src/admin",
+                "label": "admin"
+              },
+              "to": {
+                "id": "src/api",
+                "label": "api"
+              },
+              "count": 3
+            },
+            {
+              "from": {
+                "id": "src/api",
+                "label": "api"
+              },
+              "to": {
+                "id": "src/billing",
+                "label": "billing"
+              },
+              "count": 3
+            }
+          ],
+          "total": 3
+        },
+        "processes": {
+          "items": [
+            {
+              "label": "StartServer -> RoundCents",
+              "areas": [
+                "api",
+                "billing"
+              ]
+            },
+            {
+              "label": "StartServer -> RecordPayment",
+              "areas": [
+                "api",
+                "billing"
+              ]
+            },
+            {
+              "label": "StartServer -> Shipping",
+              "areas": [
+                "api"
+              ]
+            },
+            {
+              "label": "InvoiceLine -> RoundCents",
+              "areas": [
+                "billing"
+              ]
+            },
+            {
+              "label": "CleanupCarts -> MaxDelay",
+              "areas": [
+                "jobs"
+              ]
+            },
+            {
+              "label": "StartServer -> ValidateCart",
+              "areas": [
+                "api"
+              ]
+            },
+            {
+              "label": "StartServer -> UserName",
+              "areas": [
+                "api"
+              ]
+            },
+            {
+              "label": "RetryFailedCharges -> RoundCents",
+              "areas": [
+                "jobs",
+                "billing"
+              ]
+            },
+            {
+              "label": "RetryFailedCharges -> RecordPayment",
+              "areas": [
+                "jobs",
+                "billing"
+              ]
+            },
+            {
+              "label": "RetryFailedCharges -> MaxDelay",
+              "areas": [
+                "jobs"
+              ]
+            }
+          ],
+          "total": 13
+        }
+      },
+      "rules": [],
+      "words": null,
+      "changes": null
+    },
+    {
+      "page": {
+        "area": "src/api"
+      },
+      "label": "api",
+      "state": "no-words",
+      "facts": {
+        "id": "src/api",
+        "label": "api",
+        "folder": "src/api",
+        "at": "7645e40324841dedfe41b3d6f0bda4b745e6136d",
+        "layers": [
+          "api"
+        ],
+        "files": 7,
+        "symbols": 17,
+        "dependsOn": [
+          {
+            "id": "src/billing",
+            "label": "billing",
+            "count": 3
+          }
+        ],
+        "dependedOnBy": [
+          {
+            "id": "src/admin",
+            "label": "admin",
+            "count": 3
+          }
+        ],
+        "processes": {
+          "items": [
+            "StartServer -> RoundCents",
+            "StartServer -> RecordPayment",
+            "StartServer -> Shipping",
+            "StartServer -> ValidateCart",
+            "StartServer -> UserName",
+            "ListOrders -> OrderId"
+          ],
+          "total": 6
+        },
+        "mostDepended": {
+          "items": [
+            {
+              "symbol": {
+                "name": "validateCart",
+                "kind": "function",
+                "file": "src/api/cart.ts",
+                "line": 1,
+                "area": "api",
+                "layer": "api"
+              },
+              "dependents": 1
+            },
+            {
+              "symbol": {
+                "name": "cartTotal",
+                "kind": "function",
+                "file": "src/api/cart.ts",
+                "line": 6,
+                "area": "api",
+                "layer": "api"
+              },
+              "dependents": 1
+            },
+            {
+              "symbol": {
+                "name": "shipping",
+                "kind": "function",
+                "file": "src/api/cart.ts",
+                "line": 10,
+                "area": "api",
+                "layer": "api"
+              },
+              "dependents": 1
+            },
+            {
+              "symbol": {
+                "name": "checkout",
+                "kind": "function",
+                "file": "src/api/checkout.ts",
+                "line": 5,
+                "area": "api",
+                "layer": "api"
+              },
+              "dependents": 1
+            },
+            {
+              "symbol": {
+                "name": "formatAmount",
+                "kind": "function",
+                "file": "src/api/format.ts",
+                "line": 1,
+                "area": "api",
+                "layer": "api"
+              },
+              "dependents": 1
+            },
+            {
+              "symbol": {
+                "name": "formatDate",
+                "kind": "function",
+                "file": "src/api/format.ts",
+                "line": 5,
+                "area": "api",
+                "layer": "api"
+              },
+              "dependents": 1
+            },
+            {
+              "symbol": {
+                "name": "createOrder",
+                "kind": "function",
+                "file": "src/api/orders.ts",
+                "line": 3,
+                "area": "api",
+                "layer": "api"
+              },
+              "dependents": 1
+            }
+          ],
+          "total": 12
+        }
+      },
+      "rules": [],
+      "words": null,
+      "changes": null,
+      "former": []
+    },
+    {
+      "page": {
+        "area": "src/admin"
+      },
+      "label": "admin",
+      "state": "no-words",
+      "facts": {
+        "id": "src/admin",
+        "label": "admin",
+        "folder": "src/admin",
+        "at": "7645e40324841dedfe41b3d6f0bda4b745e6136d",
+        "layers": [
+          "admin"
+        ],
+        "files": 2,
+        "symbols": 15,
+        "dependsOn": [
+          {
+            "id": "src/api",
+            "label": "api",
+            "count": 3
+          }
+        ],
+        "dependedOnBy": [],
+        "processes": {
+          "items": [],
+          "total": 0
+        },
+        "mostDepended": {
+          "items": [],
+          "total": 0
+        }
+      },
+      "rules": [],
+      "words": null,
+      "changes": null,
+      "former": []
+    },
+    {
+      "page": {
+        "area": "src/mail"
+      },
+      "label": "mail",
+      "state": "no-words",
+      "facts": {
+        "id": "src/mail",
+        "label": "mail",
+        "folder": "src/mail",
+        "at": "7645e40324841dedfe41b3d6f0bda4b745e6136d",
+        "layers": [
+          "mail"
+        ],
+        "files": 1,
+        "symbols": 15,
+        "dependsOn": [],
+        "dependedOnBy": [],
+        "processes": {
+          "items": [],
+          "total": 0
+        },
+        "mostDepended": {
+          "items": [],
+          "total": 0
+        }
+      },
+      "rules": [],
+      "words": null,
+      "changes": null,
+      "former": []
+    },
+    {
+      "page": {
+        "area": "src/search"
+      },
+      "label": "search",
+      "state": "no-words",
+      "facts": {
+        "id": "src/search",
+        "label": "search",
+        "folder": "src/search",
+        "at": "7645e40324841dedfe41b3d6f0bda4b745e6136d",
+        "layers": [
+          "search"
+        ],
+        "files": 1,
+        "symbols": 15,
+        "dependsOn": [],
+        "dependedOnBy": [],
+        "processes": {
+          "items": [],
+          "total": 0
+        },
+        "mostDepended": {
+          "items": [],
+          "total": 0
+        }
+      },
+      "rules": [],
+      "words": null,
+      "changes": null,
+      "former": []
+    }
+  ],
+  "next": {
+    "after": 6,
+    "map": "7645e40324841dedfe41b3d6f0bda4b745e6136d"
+  },
+  "limits": {
+    "summary": 200,
+    "bodyWords": 400
+  }
+}

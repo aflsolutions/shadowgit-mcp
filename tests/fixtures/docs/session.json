@@ -1,0 +1,270 @@
+{
+  "success": true,
+  "head": "f62bdb89d909314bf5ac433a7478502a65bdc26d",
+  "mapAsOf": {
+    "snapshot": "f62bdb89d909314bf5ac433a7478502a65bdc26d",
+    "time": "2026-10-28T12:15:51+01:00",
+    "behind": 0,
+    "changedFiles": {
+      "items": [],
+      "total": 0
+    }
+  },
+  "pages": [
+    {
+      "page": {
+        "area": "src/billing"
+      },
+      "label": "billing",
+      "state": "no-words",
+      "facts": {
+        "id": "src/billing",
+        "label": "billing",
+        "folder": "src/billing",
+        "at": "f62bdb89d909314bf5ac433a7478502a65bdc26d",
+        "layers": [
+          "billing"
+        ],
+        "files": 6,
+        "symbols": 16,
+        "dependsOn": [],
+        "dependedOnBy": [
+          {
+            "id": "src/jobs",
+            "label": "jobs",
+            "count": 5
+          },
+          {
+            "id": "src/api",
+            "label": "api",
+            "count": 3
+          }
+        ],
+        "processes": {
+          "items": [
+            "StartServer -> RoundCents",
+            "StartServer -> RecordPayment",
+            "InvoiceLine -> RoundCents",
+            "RetryFailedCharges -> RoundCents",
+            "RetryFailedCharges -> RecordPayment"
+          ],
+          "total": 5
+        },
+        "mostDepended": {
+          "items": [
+            {
+              "symbol": {
+                "name": "roundCents",
+                "kind": "function",
+                "file": "src/billing/money.ts",
+                "line": 1,
+                "area": "billing",
+                "layer": "billing"
+              },
+              "dependents": 4
+            },
+            {
+              "symbol": {
+                "name": "chargeCard",
+                "kind": "function",
+                "file": "src/billing/charge.ts",
+                "line": 5,
+                "area": "billing",
+                "layer": "billing"
+              },
+              "dependents": 2
+            },
+            {
+              "symbol": {
+                "name": "recordPayment",
+                "kind": "function",
+                "file": "src/billing/ledger.ts",
+                "line": 3,
+                "area": "billing",
+                "layer": "billing"
+              },
+              "dependents": 2
+            },
+            {
+              "symbol": {
+                "name": "lateFee",
+                "kind": "function",
+                "file": "src/billing/charge.ts",
+                "line": 18,
+                "area": "billing",
+                "layer": "billing"
+              },
+              "dependents": 1
+            },
+            {
+              "symbol": {
+                "name": "discountRate",
+                "kind": "function",
+                "file": "src/billing/discount.ts",
+                "line": 7,
+                "area": "billing",
+                "layer": "billing"
+              },
+              "dependents": 1
+            },
+            {
+              "symbol": {
+                "name": "formatAmount",
+                "kind": "function",
+                "file": "src/billing/format.ts",
+                "line": 1,
+                "area": "billing",
+                "layer": "billing"
+              },
+              "dependents": 1
+            },
+            {
+              "symbol": {
+                "name": "invoiceTotal",
+                "kind": "function",
+                "file": "src/billing/invoice.ts",
+                "line": 5,
+                "area": "billing",
+                "layer": "billing"
+              },
+              "dependents": 1
+            }
+          ],
+          "total": 9
+        }
+      },
+      "rules": [],
+      "words": null,
+      "changes": null,
+      "former": []
+    },
+    {
+      "page": {
+        "area": "src/jobs"
+      },
+      "label": "jobs",
+      "state": "no-words",
+      "facts": {
+        "id": "src/jobs",
+        "label": "jobs",
+        "folder": "src/jobs",
+        "at": "f62bdb89d909314bf5ac433a7478502a65bdc26d",
+        "layers": [
+          "jobs"
+        ],
+        "files": 5,
+        "symbols": 12,
+        "dependsOn": [
+          {
+            "id": "src/billing",
+            "label": "billing",
+            "count": 5
+          }
+        ],
+        "dependedOnBy": [],
+        "processes": {
+          "items": [
+            "CleanupCarts -> MaxDelay",
+            "RetryFailedCharges -> RoundCents",
+            "RetryFailedCharges -> RecordPayment",
+            "RetryFailedCharges -> MaxDelay",
+            "NotifyOwner -> PurgeLogs",
+            "NotifyOwner -> WeeklyTotals"
+          ],
+          "total": 6
+        },
+        "mostDepended": {
+          "items": [
+            {
+              "symbol": {
+                "name": "maxDelay",
+                "kind": "function",
+                "file": "src/jobs/schedule.ts",
+                "line": 5,
+                "area": "jobs",
+                "layer": "jobs"
+              },
+              "dependents": 2
+            },
+            {
+              "symbol": {
+                "name": "cleanupSessions",
+                "kind": "function",
+                "file": "src/jobs/cleanup.ts",
+                "line": 3,
+                "area": "jobs",
+                "layer": "jobs"
+              },
+              "dependents": 1
+            },
+            {
+              "symbol": {
+                "name": "purgeLogs",
+                "kind": "function",
+                "file": "src/jobs/cleanup.ts",
+                "line": 11,
+                "area": "jobs",
+                "layer": "jobs"
+              },
+              "dependents": 1
+            },
+            {
+              "symbol": {
+                "name": "notifyNone",
+                "kind": "function",
+                "file": "src/jobs/notify.ts",
+                "line": 11,
+                "area": "jobs",
+                "layer": "jobs"
+              },
+              "dependents": 1
+            },
+            {
+              "symbol": {
+                "name": "dailyReport",
+                "kind": "function",
+                "file": "src/jobs/report.ts",
+                "line": 3,
+                "area": "jobs",
+                "layer": "jobs"
+              },
+              "dependents": 1
+            },
+            {
+              "symbol": {
+                "name": "weeklyTotals",
+                "kind": "function",
+                "file": "src/jobs/report.ts",
+                "line": 7,
+                "area": "jobs",
+                "layer": "jobs"
+              },
+              "dependents": 1
+            },
+            {
+              "symbol": {
+                "name": "backoff",
+                "kind": "function",
+                "file": "src/jobs/schedule.ts",
+                "line": 1,
+                "area": "jobs",
+                "layer": "jobs"
+              },
+              "dependents": 1
+            }
+          ],
+          "total": 8
+        }
+      },
+      "rules": [],
+      "words": null,
+      "changes": null,
+      "former": []
+    }
+  ],
+  "next": null,
+  "limits": {
+    "summary": 200,
+    "bodyWords": 400
+  }
+}

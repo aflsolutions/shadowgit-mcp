@@ -1,0 +1,85 @@
+{
+  "success": true,
+  "mapAsOf": {
+    "snapshot": "32cfc99c1f015796b0365e2f19aaa2840eebf35c",
+    "time": "2026-10-28T12:15:52+01:00",
+    "behind": 0,
+    "changedFiles": {
+      "items": [],
+      "total": 0
+    }
+  },
+  "context": {
+    "targets": [
+      {
+        "kind": "file",
+        "target": "src/billing/charge.ts",
+        "file": "src/billing/charge.ts",
+        "area": "billing",
+        "layer": "billing",
+        "symbols": {
+          "items": [
+            {
+              "name": "chargeCard",
+              "kind": "function",
+              "file": "src/billing/charge.ts",
+              "line": 5,
+              "area": "billing",
+              "layer": "billing"
+            },
+            {
+              "name": "refundCard",
+              "kind": "function",
+              "file": "src/billing/charge.ts",
+              "line": 11,
+              "area": "billing",
+              "layer": "billing"
+            },
+            {
+              "name": "lateFee",
+              "kind": "function",
+              "file": "src/billing/charge.ts",
+              "line": 18,
+              "area": "billing",
+              "layer": "billing"
+            }
+          ],
+          "total": 3
+        },
+        "imports": {
+          "items": [
+            "src/billing/ledger.ts",
+            "src/billing/money.ts"
+          ],
+          "total": 2
+        },
+        "importedBy": {
+          "items": [
+            "src/api/checkout.ts",
+            "src/jobs/retry.ts"
+          ],
+          "total": 2
+        },
+        "dependentsByArea": [
+          {
+            "area": "api",
+            "count": 1
+          },
+          {
+            "area": "jobs",
+            "count": 1
+          }
+        ]
+      }
+    ],
+    "landing": null
+  },
+  "rules": null,
+  "docs": [
+    {
+      "area": "src/billing",
+      "label": "billing",
+      "summary": "Charges and refunds cards, in cents, and records each payment in the ledger."
+    }
+  ]
+}

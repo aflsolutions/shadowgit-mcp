@@ -13,8 +13,9 @@ All notable changes to the ShadowGit MCP Server will be documented in this file.
   characters once trimmed, a body of at most 400 words, pieces with text that link a symbol or an area, not both. A
   page past them is left out with why, and the other pages are kept. One such page used to get the whole batch refused
   by the app.
-- `get_map`'s and `get_code_context`'s descriptions say what their `docs` holds: each page's summary, and for
-  `get_map` its `behind`, the changes to the area since the words (`mapAsOf`'s `behind` counts snapshots).
+- `get_map`'s description says what its `docs` holds: each page's summary, and `behind`, the changes to the area
+  since the words (`mapAsOf`'s `behind` counts snapshots). `get_code_context`'s stays as it was: every session reads
+  it before its first edit, and with a docs sentence there the docs step was followed less often.
 - Counts of one read in the singular in every tool's text: "1 file", "1 dependent", "1 step", "…and 1 more area".
 - The docs step names the Overview as the whole project's page, not as an area the session changed.
 

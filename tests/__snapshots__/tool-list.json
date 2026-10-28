@@ -3153,6 +3153,10 @@
           },
           "type": "array"
         },
+        "next": {
+          "description": "The step that follows: the docs pages the session changed",
+          "type": "string"
+        },
         "repo": {
           "type": "string"
         }

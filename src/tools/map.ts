@@ -45,7 +45,16 @@ export function drawnFrom({ snapshot, time, behind, changedFiles }: AsOf): strin
   return `${drawn}, ${behind} snapshot${behind === 1 ? '' : 's'} behind the newest. ${changed}`;
 }
 
-function describeSummary(repo: string, mapAsOf: AsOf, summary: NonNullable<Read['summary']>): string {
+/** How far behind the newest snapshot a page's words are, once counted. */
+const since = (behind: number | null) => (behind === null ? '' : behind === 0 ? ' (current)' : ` (${behind} change${behind === 1 ? '' : 's'} since its words)`);
+
+/** The page summaries, by area id: get_docs takes the id, and a split area's id isn't its folder. */
+function docsLines(docs: Read['docs']): string[] {
+  if (!docs?.length) return [];
+  return ['Docs pages (get_docs reads them):', ...docs.map(({ area, summary, behind }) => `- ${area}: ${summary}${since(behind)}`)];
+}
+
+function describeSummary(repo: string, mapAsOf: AsOf, summary: NonNullable<Read['summary']>, docs: Read['docs']): string {
   const { files, symbols, areas, calls, processes } = summary.counts;
   return [
     `${repo}'s map, ${drawnFrom(mapAsOf)}`,
@@ -53,6 +62,7 @@ function describeSummary(repo: string, mapAsOf: AsOf, summary: NonNullable<Read[
     `Layers: ${summary.layers.map((layer) => `${layer.name} (${layer.kind}, ${layer.files} files)`).join(', ')}.`,
     'Areas, largest first:',
     bullets(summary.areas, 'areas', (area) => `${area.label} (${area.path}): ${area.files} files, ${area.symbols} symbols; layers ${area.layers.join(', ')}`),
+    ...docsLines(docs),
     'Links between areas, heaviest first:',
     bullets(summary.links, 'links', (link) => `${link.from} → ${link.to}: ${link.count} calls and imports`),
     'Processes:',
@@ -134,7 +144,7 @@ export async function getMap({ area, repo }: { area?: string; repo?: string }, a
   const project = resolveRepo(repo);
   if (area === undefined) {
     const read = await readMap({ repoPath: project.path, aiTool });
-    const text = [describeSummary(project.name, read.mapAsOf, read.summary), ...readLines(read.rules, read.rulesFailure)].join('\n');
+    const text = [describeSummary(project.name, read.mapAsOf, read.summary, read.docs), ...readLines(read.rules, read.rulesFailure)].join('\n');
     return dataResult(MapOutput, text, { repo: project.name, ...read });
   }
   const read = await readArea({ repoPath: project.path, area, aiTool });
@@ -150,7 +160,9 @@ export async function getCodeContext(
   const read = await readCodeContext({ repoPath: project.path, files, symbols, aiTool });
   const hold = holdLines(read.rules, read.rulesFailure);
   const next = `${forRepo(repo === undefined ? undefined : repoArgument(project))}${read.rules?.length ? NEXT_WITH_RULES : NEXT}`;
-  const text = [describeContext(project.name, read.mapAsOf, read.context), hold.join('\n'), `Next: ${next}`].filter(Boolean).join('\n\n');
+  // What each area holding a target is for, from its docs page, before the edit
+  const pages = read.docs?.length ? ['Docs pages of their areas (get_docs reads them):', ...read.docs.map(({ area, label, summary }) => `- ${label} (area ${area}): ${summary}`)] : [];
+  const text = [describeContext(project.name, read.mapAsOf, read.context), pages.join('\n'), hold.join('\n'), `Next: ${next}`].filter(Boolean).join('\n\n');
   return dataResult(ContextOutput, text, { repo: project.name, ...read, next });
 }
 

@@ -47,6 +47,16 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
     expect(INSTRUCTIONS.indexOf(line)).toBeLessThan(INSTRUCTIONS.indexOf('start_session'));
   });
 
+  it("sends the user's questions about a part of the project to get_docs, and describes the docs tools as facts", async () => {
+    expect(INSTRUCTIONS).toContain('- The user asks what part of the project does, or to document it: get_docs (areas, or all: true for the whole project), then write_docs.');
+    const { tools } = await client.listTools();
+    for (const name of ['get_docs', 'write_docs']) {
+      const tool = tools.find((each) => each.name === name);
+      expect(`${tool?.description} ${JSON.stringify(tool?.inputSchema)}`, name).not.toMatch(JUDGING);
+    }
+    expect(INSTRUCTIONS).not.toMatch(JUDGING);
+  });
+
   // Outside a session the app's automatic snapshot takes an edit within seconds, and a checkpoint after it has nothing
   // left to check: in a project with rules, every edit goes through a session
   it('asks for a session before any edit in a project with rules, never a checkpoint alone', () => {

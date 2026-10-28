@@ -20,7 +20,7 @@ type Words = z.infer<typeof DocWords>;
 const BOTH = 'Ask for all, or name areas and the overview: not both.';
 
 /** A page as the answers name it: the Overview, or an area by its id. */
-const pageName = (key: z.infer<typeof DocKey>) => ('area' in key ? key.area : 'the Overview');
+export const pageName = (key: z.infer<typeof DocKey>) => ('area' in key ? key.area : 'the Overview');
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
 /** A paragraph as text, each link after its text as the app names it: a symbol in its file, or an area by its id. */

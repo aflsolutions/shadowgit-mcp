@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { getLens, writeLensWords } from '../src/tools/lens.js';
-import { FAKE_CITED_LENS, FAKE_FACTS_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, startFakeApp, type FakeApp } from './helpers/fake-app.js';
-import { makeProject, removeTempDirs, restoreEnv, textOf, useStorage } from './helpers/fixtures.js';
+import { DOCS_ANSWERS, FAKE_CITED_LENS, FAKE_FACTS_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { JUDGING, makeProject, removeTempDirs, restoreEnv, textOf, useStorage } from './helpers/fixtures.js';
 
 let project: string;
 let app: FakeApp;
@@ -24,7 +24,16 @@ beforeEach(() => {
   app.lensRoutes = true;
   app.lensAnswer = { range: FAKE_RANGE, lens: FAKE_LENS };
   app.wordsStatus = 200;
+  app.docsRoutes = true;
+  app.docsStatus = 200;
+  app.docsAnswer = DOCS_ANSWERS.session;
 });
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+const DOCS_STEP = 'Update the docs pages this session changed: get_docs, then write_docs (src/billing and src/jobs).';
 
 describe('get_lens', () => {
   it("reads the latest session's lens of the current project, every id with its code, and says how to word it", async () => {
@@ -143,18 +152,45 @@ describe('write_lens_words', () => {
       { ...FAKE_RANGE, summary: 'Failed payments wait for another try.', steps: [{ id: 'c1', title: 'Queue failed charges' }], components: [{ id: 'k1', role: 'Retries failed charges' }] },
       'Claude Code',
     );
-    expect(app.requests.at(-1)).toEqual({
-      path: '/lens/words',
-      body: {
-        repoPath: project,
-        ...FAKE_RANGE,
-        author: 'Claude Code',
-        words: { summary: 'Failed payments wait for another try.', steps: [{ id: 'c1', title: 'Queue failed charges' }], components: [{ id: 'k1', role: 'Retries failed charges' }] },
-      },
-    });
-    expect(result.structuredContent).toEqual({ repo: 'webshop', applied: { summary: true, steps: 1, components: 1, layers: 0, flows: 0 }, ignored: ['c99'] });
+    // The docs step is asked for alongside: the words are the one request to /lens/words
+    expect(app.requestsTo('/lens/words')).toEqual([{
+      repoPath: project,
+      ...FAKE_RANGE,
+      author: 'Claude Code',
+      words: { summary: 'Failed payments wait for another try.', steps: [{ id: 'c1', title: 'Queue failed charges' }], components: [{ id: 'k1', role: 'Retries failed charges' }] },
+    }]);
+    expect(result.structuredContent).toEqual({ repo: 'webshop', applied: { summary: true, steps: 1, components: 1, layers: 0, flows: 0 }, ignored: ['c99'], next: DOCS_STEP });
     expect(textOf(result)).toContain("ShadowGit's Lens shows your words for webshop");
     expect(textOf(result)).toContain('c99');
+  });
+
+  it('asks to update the docs pages the session changed when the app lists some', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    const result = await writeLensWords({ ...FAKE_RANGE, summary: 'Failed payments wait for another try.' }, 'Claude Code');
+    expect(app.requests.filter((request) => request.path.startsWith('/docs?')).map((request) => request.path)).toEqual([`/docs?${new URLSearchParams({ repoPath: project })}`]);
+    // The words' 58 s, and the docs' 20 s: the step is never worth a long wait
+    expect(timeout.mock.calls).toEqual(expect.arrayContaining([[20_000]]));
+    expect(result.structuredContent).toMatchObject({ next: DOCS_STEP });
+    expect(textOf(result).endsWith(` Next: ${DOCS_STEP}`)).toBe(true);
+    expect(textOf(result)).not.toMatch(JUDGING);
+    const pages = (answer: object) => (answer as { pages: object[] }).pages;
+    app.docsAnswer = { ...DOCS_ANSWERS.session, pages: [...pages(DOCS_ANSWERS.all).slice(0, 1), ...pages(DOCS_ANSWERS.session).slice(0, 1)] };
+    expect(textOf(await writeLensWords({ ...FAKE_RANGE, summary: 'A summary.' }, 'Claude Code'))).toContain('get_docs, then write_docs (the Overview and src/billing).');
+  });
+
+  it('answers as before when the app has no docs, counts past its deadline, has none to update, or answers a shape it does not read', async () => {
+    const words = { ...FAKE_RANGE, summary: 'Failed payments wait for another try.' };
+    app.docsRoutes = false;
+    const before = await writeLensWords(words, 'Claude Code');
+    expect(before.structuredContent).not.toHaveProperty('next');
+    expect(textOf(before)).toBe("ShadowGit's Lens shows your words for webshop: the summary, 1 steps, 1 roles. Left out ids the lens does not hold: c99. Read them again with get_lens.");
+    app.docsRoutes = true;
+    for (const docs of [{ status: 202 as const }, { answer: { ...DOCS_ANSWERS.session, pages: [] } }, { answer: { pages: 'none' } }]) {
+      app.docsStatus = docs.status ?? 200;
+      app.docsAnswer = docs.answer ?? DOCS_ANSWERS.session;
+      const result = await writeLensWords(words, 'Claude Code');
+      expect(result).toEqual(before);
+    }
   });
 
   it('asks for an app update when the route is missing', async () => {

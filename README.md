@@ -55,7 +55,7 @@ webshop") when ShadowGit tracks more than one.
 | `list_repos` | Lists tracked projects, the current one, their last snapshot and any active session |
 | `git_command` | Runs a read-only git command (`log`, `diff`, `show`, `blame`, …) on the snapshot history |
 | `get_map` | Gives how the project is organised: its areas, layers and the links between them, or one area, the project's rules and its docs pages' summaries |
-| `get_code_context` | Gives where files and symbols sit, what depends on them, where a change to them lands, and the project's rules for them |
+| `get_code_context` | Gives where files and symbols sit, what depends on them, where a change to them lands, the project's rules for them and their areas' docs pages' summaries |
 | `start_session` | Pauses automatic snapshots while the assistant edits |
 | `checkpoint` | Saves the current changes as one named checkpoint, following `.shadowgit-ignore`, then checks it against the project's `.shadowgit-rules` |
 | `end_session` | Resumes automatic snapshots |

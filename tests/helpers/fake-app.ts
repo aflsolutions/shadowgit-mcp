@@ -154,6 +154,8 @@ export const RULES_ANSWERS = {
  * changed after them, the map's and chargeCard's file's page summaries, and the first batch of all, after three more
  * areas (search, mail, admin) so it has a next.
  */
+/** A docs answer's pages, to vary one. */
+export const pagesOf = (answer: object) => (answer as { pages: Record<string, unknown>[] }).pages;
 export const DOCS_ANSWERS = {
   session: withoutSuccess(fixture('docs/session')),
   written: withoutSuccess(fixture('docs/written')),

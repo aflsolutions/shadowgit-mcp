@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { getDocs, writeDocs } from '../src/tools/docs.js';
 import { APP_WITHOUT_DOCS } from '../src/session-api.js';
-import { DOCS_ANSWERS, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { DOCS_ANSWERS, pagesOf, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { JUDGING, makeProject, removeTempDirs, restoreEnv, textOf, useStorage } from './helpers/fixtures.js';
 
 let project: string;
@@ -83,16 +83,74 @@ describe('get_docs', () => {
   });
 
   it('asks to write only the pages that need words: never a current page, nor one the map no longer holds', async () => {
-    const pages = (DOCS_ANSWERS.area as { pages: { state: string }[] }).pages;
+    const pages = pagesOf(DOCS_ANSWERS.area);
     app.docsAnswer = { ...DOCS_ANSWERS.area, pages: pages.map((page) => ({ ...page, state: 'current' })) };
     const current = await getDocs({ areas: ['src/billing'] });
     expect(current.structuredContent).not.toHaveProperty('next');
     expect(textOf(current)).not.toContain('Next:');
     expect(textOf(current)).toContain('Page "billing" (area src/billing): current: words written by Claude Code at f62bdb89.');
     const gone = { ...pages[0], page: { area: 'src/old' }, label: 'src/old', state: 'not-in-map', facts: null, changes: null };
-    app.docsAnswer = { ...DOCS_ANSWERS.session, pages: [...(DOCS_ANSWERS.session as { pages: object[] }).pages.slice(0, 1), gone] };
+    app.docsAnswer = { ...DOCS_ANSWERS.session, pages: [...pagesOf(DOCS_ANSWERS.session).slice(0, 1), gone] };
     const mixed = await getDocs({ areas: ['src/billing', 'src/old'] });
     expect(mixed.structuredContent).toMatchObject({ next: expect.stringMatching(/^Write the words of src\/billing with write_docs/) });
+  });
+
+  it('says an id the map never held is not an area of the map, and a page that left the map keeps its words', async () => {
+    const [billing] = pagesOf(DOCS_ANSWERS.area);
+    const unknown = { page: { area: 'billng' }, label: 'billng', state: 'not-in-map', facts: null, rules: [], words: null, changes: null };
+    const gone = { ...billing, page: { area: 'src/payments' }, label: 'src/payments', state: 'not-in-map', facts: null, changes: null };
+    app.docsAnswer = { ...DOCS_ANSWERS.area, pages: [unknown, gone] };
+    const result = await getDocs({ areas: ['billng', 'src/payments'] });
+    const text = textOf(result);
+    expect(text).toContain('Page "billng" (area billng): not an area of the map.');
+    expect(text).toContain('Page "src/payments" (area src/payments): no longer in the map; words written by Claude Code at f62bdb89.');
+    expect(result.structuredContent).not.toHaveProperty('next');
+  });
+
+  it("says why the changes since a page's words weren't counted, and passes on a state a newer app adds", async () => {
+    const [billing] = pagesOf(DOCS_ANSWERS.area);
+    app.docsAnswer = {
+      ...DOCS_ANSWERS.area,
+      pages: [
+        { ...billing, state: 'not-counted', changes: null, countFailure: 'This range is too large to draw' },
+        { ...billing, page: { area: 'src/jobs' }, label: 'jobs', state: 'drafted', changes: null },
+        { ...billing, page: { area: 'src/api' }, label: 'api', state: 'drafted', words: null, changes: null },
+      ],
+    };
+    const text = textOf(await getDocs({ areas: ['src/billing', 'src/jobs', 'src/api'] }));
+    expect(text).toContain('Page "billing" (area src/billing): words written by Claude Code at f62bdb89; the changes since them could not be counted: This range is too large to draw.');
+    expect(text).toContain('Page "jobs" (area src/jobs): drafted: words written by Claude Code at f62bdb89.');
+    expect(text).toContain('Page "api" (area src/api): drafted.');
+  });
+
+  it('offers the words of a page that left the map to the area that took its files', async () => {
+    const [billing] = pagesOf(DOCS_ANSWERS.area);
+    const words = { summary: 'Charges cards.', body: [[{ text: 'Through ' }, { text: 'chargeCard', symbol: { file: 'src/payments/charge.ts', name: 'chargeCard' } }, { text: '.' }]] };
+    app.docsAnswer = { ...DOCS_ANSWERS.area, pages: [{ ...billing, former: [{ area: 'src/payments', words }] }] };
+    const text = textOf(await getDocs({ areas: ['src/billing'] }));
+    expect(text).toContain(
+      ['  Former page of area src/payments, whose files this area now holds:', '    Summary: Charges cards.', '    Through [chargeCard](chargeCard in src/payments/charge.ts).'].join('\n'),
+    );
+  });
+
+  it("lists the areas and layers the Overview's project gained and lost since its words", async () => {
+    const [billing = {}] = pagesOf(DOCS_ANSWERS.area);
+    const [overview] = pagesOf(DOCS_ANSWERS.all);
+    const changes = { count: 3, symbols: { items: [], total: 0 }, dependencies: [], goneLinks: [], areas: { added: ['src/ledger'], removed: ['src/legacy'] }, layers: { added: ['ledger'], removed: [] } };
+    app.docsAnswer = { ...DOCS_ANSWERS.area, pages: [{ ...overview, state: 'behind', words: billing.words, changes }] };
+    const text = textOf(await getDocs({ overview: true }));
+    expect(text).toContain('  Areas added: src/ledger; removed: src/legacy.');
+    expect(text).toContain('  Layers added: ledger; removed: none.');
+  });
+
+  it('counts one file, one symbol and one dependent in the singular', async () => {
+    const [billing = {}] = pagesOf(DOCS_ANSWERS.area);
+    const facts = billing.facts as { mostDepended: { items: { dependents: number }[] } };
+    const [first] = facts.mostDepended.items;
+    app.docsAnswer = { ...DOCS_ANSWERS.area, pages: [{ ...billing, facts: { ...facts, files: 1, symbols: 1, mostDepended: { items: [{ ...first, dependents: 1 }], total: 1 } } }] };
+    const text = textOf(await getDocs({ areas: ['src/billing'] }));
+    expect(text).toContain('folder src/billing; 1 file, 1 symbol;');
+    expect(text).toContain('roundCents (src/billing/money.ts:1): 1 dependent.');
   });
 
   it("names the project in its steps when it is not the current one, so the next batch and the words go to it", async () => {
@@ -165,6 +223,37 @@ describe('write_docs', () => {
   ])("refuses a page it can't send, sending nothing (%o)", async (page, message) => {
     await expect(writeDocs({ head: HEAD, pages: [page] }, 'Claude Code')).rejects.toThrow(message);
     expect(app.requests).toEqual([]);
+  });
+
+  it("leaves out a page past the app's rules for words, with why, and sends the others", async () => {
+    const words = (count: number) => Array.from({ length: count }, (_, i) => `word${i}`).join(' ');
+    const result = await writeDocs(
+      {
+        head: HEAD,
+        pages: [
+          { area: 'src/billing', summary: 'x'.repeat(201), body: ['Charges cards.'] },
+          { area: 'src/api', summary: 'Routes requests.', body: [[{ ...link, area: 'src/api' }]] },
+          { area: 'src/jobs', summary: 'Retries charges.', body: [[], ''] },
+          // A paragraph ends its last word; pieces join without a space, as the app reads them
+          { area: 'src/admin', summary: 'Admin tools.', body: [words(200), [{ text: words(199) }, { text: ' ' }, { text: 'last', area: 'src/jobs' }], 'over'] },
+          { overview: true, summary: '  A small webshop.  ', body: [words(200), [{ text: words(199) }, { text: ' ' }, { text: 'last', area: 'src/jobs' }]] },
+        ],
+      },
+      'Claude Code',
+    );
+    const [sent] = app.requestsTo('/docs') as { pages: object[] }[];
+    expect(sent?.pages).toEqual([{ overview: true, words: { summary: 'A small webshop.', body: [[{ text: words(200) }], [{ text: words(199) }, { text: ' ' }, { text: 'last', area: 'src/jobs' }]] } }]);
+    expect(textOf(result)).toBe(
+      'ShadowGit keeps your words for the Overview, at snapshot f62bdb89. Left out: src/billing: summary: at most 200 characters; src/api: body.0.0: links a symbol or an area, not both; src/jobs: body.0: a paragraph has pieces; body.1.0.text: a piece has text; src/admin: the body has 401 words: write at most 400.',
+    );
+    expect(result.structuredContent).toMatchObject({ pages: [{ page: { overview: true }, kept: true }, { page: { area: 'src/billing' }, kept: false }, {}, {}, {}] });
+    expect(textOf(result)).not.toMatch(JUDGING);
+  });
+
+  it('sends nothing when every page is left out', async () => {
+    const result = await writeDocs({ head: HEAD, pages: [{ area: 'src/billing', summary: '   ', body: ['Charges cards.'] }] }, 'Claude Code');
+    expect(app.requests).toEqual([]);
+    expect(textOf(result)).toBe('ShadowGit kept no words. Left out: src/billing: summary: one sentence, not empty.');
   });
 
   it('both tools say an app without docs needs updating', async () => {

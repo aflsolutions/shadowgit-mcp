@@ -4,7 +4,7 @@ Page "billing" (area src/billing): 1 change since its words, written by Claude C
   Facts: folder src/billing; 6 files, 16 symbols; layers billing.
   Depends on: none. Depended on by: jobs (5), api (3).
   Processes: StartServer -> RoundCents, StartServer -> RecordPayment, InvoiceLine -> RoundCents, RetryFailedCharges -> RoundCents, RetryFailedCharges -> RecordPayment.
-  Most depended on: roundCents (src/billing/money.ts:1): 4 dependents; chargeCard (src/billing/charge.ts:5): 2 dependents; recordPayment (src/billing/ledger.ts:3): 2 dependents; lateFee (src/billing/charge.ts:18): 1 dependents; discountRate (src/billing/discount.ts:7): 1 dependents; formatAmount (src/billing/format.ts:1): 1 dependents; invoiceTotal (src/billing/invoice.ts:5): 1 dependents …and 2 more.
+  Most depended on: roundCents (src/billing/money.ts:1): 4 dependents; chargeCard (src/billing/charge.ts:5): 2 dependents; recordPayment (src/billing/ledger.ts:3): 2 dependents; lateFee (src/billing/charge.ts:18): 1 dependent; discountRate (src/billing/discount.ts:7): 1 dependent; formatAmount (src/billing/format.ts:1): 1 dependent; invoiceTotal (src/billing/invoice.ts:5): 1 dependent …and 2 more.
   Its words:
     Summary: Charges and refunds cards, in cents, and records each payment in the ledger.
     [chargeCard](chargeCard in src/billing/charge.ts) rounds an amount to cents and records the payment; [lateFee](lateFee in src/billing/charge.ts) adds 5% to an amount that was charged late.

@@ -204,14 +204,14 @@ export async function createCheckpoint(input: {
 }
 
 /** The lens of a range for the agent to word: the latest AI session's without a head. The app may draw it inside the request. */
-export async function readLens(input: { repoPath: string; base?: string | null; head?: string }): Promise<z.infer<typeof LensRead>> {
+export async function readLens(input: { repoPath: string; base?: string | null; head?: string; timeoutMs?: number }): Promise<z.infer<typeof LensRead>> {
   // An empty base is the empty tree: a range from the start of the history
   const query = new URLSearchParams({ repoPath: input.repoPath });
   if (input.head !== undefined) {
     query.set('base', input.base ?? '');
     query.set('head', input.head);
   }
-  const { status, json } = await request(`/lens?${query}`, undefined, { timeoutMs: SLOW_REQUEST_TIMEOUT_MS, accept: [404] });
+  const { status, json } = await request(`/lens?${query}`, undefined, { timeoutMs: input.timeoutMs ?? SLOW_REQUEST_TIMEOUT_MS, accept: [404] });
   if (status === 404) throw new Error(APP_WITHOUT_LENS);
   return read(LensRead, json, 'lens');
 }

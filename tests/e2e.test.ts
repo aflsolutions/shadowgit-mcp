@@ -96,7 +96,17 @@ describe.each(ERAS)('protocol $era', ({ era, mode }) => {
       expect(seen(name), name).toContain('test files are not counted');
       expect(seen(name), name).toContain('a floor');
       expect(seen(name), name).toContain('Edits not yet in a snapshot are not on the map');
+      // The answer's docs: a page's summary, and get_docs to read the page
+      expect(seen(name), name).toContain('docs page summary');
+      expect(seen(name), name).toContain('get_docs reads the page');
     }
+    // Its behind counts changes since the words, where mapAsOf's counts snapshots
+    expect(seen('get_map')).toContain("behind: the changes to the area since its words, null until counted (mapAsOf's behind counts snapshots)");
+  });
+
+  it('describes every tool as facts', async () => {
+    const { tools } = await client.listTools();
+    for (const tool of tools) expect(tool.description, tool.name).not.toMatch(JUDGING);
   });
 
   // Claude Code shows the model structured content alone: what to do with the rules is in the descriptions

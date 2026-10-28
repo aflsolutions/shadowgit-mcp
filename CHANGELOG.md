@@ -2,6 +2,22 @@
 
 All notable changes to the ShadowGit MCP Server will be documented in this file.
 
+## [2.6.1] - 2026-10-28
+
+### Changed
+- `write_lens_words` names the docs pages to write only when its words are for the latest AI session's range, the
+  range those pages come from. Words for another range answer as before, with no docs step.
+- An area id the map never held, such as a typo, reads "not an area of the map", where it read "no longer in the
+  map". A page that left the map still reads as before, with its words.
+- `write_docs` checks each page against the app's rules for words before it sends: a summary of 1 to 200
+  characters once trimmed, a body of at most 400 words, pieces with text that link a symbol or an area, not both. A
+  page past them is left out with why, and the other pages are kept. One such page used to get the whole batch refused
+  by the app.
+- `get_map`'s and `get_code_context`'s descriptions say what their `docs` holds: each page's summary, and for
+  `get_map` its `behind`, the changes to the area since the words (`mapAsOf`'s `behind` counts snapshots).
+- Counts of one read in the singular in every tool's text: "1 file", "1 dependent", "1 step", "…and 1 more area".
+- The docs step names the Overview as the whole project's page, not as an area the session changed.
+
 ## [2.6.0] - 2026-10-28
 
 ### Added

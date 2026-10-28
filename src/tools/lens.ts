@@ -4,9 +4,8 @@ import { clientName } from '../client-name.js';
 import { resolveRepo, type Repo } from '../repos.js';
 import { LensLines, LensRead, readDocs, readLens, sendLensWords, WordsWritten, type LensWords } from '../session-api.js';
 import { pageName } from './docs.js';
-import { andList } from './map.js';
 import { passing, quote, rangeLines, snapshots } from './rules.js';
-import { dataResult, forProject, repoParam, Snapshot } from './shared.js';
+import { andList, dataResult, forProject, plural, repoParam, Snapshot } from './shared.js';
 
 const LensOutput = z.object({ repo: z.string(), ...LensRead.shape });
 const WordsOutput = z.object({ repo: z.string(), ...WordsWritten.shape, next: z.string().optional().describe('The step that follows: the docs pages the session changed') });
@@ -89,19 +88,35 @@ export async function getLens({ base, head, repo }: { base?: string | null; head
   return dataResult(LensOutput, describeLens(project.name, read.lens, read), data);
 }
 
+/** Whether a range the agent names, by full or short hashes, is `range`. */
+const isRange = (range: Read['range'], base: string | null, head: string) =>
+  range.head.startsWith(head) && (base === null ? range.base === null : range.base?.startsWith(base) === true);
+
 /**
- * The step after the Lens's words: the docs pages the latest AI session changed whose words are missing or behind.
- * None when the app has no docs, counts past the wait, has no page to update, or answers in a shape this version
+ * The docs pages the latest AI session changed whose words are missing or behind, when the words are for its range:
+ * the app reads the latest session's pages, which another range's change doesn't touch. The range is read first, so
+ * another range's words never set the app counting.
+ */
+async function sessionPages(project: Repo, base: string | null, head: string) {
+  // One wait for both reads; get_lens drew the session's lens just now, so the first is read from the app's cache
+  const deadline = Date.now() + DOCS_PROBE_MS;
+  const session = await readLens({ repoPath: project.path, timeoutMs: DOCS_PROBE_MS });
+  const left = deadline - Date.now();
+  if (!isRange(session.range, base, head) || left <= 0) return [];
+  return (await readDocs({ repoPath: project.path, timeoutMs: left })).pages;
+}
+
+/**
+ * The step after the Lens's words: the docs pages the session changed that need words. None when the words are for
+ * another range, the app has no docs, counts past the wait, has no page to update, or answers in a shape this version
  * doesn't read: the words are kept either way, and get_docs still says why when the agent asks.
  */
-async function docsStep(project: Repo, repo: string | undefined): Promise<string | undefined> {
-  const pages = await readDocs({ repoPath: project.path, timeoutMs: DOCS_PROBE_MS }).then(
-    (read) => read.pages,
-    () => [],
-  );
+async function docsStep(project: Repo, repo: string | undefined, base: string | null, head: string): Promise<string | undefined> {
+  const pages = await sessionPages(project, base, head).catch(() => []);
   if (pages.length === 0) return undefined;
   const names = andList(pages.map(({ page }) => pageName(page)));
-  return `${forProject(repo, project)}The session's last step: the docs pages of the areas it changed, ${names}, need words, so the pages the user reads in ShadowGit describe the code as it is now. A page with no words can start short, from its facts and the code you read. get_docs, then write_docs.`;
+  const of = pages.some(({ page }) => 'overview' in page) ? 'of the areas it changed and of the whole project' : 'of the areas it changed';
+  return `${forProject(repo, project)}The session's last step: the docs pages ${of}, ${names}, need words, so the pages the user reads in ShadowGit describe the code as it is now. A page with no words can start short, from its facts and the code you read. get_docs, then write_docs.`;
 }
 
 export async function writeLensWords(
@@ -109,8 +124,8 @@ export async function writeLensWords(
   author: string,
 ): Promise<CallToolResult> {
   const project = resolveRepo(repo);
-  const [{ applied, ignored }, next] = await Promise.all([sendLensWords({ repoPath: project.path, base, head, author, words }), docsStep(project, repo)]);
-  const counts = [applied.summary && 'the summary', applied.steps && `${applied.steps} steps`, applied.components && `${applied.components} roles`, applied.layers && `${applied.layers} layers`, applied.flows && `${applied.flows} flows`].filter(Boolean);
+  const [{ applied, ignored }, next] = await Promise.all([sendLensWords({ repoPath: project.path, base, head, author, words }), docsStep(project, repo, base, head)]);
+  const counts = [applied.summary && 'the summary', applied.steps && plural(applied.steps, 'step'), applied.components && plural(applied.components, 'role'), applied.layers && plural(applied.layers, 'layer'), applied.flows && plural(applied.flows, 'flow')].filter(Boolean);
   const text = [
     `ShadowGit's Lens shows your words for ${project.name}: ${counts.join(', ') || 'nothing new'}.`,
     ...(ignored.length > 0 ? [`Left out ids the lens does not hold: ${ignored.join(', ')}. Read them again with get_lens.`] : []),

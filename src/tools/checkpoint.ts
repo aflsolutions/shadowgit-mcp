@@ -5,7 +5,7 @@ import { resolveRepo } from '../repos.js';
 import { CheckpointRules } from '../rule-shapes.js';
 import { createCheckpoint } from '../session-api.js';
 import { checkpointLines } from './rules.js';
-import { dataResult, repoParam } from './shared.js';
+import { dataResult, plural, repoParam } from './shared.js';
 
 const Output = z.object({
   commit: z.string().nullable(),
@@ -23,7 +23,7 @@ export async function checkpoint(
   const result = await createCheckpoint({ repoPath: project.path, title, message, author });
   const data = { commit: result.commit, title, files_changed: result.filesChanged, repo: project.name, ...(result.rules && { rules: result.rules }) };
   if (!result.commit) return dataResult(Output, ['No changes since the last snapshot; nothing to checkpoint.', ...checkpointLines(result.rules)].join('\n'), data);
-  const saved = `Saved checkpoint ${result.commit.slice(0, 8)} "${title}" on ${project.name} (${result.filesChanged} files).`;
+  const saved = `Saved checkpoint ${result.commit.slice(0, 8)} "${title}" on ${project.name} (${plural(result.filesChanged, 'file')}).`;
   return dataResult(Output, [saved, ...checkpointLines(result.rules)].join('\n'), data);
 }
 

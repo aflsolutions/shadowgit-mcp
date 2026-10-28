@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { getLens, writeLensWords } from '../src/tools/lens.js';
-import { DOCS_ANSWERS, FAKE_CITED_LENS, FAKE_FACTS_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, startFakeApp, type FakeApp } from './helpers/fake-app.js';
+import { DOCS_ANSWERS, pagesOf, FAKE_CITED_LENS, FAKE_FACTS_LENS, FAKE_LENS, FAKE_LIMITS, FAKE_RANGE, startFakeApp, type FakeApp } from './helpers/fake-app.js';
 import { JUDGING, makeProject, removeTempDirs, restoreEnv, textOf, useStorage } from './helpers/fixtures.js';
 
 let project: string;
@@ -173,9 +173,29 @@ describe('write_lens_words', () => {
     expect(result.structuredContent).toMatchObject({ next: DOCS_STEP });
     expect(textOf(result).endsWith(` Next: ${DOCS_STEP}`)).toBe(true);
     expect(textOf(result)).not.toMatch(JUDGING);
-    const pages = (answer: object) => (answer as { pages: object[] }).pages;
-    app.docsAnswer = { ...DOCS_ANSWERS.session, pages: [...pages(DOCS_ANSWERS.all).slice(0, 1), ...pages(DOCS_ANSWERS.session).slice(0, 1)] };
-    expect(textOf(await writeLensWords({ ...FAKE_RANGE, summary: 'A summary.' }, 'Claude Code'))).toContain('the docs pages of the areas it changed, the Overview and src/billing, need words');
+    app.docsAnswer = { ...DOCS_ANSWERS.session, pages: [...pagesOf(DOCS_ANSWERS.all).slice(0, 1), ...pagesOf(DOCS_ANSWERS.session).slice(0, 1)] };
+    // The Overview is the whole project's page, not an area's
+    expect(textOf(await writeLensWords({ ...FAKE_RANGE, summary: 'A summary.' }, 'Claude Code'))).toContain(
+      "The session's last step: the docs pages of the areas it changed and of the whole project, the Overview and src/billing, need words",
+    );
+  });
+
+  it("asks for the latest AI session's pages only when the words are for its range", async () => {
+    const docsAsked = () => app.requests.filter((request) => request.path.startsWith('/docs?'));
+    // The session's range, as get_lens without a range answers it: short hashes name it too
+    const short = await writeLensWords({ base: FAKE_RANGE.base.slice(0, 7), head: FAKE_RANGE.head.slice(0, 7), summary: 'A summary.' }, 'Claude Code');
+    expect(short.structuredContent).toMatchObject({ next: DOCS_STEP });
+    expect(app.requests.filter((request) => request.path.startsWith('/lens?')).map((request) => request.path)).toEqual([`/lens?${new URLSearchParams({ repoPath: project })}`]);
+    app.requests.length = 0;
+    // Another range's words: the latest session's pages are not this change's
+    const other = await writeLensWords({ base: 'a'.repeat(40), head: FAKE_RANGE.head, summary: 'A summary.' }, 'Claude Code');
+    expect(other.structuredContent).not.toHaveProperty('next');
+    expect(docsAsked()).toEqual([]);
+    // A session from the start of the history
+    app.lensAnswer = { range: { base: null, head: FAKE_RANGE.head }, lens: FAKE_LENS };
+    const first = await writeLensWords({ base: null, head: FAKE_RANGE.head, summary: 'A summary.' }, 'Claude Code');
+    expect(first.structuredContent).toMatchObject({ next: DOCS_STEP });
+    expect((await writeLensWords({ ...FAKE_RANGE, summary: 'A summary.' }, 'Claude Code')).structuredContent).not.toHaveProperty('next');
   });
 
   it('answers as before when the app has no docs, counts past its deadline, has none to update, or answers a shape it does not read', async () => {
@@ -183,7 +203,7 @@ describe('write_lens_words', () => {
     app.docsRoutes = false;
     const before = await writeLensWords(words, 'Claude Code');
     expect(before.structuredContent).not.toHaveProperty('next');
-    expect(textOf(before)).toBe("ShadowGit's Lens shows your words for webshop: the summary, 1 steps, 1 roles. Left out ids the lens does not hold: c99. Read them again with get_lens.");
+    expect(textOf(before)).toBe("ShadowGit's Lens shows your words for webshop: the summary, 1 step, 1 role. Left out ids the lens does not hold: c99. Read them again with get_lens.");
     app.docsRoutes = true;
     for (const docs of [{ status: 202 as const }, { answer: { ...DOCS_ANSWERS.session, pages: [] } }, { answer: { pages: 'none' } }]) {
       app.docsStatus = docs.status ?? 200;

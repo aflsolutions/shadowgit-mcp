@@ -1,5 +1,6 @@
 import type * as z from 'zod/v4';
 import type { CheckpointRules, Range, Rule, RuleCheck, RulesFor, RulesRead } from '../rule-shapes.js';
+import { plural } from './shared.js';
 
 // The project's rules as the tools' text says them: a rule "names" a link, quoted as its authors wrote it. Whether a
 // link is wanted is the rule's to say, never these words'. Every text from the project (a rule, its reason, a link's
@@ -44,7 +45,7 @@ function checkLines(check: Check, range?: z.infer<typeof Range>): string[] {
   return [
     `The project's rules (.shadowgit-rules): ${check.rules} checked${range === undefined ? '' : `, over snapshots ${snapshots(range)}`}.`,
     ...check.matches.flatMap(({ rule, count, links, steps }) => [
-      `- ${ruleLine(rule)}: names ${count} link${count === 1 ? '' : 's'} this range adds${steps.length > 0 ? ` (steps ${steps.join(', ')})` : ''}`,
+      `- ${ruleLine(rule)}: names ${plural(count, 'link')} this range adds${steps.length > 0 ? ` (steps ${steps.join(', ')})` : ''}`,
       ...links.map((link) => `  ${quote(link)}`),
       ...(count > links.length ? [`  and ${count - links.length} more`] : []),
     ]),

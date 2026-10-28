@@ -4,9 +4,9 @@ import { clientName } from '../client-name.js';
 import { DocPiece, DocsCursor, DocsRead, DocsWritten, type DocKey, type DocWords } from '../doc-shapes.js';
 import { resolveRepo } from '../repos.js';
 import { readDocs, sendDocs, type AppDocWrite } from '../session-api.js';
-import { andList, drawnFrom, list, plural } from './map.js';
+import { drawnFrom } from './map.js';
 import { quote } from './rules.js';
-import { dataResult, forProject, repoParam, Snapshot } from './shared.js';
+import { andList, dataResult, forProject, list, plural, repoParam, Snapshot } from './shared.js';
 
 // The app's cursor for all is more here: next is the step that follows, in every tool's answer, and the model reads
 // the structured answer alone
@@ -32,8 +32,8 @@ export const pageName = (key: z.infer<typeof DocKey>) => ('area' in key ? key.ar
 const paragraph = (pieces: readonly z.infer<typeof DocPiece>[]) =>
   pieces.map(({ text, symbol, area }) => (symbol ? `[${text}](${symbol.name} in ${symbol.file})` : area !== undefined ? `[${text}](area ${area})` : text)).join('');
 
-function wordsLines(words: Words, indent = '  '): string[] {
-  return [`${indent}Summary: ${words.summary}`, ...words.body.map((pieces) => `${indent}${paragraph(pieces)}`)];
+function wordsLines(words: Words): string[] {
+  return [`    Summary: ${words.summary}`, ...words.body.map((pieces) => `    ${paragraph(pieces)}`)];
 }
 
 function stateLine({ state, words, changes, countFailure }: Page): string {
@@ -46,7 +46,8 @@ function stateLine({ state, words, changes, countFailure }: Page): string {
     case 'behind':
       return `${plural(changes?.count ?? 0, 'change')} since its words, ${by}`;
     case 'not-in-map':
-      return `no longer in the map${by && `; words ${by}`}`;
+      // The app answers an id its map never held as a page without words: a page that left the map keeps its own
+      return words === null ? 'not an area of the map' : `no longer in the map; words ${by}`;
     case 'not-counted':
       return `words ${by}; the changes since them could not be counted${countFailure === undefined ? '' : `: ${countFailure}`}`;
     default:
@@ -59,19 +60,19 @@ function factLines(facts: Facts): string[] {
   const links = (each: readonly { label: string; count: number }[]) => (each.length === 0 ? 'none' : each.map(({ label, count }) => `${label} (${count})`).join(', '));
   if ('folder' in facts) {
     return [
-      `  Facts: folder ${facts.folder}; ${facts.files} files, ${facts.symbols} symbols; layers ${facts.layers.join(', ') || 'none'}.`,
+      `  Facts: folder ${facts.folder}; ${plural(facts.files, 'file')}, ${plural(facts.symbols, 'symbol')}; layers ${facts.layers.join(', ') || 'none'}.`,
       `  Depends on: ${links(facts.dependsOn)}. Depended on by: ${links(facts.dependedOnBy)}.`,
       ...(facts.processes.total > 0 ? [`  Processes: ${list(facts.processes, (process) => process)}.`] : []),
       ...(facts.mostDepended.total > 0
-        ? [`  Most depended on: ${list(facts.mostDepended, ({ symbol, dependents }) => `${symbol.name} (${symbol.file}:${symbol.line}): ${dependents} dependents`, '; ')}.`]
+        ? [`  Most depended on: ${list(facts.mostDepended, ({ symbol, dependents }) => `${symbol.name} (${symbol.file}:${symbol.line}): ${plural(dependents, 'dependent')}`, '; ')}.`]
         : []),
     ];
   }
   const { files, symbols, areas, calls, processes } = facts.counts;
   return [
-    `  Facts: ${files} files, ${symbols} symbols, ${areas} areas, ${calls} calls, ${processes} processes.`,
-    `  Layers: ${facts.layers.map((layer) => `${layer.name} (${layer.kind}, ${layer.files} files)`).join(', ')}.`,
-    `  Areas: ${list(facts.areas, (area) => `${area.label} (area ${area.id}): ${area.files} files, ${area.symbols} symbols`, '; ')}.`,
+    `  Facts: ${plural(files, 'file')}, ${plural(symbols, 'symbol')}, ${plural(areas, 'area')}, ${plural(calls, 'call')}, ${plural(processes, 'process')}.`,
+    `  Layers: ${facts.layers.map((layer) => `${layer.name} (${layer.kind}, ${plural(layer.files, 'file')})`).join(', ')}.`,
+    `  Areas: ${list(facts.areas, (area) => `${area.label} (area ${area.id}): ${plural(area.files, 'file')}, ${plural(area.symbols, 'symbol')}`, '; ')}.`,
     ...(facts.links.total > 0 ? [`  Links between areas: ${list(facts.links, ({ from, to, count }) => `${from.label} → ${to.label} (${count})`)}.`] : []),
     ...(facts.processes.total > 0 ? [`  Processes: ${list(facts.processes, ({ label, areas: through }) => `${label} (${through.join(' → ')})`, '; ')}.`] : []),
   ];
@@ -81,7 +82,7 @@ function changeLines(changes: NonNullable<Page['changes']>): string[] {
   const moved = (what: string, { added, removed }: { added: string[]; removed: string[] }) =>
     added.length + removed.length === 0 ? [] : [`  ${what} added: ${added.join(', ') || 'none'}; removed: ${removed.join(', ') || 'none'}.`];
   return [
-    ...(changes.symbols.total > 0 ? ['  Symbols changed since the words:', list(changes.symbols, ({ name, path, change }) => `  - ${name} (${path}): ${change}`, '\n', 'symbols')] : []),
+    ...(changes.symbols.total > 0 ? ['  Symbols changed since the words:', list(changes.symbols, ({ name, path, change }) => `  - ${name} (${path}): ${change}`, '\n', 'symbol')] : []),
     ...changes.dependencies.map((sentence) => `  Dependency: ${sentence}`),
     ...(changes.goneLinks.length > 0 ? [`  Links of the words that name nothing now: ${changes.goneLinks.join('; ')}.`] : []),
     ...(changes.areas ? moved('Areas', changes.areas) : []),
@@ -95,9 +96,9 @@ function pageLines(page: Page): string[] {
     `Page ${quote(page.label)} (${name}): ${stateLine(page)}.`,
     ...(page.facts === null ? [] : factLines(page.facts)),
     ...(page.rules.length > 0 ? [`  The project's rules naming it: ${page.rules.map(quote).join(', ')}`] : []),
-    ...(page.words === null ? [] : ['  Its words:', ...wordsLines(page.words.words, '    ')]),
+    ...(page.words === null ? [] : ['  Its words:', ...wordsLines(page.words.words)]),
     ...(page.changes === null ? [] : changeLines(page.changes)),
-    ...(page.former ?? []).flatMap((former) => [`  Former page of area ${former.area}, whose files this area now holds:`, ...wordsLines(former.words, '    ')]),
+    ...(page.former ?? []).flatMap((former) => [`  Former page of area ${former.area}, whose files this area now holds:`, ...wordsLines(former.words)]),
   ];
 }
 
@@ -150,6 +151,10 @@ export async function getDocs({
   return dataResult(DocsOutput, describeDocs(project.name, read, batch, step), { repo: project.name, ...rest, more: cursor, ...(step !== undefined && { next: step }) });
 }
 
+// code-graph's DOC_LIMITS, which get_docs answers as limits
+const SUMMARY_MAX = 200;
+const BODY_WORDS_MAX = 400;
+
 /** A page as write_docs takes it: flat, for a model to fill. */
 const PageInput = z.object({
   area: z.string().min(1).optional().describe("The area's id, as get_docs names it"),
@@ -162,8 +167,32 @@ const PageInput = z.object({
     .describe('Short paragraphs on how it works: each plain text, or pieces, a piece linking a symbol (file and name) or an area (id) where its text names it'),
 });
 
-/** A page as the app takes it, or why it can't be sent. */
-function appPage({ area, overview, holds, summary, body }: z.infer<typeof PageInput>, place: number): AppDocWrite {
+/** The app's rules for a page's words (code-graph's DocWordsSchema), checked a page at a time: one page past them never costs the others. */
+const AppWords = z.object({
+  summary: z.string().trim().min(1, 'one sentence, not empty').max(SUMMARY_MAX, `at most ${SUMMARY_MAX} characters`),
+  body: z.array(
+    z
+      .array(
+        z
+          .object({
+            text: z.string().min(1, 'a piece has text'),
+            symbol: z.object({ file: z.string().min(1, 'a symbol names its file'), name: z.string().min(1, 'a symbol has a name') }).optional(),
+            area: z.string().min(1, "an area's id").optional(),
+          })
+          .refine((piece) => piece.symbol === undefined || piece.area === undefined, 'links a symbol or an area, not both'),
+      )
+      .min(1, 'a paragraph has pieces'),
+  ),
+});
+
+/** A body's words as the app counts them: a paragraph's pieces read as one text, and a paragraph ends its last word. */
+const bodyWords = (body: readonly (readonly { text: string }[])[]) =>
+  body.map((pieces) => pieces.map((piece) => piece.text).join('')).join(' ').split(/\s+/).filter(Boolean).length;
+
+type Left = { page: z.infer<typeof DocKey>; kept: false; reason: string };
+
+/** A page as the app takes it, or left out with why when its words are past the app's rules; throws for a page no app could read. */
+function appPage({ area, overview, holds, summary, body }: z.infer<typeof PageInput>, place: number): AppDocWrite | Left {
   const page = `Page ${place + 1}`;
   if (area !== undefined && overview) throw new Error(`${page} names an area and the overview: name one.`);
   const key = overview ? { overview: true as const } : area !== undefined ? { area } : null;
@@ -176,13 +205,19 @@ function appPage({ area, overview, holds, summary, body }: z.infer<typeof PageIn
     throw new Error(`${page} sends neither words (a summary and a body) nor holds: send words, or holds: true where its words still hold.`);
   }
   // A plain paragraph is one piece of text
-  return { ...key, words: { summary, body: body.map((pieces) => (typeof pieces === 'string' ? [{ text: pieces }] : pieces)) } };
+  const words = AppWords.safeParse({ summary, body: body.map((pieces) => (typeof pieces === 'string' ? [{ text: pieces }] : pieces)) });
+  if (!words.success) return { page: key, kept: false, reason: words.error.issues.map(({ path, message }) => `${path.join('.')}: ${message}`).join('; ') };
+  const count = bodyWords(words.data.body);
+  if (count > BODY_WORDS_MAX) return { page: key, kept: false, reason: `the body has ${count} words: write at most ${BODY_WORDS_MAX}` };
+  return { ...key, words: words.data };
 }
 
 export async function writeDocs({ head, pages, repo }: { head: string; pages: z.infer<typeof PageInput>[]; repo?: string }, author: string): Promise<CallToolResult> {
-  const sent = pages.map(appPage);
+  const checked = pages.map(appPage);
+  const sent = checked.filter((page): page is AppDocWrite => !('kept' in page));
   const project = resolveRepo(repo);
-  const written = await sendDocs({ repoPath: project.path, head, author, pages: sent });
+  const answered = sent.length === 0 ? { head, pages: [] } : await sendDocs({ repoPath: project.path, head, author, pages: sent });
+  const written = { head: answered.head, pages: [...answered.pages, ...checked.filter((page): page is Left => 'kept' in page)] };
   const at = written.head.slice(0, 8);
   const kept = written.pages.filter((page) => page.kept);
   const left = written.pages.filter((page) => !page.kept);
@@ -218,7 +253,7 @@ export function registerDocs(server: McpServer): void {
     {
       title: 'Write docs pages',
       description:
-        "Write the words of docs pages get_docs read, at the head it answered. For each page, an area by its id or overview: true, then a summary, one sentence on what it is for (at most 200 characters), and a body, short paragraphs on how it works (at most 400 words), each paragraph text or pieces, a piece linking a symbol (its file and name, as get_docs and get_code_context name them) or an area by its id, where the text names it. Or holds: true, when the words still hold after the changes get_docs listed: they are kept again at head, unchanged. Describe what the code does and how it works, from the code you read and the facts get_docs gave: a page with no words can start short, and later sessions add to it. Links that name nothing at head are made plain text and named back. ShadowGit keeps every version in its own history, never in the project's files.",
+        `Write the words of docs pages get_docs read, at the head it answered. For each page, an area by its id or overview: true, then a summary, one sentence on what it is for (at most ${SUMMARY_MAX} characters), and a body, short paragraphs on how it works (at most ${BODY_WORDS_MAX} words), each paragraph text or pieces, a piece linking a symbol (its file and name, as get_docs and get_code_context name them) or an area by its id, where the text names it. Or holds: true, when the words still hold after the changes get_docs listed: they are kept again at head, unchanged. Describe what the code does and how it works, from the code you read and the facts get_docs gave: a page with no words can start short, and later sessions add to it. Links that name nothing at head are made plain text and named back. A page past these limits is left out, with why; the others are kept. ShadowGit keeps every version in its own history, never in the project's files.`,
       inputSchema: z.object({
         head: Snapshot.describe('The head get_docs answered'),
         pages: z.array(PageInput).min(1).max(10),

@@ -2,8 +2,8 @@ webshop's docs pages, at snapshot 7645e403; the map is drawn from snapshot 7645e
 
 Page "Overview" (the Overview): no words yet.
   Facts: 22 files, 90 symbols, 6 areas, 34 calls, 13 processes.
-  Layers: admin (folder, 1 files), api (folder, 7 files), billing (folder, 6 files), jobs (folder, 5 files), mail (folder, 1 files), search (folder, 1 files).
-  Areas: api (area src/api): 7 files, 17 symbols; billing (area src/billing): 6 files, 16 symbols; admin (area src/admin): 2 files, 15 symbols; mail (area src/mail): 1 files, 15 symbols; search (area src/search): 1 files, 15 symbols; jobs (area src/jobs): 5 files, 12 symbols.
+  Layers: admin (folder, 1 file), api (folder, 7 files), billing (folder, 6 files), jobs (folder, 5 files), mail (folder, 1 file), search (folder, 1 file).
+  Areas: api (area src/api): 7 files, 17 symbols; billing (area src/billing): 6 files, 16 symbols; admin (area src/admin): 2 files, 15 symbols; mail (area src/mail): 1 file, 15 symbols; search (area src/search): 1 file, 15 symbols; jobs (area src/jobs): 5 files, 12 symbols.
   Links between areas: jobs → billing (5), admin → api (3), api → billing (3).
   Processes: StartServer -> RoundCents (api → billing); StartServer -> RecordPayment (api → billing); StartServer -> Shipping (api); InvoiceLine -> RoundCents (billing); CleanupCarts -> MaxDelay (jobs); StartServer -> ValidateCart (api); StartServer -> UserName (api); RetryFailedCharges -> RoundCents (jobs → billing); RetryFailedCharges -> RecordPayment (jobs → billing); RetryFailedCharges -> MaxDelay (jobs) …and 3 more.
 
@@ -11,18 +11,18 @@ Page "api" (area src/api): no words yet.
   Facts: folder src/api; 7 files, 17 symbols; layers api.
   Depends on: billing (3). Depended on by: admin (3).
   Processes: StartServer -> RoundCents, StartServer -> RecordPayment, StartServer -> Shipping, StartServer -> ValidateCart, StartServer -> UserName, ListOrders -> OrderId.
-  Most depended on: validateCart (src/api/cart.ts:1): 1 dependents; cartTotal (src/api/cart.ts:6): 1 dependents; shipping (src/api/cart.ts:10): 1 dependents; checkout (src/api/checkout.ts:5): 1 dependents; formatAmount (src/api/format.ts:1): 1 dependents; formatDate (src/api/format.ts:5): 1 dependents; createOrder (src/api/orders.ts:3): 1 dependents …and 5 more.
+  Most depended on: validateCart (src/api/cart.ts:1): 1 dependent; cartTotal (src/api/cart.ts:6): 1 dependent; shipping (src/api/cart.ts:10): 1 dependent; checkout (src/api/checkout.ts:5): 1 dependent; formatAmount (src/api/format.ts:1): 1 dependent; formatDate (src/api/format.ts:5): 1 dependent; createOrder (src/api/orders.ts:3): 1 dependent …and 5 more.
 
 Page "admin" (area src/admin): no words yet.
   Facts: folder src/admin; 2 files, 15 symbols; layers admin.
   Depends on: api (3). Depended on by: none.
 
 Page "mail" (area src/mail): no words yet.
-  Facts: folder src/mail; 1 files, 15 symbols; layers mail.
+  Facts: folder src/mail; 1 file, 15 symbols; layers mail.
   Depends on: none. Depended on by: none.
 
 Page "search" (area src/search): no words yet.
-  Facts: folder src/search; 1 files, 15 symbols; layers search.
+  Facts: folder src/search; 1 file, 15 symbols; layers search.
   Depends on: none. Depended on by: none.
 
 Next: Write the words of the Overview, src/api, src/admin, src/mail and src/search with write_docs, head "7645e40324841dedfe41b3d6f0bda4b745e6136d": for each page a summary of one sentence (at most 200 characters) and a body of short paragraphs (at most 400 words) on what the code you read does, linking the symbols and areas it names; a page with no words can start short, from its facts and the code you read, and later sessions add to it; or holds: true where its words still hold. Then get_docs with more {"after":6,"map":"7645e40324841dedfe41b3d6f0bda4b745e6136d"} for the next pages without words.

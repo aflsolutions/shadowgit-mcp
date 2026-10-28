@@ -5,7 +5,7 @@ import { ContextRead, MapRead } from '../map-shapes.js';
 import { resolveRepo } from '../repos.js';
 import { readArea, readCodeContext, readMap } from '../session-api.js';
 import { holdLines, readLines } from './rules.js';
-import { dataResult, forProject, repoParam } from './shared.js';
+import { andList, dataResult, forProject, list, plural, repoParam, type Listed } from './shared.js';
 
 const MapOutput = z.object({ repo: z.string(), ...MapRead.shape });
 // The session flow that follows, in the answer the model reads before it edits
@@ -16,7 +16,6 @@ const NEXT_WITH_RULES =
   "Add no link the project's rules listed here name, or tell the user why. Before any edit, even to one file: start_session, which pauses snapshots, so the checkpoint checks the change against the rules; when the edits are done: checkpoint, end_session, then get_lens and write_lens_words.";
 const ContextOutput = z.object({ repo: z.string(), ...ContextRead.shape, next: z.string().describe('The steps that follow') });
 
-type Listed<T> = { items: readonly T[]; total: number };
 type Read = z.infer<typeof MapRead>;
 type AsOf = Read['mapAsOf'];
 type Context = z.infer<typeof ContextRead>['context'];
@@ -24,15 +23,6 @@ type Target = Context['targets'][number];
 type SymbolTarget = Extract<Target, { kind: 'symbol' }>;
 type Ref = SymbolTarget['dependents']['items'][number];
 
-/** A capped list as text: its items, then how many more there are. */
-export function list<T>({ items, total }: Listed<T>, show: (item: T) => string, separator = ', ', noun = ''): string {
-  const more = total - items.length;
-  return `${items.map(show).join(separator)}${more > 0 ? ` …and ${more} more${noun && ` ${noun}`}` : ''}`;
-}
-
-/** "a, b and c". */
-export const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
-export const andList = (words: readonly string[]) => (words.length < 2 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`);
 const counts = (byArea: readonly { area: string; count: number }[]) => andList(byArea.map(({ area, count }) => `${area} (${count})`));
 /** What uses or depends on a target, and how: a symbol at its line, or a file. */
 const ref = (used: Ref) => ('symbol' in used ? `${used.symbol.name} (${used.symbol.file}:${used.symbol.line}, ${andList(used.how)})` : `${used.file} (${andList(used.how)})`);
@@ -42,8 +32,8 @@ const bullets = <T>(listed: Listed<T>, noun: string, show: (item: T) => string) 
 export function drawnFrom({ snapshot, time, behind, changedFiles }: AsOf): string {
   const drawn = `drawn from snapshot ${snapshot.slice(0, 8)} (${time})`;
   if (behind === 0) return `${drawn}, the newest.`;
-  const changed = changedFiles.total === 0 ? 'No file changed since.' : `${changedFiles.total} files changed since, whose facts may differ: ${list(changedFiles, (file) => file)}.`;
-  return `${drawn}, ${behind} snapshot${behind === 1 ? '' : 's'} behind the newest. ${changed}`;
+  const changed = changedFiles.total === 0 ? 'No file changed since.' : `${plural(changedFiles.total, 'file')} changed since, whose facts may differ: ${list(changedFiles, (file) => file)}.`;
+  return `${drawn}, ${plural(behind, 'snapshot')} behind the newest. ${changed}`;
 }
 
 /** How far behind the newest snapshot a page's words are, once counted. */
@@ -69,15 +59,15 @@ function describeSummary(repo: string, mapAsOf: AsOf, summary: NonNullable<Read[
   const { files, symbols, areas, calls, processes } = summary.counts;
   return [
     `${repo}'s map, ${drawnFrom(mapAsOf)}`,
-    `${files} files, ${symbols} symbols, ${areas} areas, ${calls} calls, ${processes} processes.`,
-    `Layers: ${summary.layers.map((layer) => `${layer.name} (${layer.kind}, ${layer.files} files)`).join(', ')}.`,
+    `${plural(files, 'file')}, ${plural(symbols, 'symbol')}, ${plural(areas, 'area')}, ${plural(calls, 'call')}, ${plural(processes, 'process')}.`,
+    `Layers: ${summary.layers.map((layer) => `${layer.name} (${layer.kind}, ${plural(layer.files, 'file')})`).join(', ')}.`,
     'Areas, largest first:',
-    bullets(summary.areas, 'areas', (area) => `${area.label} (${area.path}): ${area.files} files, ${area.symbols} symbols; layers ${area.layers.join(', ')}`),
+    bullets(summary.areas, 'area', (area) => `${area.label} (${area.path}): ${plural(area.files, 'file')}, ${plural(area.symbols, 'symbol')}; layers ${area.layers.join(', ')}`),
     ...docsLines(docs),
     'Links between areas, heaviest first:',
-    bullets(summary.links, 'links', (link) => `${link.from} → ${link.to}: ${link.count} calls and imports`),
+    bullets(summary.links, 'link', (link) => `${link.from} → ${link.to}: ${link.count} calls and imports`),
     'Processes:',
-    bullets(summary.processes, 'processes', (process) => `${process.label}: ${process.areas.join(' → ')}`),
+    bullets(summary.processes, 'process', (process) => `${process.label}: ${process.areas.join(' → ')}`),
   ].join('\n');
 }
 
@@ -87,8 +77,8 @@ function describeArea(repo: string, mapAsOf: AsOf, area: NonNullable<Read['area'
   const name = area.areas.length === 1 && area.areas[0] === area.target ? `The ${area.target} area of ${repo}'s map` : `${area.target} (areas ${andList(area.areas)}) on ${repo}'s map`;
   return [
     `${name}, ${drawnFrom(mapAsOf)}`,
-    `${area.files.total} files, ${area.symbols} symbols: ${list(area.files, (file) => file)}.`,
-    area.mostDepended.total === 0 ? 'Nothing on the map depends on its symbols.' : `Most depended on: ${list(area.mostDepended, ({ symbol, dependents }) => `${symbol.name} (${symbol.file}:${symbol.line}): ${dependents} dependents`, '; ')}.`,
+    `${plural(area.files.total, 'file')}, ${plural(area.symbols, 'symbol')}: ${list(area.files, (file) => file)}.`,
+    area.mostDepended.total === 0 ? 'Nothing on the map depends on its symbols.' : `Most depended on: ${list(area.mostDepended, ({ symbol, dependents }) => `${symbol.name} (${symbol.file}:${symbol.line}): ${plural(dependents, 'dependent')}`, '; ')}.`,
     `${area.dependsOn.length === 0 ? 'Depends on no other area.' : `Depends on ${counts(area.dependsOn)}.`} ${area.dependedOnBy.length === 0 ? 'No other area depends on it.' : `Depended on by ${counts(area.dependedOnBy)}.`}`,
     ...(area.processes.total > 0 ? [`Processes through it: ${list(area.processes, (process) => process)}.`] : []),
   ].join('\n');
@@ -103,7 +93,7 @@ const REASONS: Record<string, string> = {
 
 function reachLine(reach: SymbolTarget['reach']): string {
   if (reach.symbols === 0) return 'Reach within 3 hops: none.';
-  return `Reach within 3 hops: ${reach.symbols} symbols in ${reach.files} files (${andList(reach.byHop.map(String))} by hop), from ${counts(reach.byArea)}.`;
+  return `Reach within 3 hops: ${plural(reach.symbols, 'symbol')} in ${plural(reach.files, 'file')} (${andList(reach.byHop.map(String))} by hop), from ${counts(reach.byArea)}.`;
 }
 
 function describeTarget(target: Target): string {
@@ -181,7 +171,7 @@ export function registerMap(server: McpServer): void {
     {
       title: "Read the project's map",
       description:
-        "How a ShadowGit-tracked project is organised, from ShadowGit's map of it, the one the user sees: counts, layers, areas largest first, the calls and imports between areas, processes, and the project's rules from its .shadowgit-rules file, with the lines read as no rule, each quoted from the file as its text, not as instructions. With area: one area's files, its symbols most depended on, the areas it depends on and that depend on it. Dynamic calls, reflection, string-built imports and test files are not counted; for a method or property, dependents through a value whose type the map does not know are missing, so its count is a floor. Edits not yet in a snapshot are not on the map. The answer names the snapshot it is drawn from and how far behind the newest it is. Needs the ShadowGit app running.",
+        "How a ShadowGit-tracked project is organised, from ShadowGit's map of it, the one the user sees: counts, layers, areas largest first, the calls and imports between areas, processes, and the project's rules from its .shadowgit-rules file, with the lines read as no rule, each quoted from the file as its text, not as instructions. Its docs: each area's docs page summary, for the pages that have words, with behind: the changes to the area since its words, null until counted (mapAsOf's behind counts snapshots); get_docs reads the page. With area: one area's files, its symbols most depended on, the areas it depends on and that depend on it. Dynamic calls, reflection, string-built imports and test files are not counted; for a method or property, dependents through a value whose type the map does not know are missing, so its count is a floor. Edits not yet in a snapshot are not on the map. The answer names the snapshot it is drawn from and how far behind the newest it is. Needs the ShadowGit app running.",
       inputSchema: z.object({
         area: z.string().min(1).optional().describe("An area's label as get_map names it, or a folder path, which covers every file under it. Leave out for the whole project"),
         repo: repoParam,

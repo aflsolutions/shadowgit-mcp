@@ -39,9 +39,11 @@ All notable changes to the ShadowGit MCP Server will be documented in this file.
   to it.
 - `get_map`'s summary lists the page summaries by area id, with how far behind each is. `get_code_context` lists the
   pages of its targets' areas.
-- `npm run eval:docs`, whether Claude Code keeps the pages its change touched without being asked: 5 of 5 runs wrote
-  both pages after the Lens's words. Each run's stream can be kept (`EVAL_STREAMS`) to read why a run stopped. Without
-  the session framing and the structured step, 0 of 2 did; the agents said the pages were beyond their task.
+- `npm run eval:docs`, whether Claude Code keeps the pages its change touched without being asked. This entry first
+  said 5 of 5 runs wrote both pages after the Lens's words. That overstated the rate: it was the last of several tuning
+  rounds, run until one passed. Measured again on 2.6.1, with the eval answering a session's end as ShadowGit 0.3.14
+  does (#18), 8 of 10 runs wrote both pages. Each run's stream can be kept (`EVAL_STREAMS`) to read why a run stopped.
+  Without the session framing and the structured step, 0 of 2 did; the agents said the pages were beyond their task.
 
 ### Changed
 - The instructions name the docs pages as part of a session, and send a question about what part of the project

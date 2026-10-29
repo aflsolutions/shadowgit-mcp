@@ -90,6 +90,8 @@ async function run(i: number): Promise<boolean | null> {
     const project = makeProject('webshop', MAP_PROJECT, ago(2 * 24 * 60));
     const base = shadowGit(project, ['rev-parse', 'HEAD']);
     app.checkpointsIn = project;
+    // The docs need ShadowGit 0.3.14, which answers a session's end with the snapshot holding its edits, as from 0.3.13
+    Object.defineProperty(app, 'endCommit', { get: () => shadowGit(project, ['rev-parse', 'HEAD']) });
     // The real app's map answers for this webshop: a question about files reads charge.ts, about symbols chargeCard
     Object.defineProperty(app.mapAnswer, 'context', {
       get: () => (JSON.stringify(app.requestsTo('/map/context').at(-1) ?? {}).includes('"files"') ? MAP_ANSWERS.file : MAP_ANSWERS.context),
